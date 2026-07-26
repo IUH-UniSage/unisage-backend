@@ -1,0 +1,30 @@
+services:
+  unisage-db:
+    image: pgvector/pgvector:pg17
+    container_name: unisage-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: assistant_DB
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend-java:
+    profiles:
+      - app
+    build: .
+    container_name: backend-java
+    ports:
+      - "${SERVER_PORT:-8081}:${SERVER_PORT:-8081}"
+    depends_on:
+      - unisage-db
+    env_file:
+      - .ENV
+    environment:
+      - DB_HOST=unisage-db
+      - DB_PORT=5432
+
+volumes:
+  postgres_data:
