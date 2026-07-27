@@ -28,13 +28,13 @@ public class DataInitializer implements CommandLineRunner {
     private final UserRepository            userRepository;
     private final PasswordEncoder           passwordEncoder;
 
-    @Value("${DEFAULT_SUPERADMIN_PASS:Admin@123456}")
+    @Value("${app.bootstrap.superadmin-password}")
     private String defaultSuperAdminPassword;
 
-    @Value("${DEFAULT_INGESTADMIN_PASS:Ingest@123456}")
+    @Value("${app.bootstrap.ingest-admin-password}")
     private String defaultIngestAdminPassword;
 
-    @Value("${DEFAULT_USER_PASS:User@123456}")
+    @Value("${app.bootstrap.user-password}")
     private String defaultUserPassword;
 
     // ─────────────────────────────────────────────────────────────────────
