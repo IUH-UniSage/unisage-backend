@@ -1,12 +1,15 @@
 package com.unisage.backend.exception;
 
 import com.unisage.backend.dto.response.ApiResponse;
+import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -43,6 +46,41 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
                 .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage(), errors));
+    }
+
+    @ExceptionHandler({
+            ConstraintViolationException.class,
+            HandlerMethodValidationException.class
+    })
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleRequestConstraintException(
+            Exception exception) {
+        ErrorCode errorCode = ErrorCode.VALIDATION_ERROR;
+
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage(), null));
+    }
+
+    @ExceptionHandler(AiAgentClientException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleAiAgentClientException(
+            AiAgentClientException exception) {
+        ErrorCode errorCode = exception.getUpstreamStatus().is4xxClientError()
+                ? ErrorCode.AI_AGENT_REQUEST_REJECTED
+                : ErrorCode.AI_AGENT_UNAVAILABLE;
+
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage(), null));
+    }
+
+    @ExceptionHandler(WebClientRequestException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleAiAgentConnectionException(
+            WebClientRequestException exception) {
+        ErrorCode errorCode = ErrorCode.AI_AGENT_UNAVAILABLE;
+
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage(), null));
     }
 
     @ExceptionHandler(Exception.class)

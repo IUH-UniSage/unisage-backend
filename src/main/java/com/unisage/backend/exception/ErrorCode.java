@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
     // System errors (9xxx)
     SYS_UNCATEGORIZED(HttpStatus.INTERNAL_SERVER_ERROR, 9999, "Hệ thống có lỗi chưa xác định. Vui lòng thử lại sau."),
+    AI_AGENT_UNAVAILABLE(HttpStatus.BAD_GATEWAY, 9001, "Dịch vụ AI Agent hiện không khả dụng."),
 
     // Authentication errors (1xxx)
     AUTH_UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, 1001, "Bạn cần đăng nhập để thực hiện thao tác này."),
@@ -24,6 +25,7 @@ public enum ErrorCode {
     
     // Validation
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, 2300, "Dữ liệu đầu vào không hợp lệ."),
+    AI_AGENT_REQUEST_REJECTED(HttpStatus.BAD_REQUEST, 2301, "AI Agent từ chối dữ liệu đầu vào."),
     DOCUMENT_PERMISSION_FORBIDDEN(HttpStatus.FORBIDDEN, 2310, "Ban không đủ quyền để tạo documemnt."),
     
     // Not found errors
