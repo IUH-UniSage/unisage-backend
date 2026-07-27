@@ -1,6 +1,7 @@
 package com.unisage.backend.config;
 
 import com.unisage.backend.security.GatewayHeaderFilter;
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -44,6 +45,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                 .anyRequest().access(dynamicAuthorizationManager)
             )
             .addFilterBefore(gatewayHeaderFilter, UsernamePasswordAuthenticationFilter.class);
