@@ -358,9 +358,9 @@ public class DataInitializer implements CommandLineRunner {
                 "Xem nhật ký LLM", null)
         ));
 
-        // INGEST WITH ACCESS LEVELS (L1-L5)
+        // INGESTION WITH ACCESS LEVELS (L1-L5)
         for (int i = 1; i <= 5; i++) {
-            list.add(def(PredefinedPermissions.INGEST_ALL, "/ai/ingest/**", PermissionMethod.ALL, ResourceType.INGEST, "Toàn quyền nạp liệu L" + i, i));
+            list.add(def(PredefinedPermissions.INGEST_ALL, "/documents/ingestions/**", PermissionMethod.ALL, ResourceType.INGEST, "Toàn quyền nạp liệu L" + i, i));
         }
 
         return list;
