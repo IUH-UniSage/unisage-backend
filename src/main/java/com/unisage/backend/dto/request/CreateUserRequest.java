@@ -8,9 +8,14 @@ import java.util.UUID;
 
 @Builder
 public record CreateUserRequest(
-    @NotBlank(message = "Email cá nhân không được để trống")
+    @NotBlank(message = "Email không được để trống")
     @Email(message = "Email không hợp lệ")
-    String personalEmail,
+    String email,
+
+    String code,
+
+    @NotBlank(message = "Mật khẩu không được để trống")
+    String password,
 
     @NotBlank(message = "Tên không được để trống")
     String firstName,
@@ -20,9 +25,6 @@ public record CreateUserRequest(
 
     @NotNull(message = "Vai trò không được để trống")
     UUID roleId,
-
-    @NotNull(message = "Tài khoản liên kết không được để trống")
-    UUID accountId,
 
     String phone,
     String gender

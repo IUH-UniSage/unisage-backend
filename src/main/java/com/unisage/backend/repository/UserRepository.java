@@ -10,7 +10,8 @@ import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByPhone(String phone);
-    List<User> findByAccountId(UUID accountId);
+    Optional<User> findByEmail(String email);
+    Optional<User> findByCode(String code);
 
     /**
      * Loads the user together with its Role, RolePermissions and Permission
@@ -26,11 +27,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
         """)
     Optional<User> findByIdWithPermissions(@Param("id") UUID id);
     @Query("""
-            SELECT MAX(p.accessLevel) 
-            FROM User u 
-            JOIN u.role r 
-            JOIN r.rolePermissions rp 
-            JOIN rp.permission p 
+            SELECT MAX(p.accessLevel)
+            FROM User u
+            JOIN u.role r
+            JOIN r.rolePermissions rp
+            JOIN rp.permission p
             WHERE u.id = :userId
         """)
     Integer findMaxAccessLevelByUserId(@Param("userId") UUID userId);

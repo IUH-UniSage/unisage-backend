@@ -33,7 +33,7 @@ public class JwtUtil {
     public String generateAccessToken(User user) {
         return Jwts.builder()
                 .setSubject(user.getId().toString())
-                .claim("code", user.getAccount().getCode())
+                .claim("code", user.getCode())
                 .claim("role", user.getRole().getName())
                 .claim("type", "access")
                 .setIssuedAt(new Date())

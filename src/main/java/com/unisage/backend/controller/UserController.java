@@ -1,5 +1,6 @@
 package com.unisage.backend.controller;
 
+import com.unisage.backend.dto.request.ChangePasswordRequest;
 import com.unisage.backend.dto.request.CreateUserRequest;
 import jakarta.validation.Valid;
 import com.unisage.backend.dto.request.UpdateUserRequest;
@@ -68,6 +69,12 @@ public class UserController {
     @PostMapping("/bulk/recover")
     public ResponseEntity<ApiResponse<Void>> recoverUsers(@RequestBody List<UUID> ids) {
         userService.recoverResources(ids);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @PatchMapping("/{id}/password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(@PathVariable UUID id, @RequestBody ChangePasswordRequest request) {
+        userService.changePassword(id, request.password());
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

@@ -26,5 +26,31 @@ services:
       - DB_HOST=unisage-db
       - DB_PORT=5432
 
+  devcontainer:
+    profiles:
+      - devcontainer
+    image: mcr.microsoft.com/devcontainers/java:1-17-bullseye
+    volumes:
+      - .:/workspace:cached
+    command: sleep infinity
+    depends_on:
+      - unisage-db
+    environment:
+      - DB_HOST=unisage-db
+      - DB_PORT=5432
+      - DB_NAME=assistant_DB
+      - DB_USER=postgres
+      - DB_PASSWORD=123456
+      - SERVER_PORT=8081
+      - SPRING_APPLICATION_NAME=Unisage_Assistant
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+      - JWT_ACCESS_TOKEN_EXPIRATION=86400000
+      - JWT_REFRESH_TOKEN_EXPIRATION=2592000000
+      - JWT_SECRET=Unisage_Enterprise_Assistant_Authentication_Secret_Key
+      - DEFAULT_SUPERADMIN_PASS=SuperAdmin@123
+      - DEFAULT_INGESTADMIN_PASS=Ingest@123
+      - DEFAULT_USER_PASS=User@123
+      - UPLOAD_DIR=/workspace/uploads
+
 volumes:
   postgres_data:

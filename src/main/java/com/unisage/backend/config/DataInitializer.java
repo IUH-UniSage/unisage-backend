@@ -24,7 +24,6 @@ public class DataInitializer implements CommandLineRunner {
     private final RoleRepository            roleRepository;
     private final PermissionRepository      permissionRepository;
     private final RolePermissionRepository  rolePermissionRepository;
-    private final AccountRepository         accountRepository;
     private final UserRepository            userRepository;
     private final PasswordEncoder           passwordEncoder;
 
@@ -61,12 +60,10 @@ public class DataInitializer implements CommandLineRunner {
         assignIngestAdmin(ingestAdmin, perms);
         assignUser(userRole, perms);
 
-        // 4. Seed one default account per role
-        seedAccount("admin@unisage.com",    "SA-001", "System",   "Administrator", "0999999999", superAdmin,  defaultSuperAdminPassword);
-        seedAccount("ingest@unisage.com",   "IA-001", "Ingest",   "Admin",         "0888888888", ingestAdmin, defaultIngestAdminPassword);
-        seedAccount("user@unisage.com",     "US-001", "Default",  "User",          "0777777777", userRole,    defaultUserPassword);
-
-
+        // 4. Seed one default user per role
+        seedUser("admin@unisage.com",    "SA-001", "System",   "Administrator", "0999999999", superAdmin,  defaultSuperAdminPassword);
+        seedUser("ingest@unisage.com",   "IA-001", "Ingest",   "Admin",         "0888888888", ingestAdmin, defaultIngestAdminPassword);
+        seedUser("user@unisage.com",     "US-001", "Default",  "User",          "0777777777", userRole,    defaultUserPassword);
 
         log.info(">>> [SUCCESS] RBAC initialisation complete.");
     }
@@ -123,26 +120,6 @@ public class DataInitializer implements CommandLineRunner {
             def(PredefinedPermissions.SUPER_ADMIN_ALL,
                 "/**", PermissionMethod.ALL, ResourceType.SYSTEM,
                 "Toàn quyền hệ thống", null),
-
-            // ── Account ──────────────────────────────────────────────────
-            def(PredefinedPermissions.ACCOUNT_ALL,
-                "/accounts/**", PermissionMethod.ALL, ResourceType.ACCOUNT,
-                "Toàn quyền tài khoản", null),
-            def(PredefinedPermissions.ACCOUNT_READ,
-                "/accounts/**", PermissionMethod.GET, ResourceType.ACCOUNT,
-                "Xem tài khoản", null),
-            def(PredefinedPermissions.ACCOUNT_CREATE,
-                "/accounts", PermissionMethod.POST, ResourceType.ACCOUNT,
-                "Tạo tài khoản", null),
-            def(PredefinedPermissions.ACCOUNT_UPDATE,
-                "/accounts/**", PermissionMethod.PUT, ResourceType.ACCOUNT,
-                "Cập nhật tài khoản", null),
-            def(PredefinedPermissions.ACCOUNT_DELETE,
-                "/accounts/**", PermissionMethod.DELETE, ResourceType.ACCOUNT,
-                "Xóa tài khoản", null),
-            def(PredefinedPermissions.ACCOUNT_TOGGLE_ACTIVE,
-                "/accounts/**/toggle-active", PermissionMethod.PATCH, ResourceType.ACCOUNT,
-                "Kích hoạt / vô hiệu tài khoản", null),
 
             // ── User ─────────────────────────────────────────────────────
             def(PredefinedPermissions.USER_ALL,
@@ -212,25 +189,38 @@ public class DataInitializer implements CommandLineRunner {
                 "/categories/**", PermissionMethod.DELETE, ResourceType.CATEGORY,
                 "Xóa danh mục", null),
 
-            // ── DocPackage ───────────────────────────────────────────────
-            def(PredefinedPermissions.DOC_PACKAGE_ALL,
-                "/doc-packages/**", PermissionMethod.ALL, ResourceType.DOC_PACKAGE,
-                "Toàn quyền gói tài liệu", null),
-            def(PredefinedPermissions.DOC_PACKAGE_READ,
-                "/doc-packages/**", PermissionMethod.GET, ResourceType.DOC_PACKAGE,
-                "Xem gói tài liệu", null),
-            def(PredefinedPermissions.DOC_PACKAGE_CREATE,
-                "/doc-packages", PermissionMethod.POST, ResourceType.DOC_PACKAGE,
-                "Tạo gói tài liệu", null),
-            def(PredefinedPermissions.DOC_PACKAGE_UPDATE,
-                "/doc-packages/**", PermissionMethod.PUT, ResourceType.DOC_PACKAGE,
-                "Cập nhật gói tài liệu", null),
-            def(PredefinedPermissions.DOC_PACKAGE_DELETE,
-                "/doc-packages/**", PermissionMethod.DELETE, ResourceType.DOC_PACKAGE,
-                "Xóa gói tài liệu", null)
+            // ── Department ───────────────────────────────────────────────
+            def(PredefinedPermissions.DEPARTMENT_ALL,
+                "/departments/**", PermissionMethod.ALL, ResourceType.DEPARTMENT,
+                "Toàn quyền phòng ban", null),
+            def(PredefinedPermissions.DEPARTMENT_READ,
+                "/departments/**", PermissionMethod.GET, ResourceType.DEPARTMENT,
+                "Xem phòng ban", null),
+            def(PredefinedPermissions.DEPARTMENT_CREATE,
+                "/departments", PermissionMethod.POST, ResourceType.DEPARTMENT,
+                "Tạo phòng ban", null),
+            def(PredefinedPermissions.DEPARTMENT_UPDATE,
+                "/departments/**", PermissionMethod.PUT, ResourceType.DEPARTMENT,
+                "Cập nhật phòng ban", null),
+            def(PredefinedPermissions.DEPARTMENT_DELETE,
+                "/departments/**", PermissionMethod.DELETE, ResourceType.DEPARTMENT,
+                "Xóa phòng ban", null),
+
+            // ── UserDepartmentAccess ─────────────────────────────────────
+            def(PredefinedPermissions.USER_DEPARTMENT_ACCESS_ALL,
+                "/user-department-access/**", PermissionMethod.ALL, ResourceType.USER_DEPARTMENT_ACCESS,
+                "Toàn quyền phân quyền phòng ban", null),
+            def(PredefinedPermissions.USER_DEPARTMENT_ACCESS_READ,
+                "/user-department-access/**", PermissionMethod.GET, ResourceType.USER_DEPARTMENT_ACCESS,
+                "Xem phân quyền phòng ban", null),
+            def(PredefinedPermissions.USER_DEPARTMENT_ACCESS_CREATE,
+                "/user-department-access", PermissionMethod.POST, ResourceType.USER_DEPARTMENT_ACCESS,
+                "Gán phân quyền phòng ban", null),
+            def(PredefinedPermissions.USER_DEPARTMENT_ACCESS_DELETE,
+                "/user-department-access/**", PermissionMethod.DELETE, ResourceType.USER_DEPARTMENT_ACCESS,
+                "Thu hồi phân quyền phòng ban", null)
 
             // ── Document (CREATE = ingest) ────────────────────────────────
-
 
         ));
 
@@ -245,68 +235,22 @@ public class DataInitializer implements CommandLineRunner {
 
         list.addAll(List.of(
 
-
-            // ── DocumentChunk ────────────────────────────────────────────
-            def(PredefinedPermissions.DOCUMENT_CHUNK_ALL,
-                "/document-chunks/**", PermissionMethod.ALL, ResourceType.DOCUMENT_CHUNK,
-                "Toàn quyền đoạn tài liệu", null),
-            def(PredefinedPermissions.DOCUMENT_CHUNK_READ,
-                "/document-chunks/**", PermissionMethod.GET, ResourceType.DOCUMENT_CHUNK,
-                "Xem đoạn tài liệu", null),
-            def(PredefinedPermissions.DOCUMENT_CHUNK_DELETE,
-                "/document-chunks/**", PermissionMethod.DELETE, ResourceType.DOCUMENT_CHUNK,
-                "Xóa đoạn tài liệu", null),
-
-            // ── EmbeddedModel ────────────────────────────────────────────
-            def(PredefinedPermissions.EMBEDDED_MODEL_ALL,
-                "/embedded-models/**", PermissionMethod.ALL, ResourceType.EMBEDDED_MODEL,
-                "Toàn quyền mô hình nhúng", null),
-            def(PredefinedPermissions.EMBEDDED_MODEL_READ,
-                "/embedded-models/**", PermissionMethod.GET, ResourceType.EMBEDDED_MODEL,
-                "Xem mô hình nhúng", null),
-            def(PredefinedPermissions.EMBEDDED_MODEL_CREATE,
-                "/embedded-models", PermissionMethod.POST, ResourceType.EMBEDDED_MODEL,
-                "Tạo mô hình nhúng", null),
-            def(PredefinedPermissions.EMBEDDED_MODEL_UPDATE,
-                "/embedded-models/**", PermissionMethod.PUT, ResourceType.EMBEDDED_MODEL,
-                "Cập nhật mô hình nhúng", null),
-            def(PredefinedPermissions.EMBEDDED_MODEL_DELETE,
-                "/embedded-models/**", PermissionMethod.DELETE, ResourceType.EMBEDDED_MODEL,
-                "Xóa mô hình nhúng", null),
-
-            // ── ChatbotConfig ────────────────────────────────────────────
-            def(PredefinedPermissions.CHATBOT_CONFIG_ALL,
-                "/chatbot-configs/**", PermissionMethod.ALL, ResourceType.CHATBOT_CONFIG,
-                "Toàn quyền cấu hình chatbot", null),
-            def(PredefinedPermissions.CHATBOT_CONFIG_READ,
-                "/chatbot-configs/**", PermissionMethod.GET, ResourceType.CHATBOT_CONFIG,
-                "Xem cấu hình chatbot", null),
-            def(PredefinedPermissions.CHATBOT_CONFIG_CREATE,
-                "/chatbot-configs", PermissionMethod.POST, ResourceType.CHATBOT_CONFIG,
-                "Tạo cấu hình chatbot", null),
-            def(PredefinedPermissions.CHATBOT_CONFIG_UPDATE,
-                "/chatbot-configs/**", PermissionMethod.PUT, ResourceType.CHATBOT_CONFIG,
-                "Cập nhật cấu hình chatbot", null),
-            def(PredefinedPermissions.CHATBOT_CONFIG_DELETE,
-                "/chatbot-configs/**", PermissionMethod.DELETE, ResourceType.CHATBOT_CONFIG,
-                "Xóa cấu hình chatbot", null),
-
-            // ── ChatbotPool ──────────────────────────────────────────────
-            def(PredefinedPermissions.CHATBOT_POOL_ALL,
-                "/chatbot-pools/**", PermissionMethod.ALL, ResourceType.CHATBOT_POOL,
-                "Toàn quyền pool chatbot", null),
-            def(PredefinedPermissions.CHATBOT_POOL_READ,
-                "/chatbot-pools/**", PermissionMethod.GET, ResourceType.CHATBOT_POOL,
-                "Xem pool chatbot", null),
-            def(PredefinedPermissions.CHATBOT_POOL_CREATE,
-                "/chatbot-pools", PermissionMethod.POST, ResourceType.CHATBOT_POOL,
-                "Tạo pool chatbot", null),
-            def(PredefinedPermissions.CHATBOT_POOL_UPDATE,
-                "/chatbot-pools/**", PermissionMethod.PUT, ResourceType.CHATBOT_POOL,
-                "Cập nhật pool chatbot", null),
-            def(PredefinedPermissions.CHATBOT_POOL_DELETE,
-                "/chatbot-pools/**", PermissionMethod.DELETE, ResourceType.CHATBOT_POOL,
-                "Xóa pool chatbot", null),
+            // ── ChatModel ────────────────────────────────────────────────
+            def(PredefinedPermissions.CHAT_MODEL_ALL,
+                "/chat-models/**", PermissionMethod.ALL, ResourceType.CHAT_MODEL,
+                "Toàn quyền mô hình chat", null),
+            def(PredefinedPermissions.CHAT_MODEL_READ,
+                "/chat-models/**", PermissionMethod.GET, ResourceType.CHAT_MODEL,
+                "Xem mô hình chat", null),
+            def(PredefinedPermissions.CHAT_MODEL_CREATE,
+                "/chat-models", PermissionMethod.POST, ResourceType.CHAT_MODEL,
+                "Tạo mô hình chat", null),
+            def(PredefinedPermissions.CHAT_MODEL_UPDATE,
+                "/chat-models/**", PermissionMethod.PUT, ResourceType.CHAT_MODEL,
+                "Cập nhật mô hình chat", null),
+            def(PredefinedPermissions.CHAT_MODEL_DELETE,
+                "/chat-models/**", PermissionMethod.DELETE, ResourceType.CHAT_MODEL,
+                "Xóa mô hình chat", null),
 
             // ── Conversation ─────────────────────────────────────────────
             def(PredefinedPermissions.CONVERSATION_ALL,
@@ -340,14 +284,6 @@ public class DataInitializer implements CommandLineRunner {
             def(PredefinedPermissions.AUDIT_LOG_READ,
                 "/audit-logs/**", PermissionMethod.GET, ResourceType.AUDIT_LOG,
                 "Xem nhật ký hệ thống", null),
-
-            // ── DocumentProcessLog ───────────────────────────────────────
-            def(PredefinedPermissions.DOCUMENT_PROCESS_LOG_ALL,
-                "/document-process-logs/**", PermissionMethod.ALL, ResourceType.DOCUMENT_PROCESS_LOG,
-                "Toàn quyền nhật ký xử lý tài liệu", null),
-            def(PredefinedPermissions.DOCUMENT_PROCESS_LOG_READ,
-                "/document-process-logs/**", PermissionMethod.GET, ResourceType.DOCUMENT_PROCESS_LOG,
-                "Xem nhật ký xử lý tài liệu", null),
 
             // ── LlmTraceLog ──────────────────────────────────────────────
             def(PredefinedPermissions.LLM_TRACE_LOG_ALL,
@@ -396,17 +332,15 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     /**
-     * INGEST_ADMIN — manages knowledge base, documents, chatbot configs & models.
-     * Does NOT have account/user/role/permission management.
+     * INGEST_ADMIN — manages knowledge base, documents, chat models.
+     * Does NOT have user/role/permission management.
      */
     private void assignIngestAdmin(Role role, Map<String, Permission> perms) {
         List<String> keys = List.of(
-            permKey(PredefinedPermissions.DOC_PACKAGE_READ, null),
+            permKey(PredefinedPermissions.DEPARTMENT_READ, null),
             permKey(PredefinedPermissions.DOCUMENT_ALL, 5),
-            permKey(PredefinedPermissions.DOCUMENT_CHUNK_ALL, null),
             permKey(PredefinedPermissions.CATEGORY_ALL, null),
-            permKey(PredefinedPermissions.EMBEDDED_MODEL_READ, null),
-            permKey(PredefinedPermissions.DOCUMENT_PROCESS_LOG_READ, null),
+            permKey(PredefinedPermissions.CHAT_MODEL_READ, null),
             permKey(PredefinedPermissions.LLM_TRACE_LOG_READ, null),
             permKey(PredefinedPermissions.INGEST_ALL, 5)
         );
@@ -424,9 +358,9 @@ public class DataInitializer implements CommandLineRunner {
             permKey(PredefinedPermissions.MESSAGE_READ, null),
             permKey(PredefinedPermissions.MESSAGE_SEND, null),
             permKey(PredefinedPermissions.DOCUMENT_READ, 5),
-            permKey(PredefinedPermissions.DOC_PACKAGE_READ, null),
+            permKey(PredefinedPermissions.DEPARTMENT_READ, null),
             permKey(PredefinedPermissions.CATEGORY_READ, null),
-            permKey(PredefinedPermissions.CHATBOT_CONFIG_READ, null),
+            permKey(PredefinedPermissions.CHAT_MODEL_READ, null),
             permKey(PredefinedPermissions.USER_READ, null),
             permKey(PredefinedPermissions.USER_UPDATE, null)
         );
@@ -457,27 +391,22 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
 
-    // ─── Account / User bootstrap ────────────────────────────────────────
+    // ─── User bootstrap ──────────────────────────────────────────────────
     /**
-     * Creates one Account + one User for the given role if the email is not yet taken.
+     * Creates one User (login identity + profile merged) for the given role
+     * if the email is not yet taken.
      */
-    private void seedAccount(String email, String code,
-                             String firstName, String lastName, String phone,
-                             Role role, String rawPassword) {
-        if (accountRepository.findByEmail(email).isPresent()) return;
+    private void seedUser(String email, String code,
+                          String firstName, String lastName, String phone,
+                          Role role, String rawPassword) {
+        if (userRepository.findByEmail(email).isPresent()) return;
 
-        Account account = Account.builder()
+        User user = User.builder()
                 .email(email)
                 .code(code)
                 .passwordHash(passwordEncoder.encode(rawPassword))
-                .isActive(true)
-                .build();
-        accountRepository.save(account);
-
-        User user = User.builder()
                 .firstName(firstName)
                 .lastName(lastName)
-                .account(account)
                 .role(role)
                 .phone(phone)
                 .gender("NAM")
@@ -485,10 +414,8 @@ public class DataInitializer implements CommandLineRunner {
                 .build();
         userRepository.save(user);
 
-        log.info("  Account seeded: {} [{}]", email, role.getName());
+        log.info("  User seeded: {} [{}]", email, role.getName());
     }
-
-
 
     // ─── Compact builder record ──────────────────────────────────────────
     private record PermDef(String name, String path, PermissionMethod method,

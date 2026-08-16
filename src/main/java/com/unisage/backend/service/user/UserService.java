@@ -19,4 +19,5 @@ public interface UserService {
  void recoverUser(UUID id);
  void deleteResources(List<UUID> ids);
  void recoverResources(List<UUID> ids);
+ void changePassword(UUID id, String newPassword);
 }

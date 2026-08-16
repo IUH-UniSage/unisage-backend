@@ -11,10 +11,8 @@ public record UpdateUserRequest(
     @Email
     String email,
     UUID roleId,
-    UUID accountId,
     String code,
     String phone,
     String gender,
-    String department,
-    String address
+    String extraInfo
 ) {}

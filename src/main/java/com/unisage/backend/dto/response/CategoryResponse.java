@@ -1,16 +1,17 @@
 package com.unisage.backend.dto.response;
 
-import lombok.Builder;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import lombok.Builder;
+
 @Builder
-public record AccountResponse(
+public record CategoryResponse(
     UUID id,
-    String email,
-    String code,
+    String name,
+    String status,
+    String description,
     Boolean isActive,
-    LocalDateTime lastLogin,
     LocalDateTime createdAt,
     String createdBy,
     LocalDateTime updatedAt,

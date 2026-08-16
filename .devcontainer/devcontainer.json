@@ -1,0 +1,33 @@
+{
+  "name": "backend-java (Spring Boot)",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "devcontainer",
+  "runServices": ["unisage-db"],
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "17",
+      "installMaven": "true"
+    }
+  },
+  "forwardPorts": [8081, 5433],
+  "portsAttributes": {
+    "8081": { "label": "backend-java" },
+    "5433": { "label": "unisage-postgres" }
+  },
+  "postCreateCommand": "chmod +x mvnw && ./mvnw -q -DskipTests dependency:go-offline",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "vmware.vscode-spring-boot",
+        "vscjava.vscode-spring-boot-dashboard"
+      ],
+      "settings": {
+        "java.configuration.updateBuildConfiguration": "automatic"
+      }
+    }
+  },
+  "remoteUser": "vscode"
+}

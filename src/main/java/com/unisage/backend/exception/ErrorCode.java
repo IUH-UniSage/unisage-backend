@@ -15,39 +15,35 @@ public enum ErrorCode {
     JWT_EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, 1004, "Token đã hết hạn."),
     JWT_SIGNATURE_INVALID(HttpStatus.UNAUTHORIZED, 1005, "Chữ ký token không hợp lệ."),
     AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, 1006, "Email hoặc mật khẩu không chính xác."),
-    
+
     // User account errors (2xxx)
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, 2004, "Người dùng không tồn tại."),
     USER_BANNED(HttpStatus.FORBIDDEN, 2002, "Người dùng đã bị khoá."),
     ACCOUNT_LOCKED(HttpStatus.FORBIDDEN, 2005, "Tài khoản của bạn đã bị khóa hoặc chưa kích hoạt."),
-    ACCOUNT_NOT_EXISTED(HttpStatus.NOT_FOUND, 2003, "Tài khoản không tồn tại."),
-    
+
     // Validation
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, 2300, "Dữ liệu đầu vào không hợp lệ."),
     DOCUMENT_PERMISSION_FORBIDDEN(HttpStatus.FORBIDDEN, 2310, "Ban không đủ quyền để tạo documemnt."),
-    
+
     // Not found errors
     CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, 2101, "Category không tồn tại."),
-    EMBEDDED_MODEL_NOT_FOUND(HttpStatus.NOT_FOUND, 2104, "Embedded Model không tồn tại."),
-    DOC_PACKAGE_NOT_FOUND(HttpStatus.NOT_FOUND, 2105, "DocPackage không tồn tại."),
+    DEPARTMENT_NOT_FOUND(HttpStatus.NOT_FOUND, 2105, "Department không tồn tại."),
     DOCUMENT_NOT_FOUND(HttpStatus.NOT_FOUND, 2106, "Document không tồn tại."),
-    CONVERSATION_NOT_FOUND(HttpStatus.NOT_FOUND, 2107, "Conversation không tồn tại."),
-    CHATBOT_CONFIG_NOT_FOUND(HttpStatus.NOT_FOUND, 2108, "ChatbotConfig không tồn tại."),
     ROLE_NOT_FOUND(HttpStatus.NOT_FOUND, 2109, "Role không tồn tại."),
-    PROFILE_NOT_FOUND(HttpStatus.NOT_FOUND, 2110, "Profile không tồn tại."),
-    CHUNK_NOT_FOUND(HttpStatus.NOT_FOUND, 2111, "Chunk không tồn tại."),
     PERMISSION_NOT_FOUND(HttpStatus.NOT_FOUND, 2112, "Permission không tồn tại."),
-    
+    CHAT_MODEL_NOT_FOUND(HttpStatus.NOT_FOUND, 2121, "Chat Model không tồn tại!"),
+    USER_DEPARTMENT_ACCESS_NOT_FOUND(HttpStatus.NOT_FOUND, 2125, "Phân quyền phòng ban không tồn tại."),
+    CONVERSATION_NOT_FOUND(HttpStatus.NOT_FOUND, 2127, "Conversation không tồn tại."),
+    MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, 2128, "Message không tồn tại."),
+
     // Business rule errors
-    MODEL_TYPE_EXISTED(HttpStatus.BAD_REQUEST, 2113, "Model type này đã tồn tại!"),
     PATH_EXISTED(HttpStatus.BAD_REQUEST, 2114, "Đường dẫn đã tồn tại trong hệ thống!"),
     EMAIL_EXISTED(HttpStatus.BAD_REQUEST, 2115, "Email này đã được sử dụng!"),
     PHONE_EXISTED(HttpStatus.BAD_REQUEST, 2116, "Số điện thoại này đã được sử dụng!"),
     USER_CODE_EXISTED(HttpStatus.BAD_REQUEST, 2117, "Mã người dùng này đã tồn tại!"),
     ROLE_EXISTED(HttpStatus.BAD_REQUEST, 2119, "Vai trò này đã tồn tại!"),
     CATEGORY_NAME_EXISTED(HttpStatus.BAD_REQUEST, 2120, "Tên danh mục này đã tồn tại!"),
-    CHATBOT_POOL_NOT_FOUND(HttpStatus.NOT_FOUND, 2121, "Chatbot Pool không tồn tại!"),
-    MODEL_NAME_EXISTED(HttpStatus.BAD_REQUEST, 2122, "Tên mô hình này đã tồn tại!")
+    USER_DEPARTMENT_ACCESS_EXISTED(HttpStatus.BAD_REQUEST, 2126, "Phân quyền phòng ban này đã tồn tại!")
     ;
 
     private final HttpStatus httpStatus;

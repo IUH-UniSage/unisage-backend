@@ -77,11 +77,6 @@ public class DynamicAuthorizationManager implements AuthorizationManager<Request
                 return new AuthorizationDecision(false);
             }
 
-            if (!user.getAccount().getIsActive()) {
-                log.warn("Account not found for userId: {}", userId);
-                return new AuthorizationDecision(false);
-            }
-
             if (!user.getIsActive()) {
                 log.warn("User {} is inactive — denied", userId);
                 return new AuthorizationDecision(false);

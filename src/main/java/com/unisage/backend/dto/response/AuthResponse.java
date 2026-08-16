@@ -10,5 +10,9 @@ public record AuthResponse(
     long refreshTokenExpirationMs,
     String email,
     String code,
-    List<UserProfileResponse> profiles
+    String fullName,
+    String avatarUrl,
+    String role,
+    Boolean isSystemRole,
+    List<PermissionInfo> permissions
 ) {}

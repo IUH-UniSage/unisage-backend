@@ -5,21 +5,18 @@ import lombok.Getter;
 @Getter
 public enum ResourceType {
     // Auth & Access
-    ACCOUNT("Tài khoản"),
     USER("Người dùng"),
     ROLE("Vai trò"),
     PERMISSION("Quyền hạn"),
 
     // Knowledge Base
-    DOC_PACKAGE("Gói tài liệu"),
+    DEPARTMENT("Phòng ban"),
+    USER_DEPARTMENT_ACCESS("Phân quyền truy cập phòng ban"),
     DOCUMENT("Tài liệu"),
-    DOCUMENT_CHUNK("Đoạn tài liệu"),
     CATEGORY("Danh mục"),
 
     // AI / Chatbot
-    CHATBOT_CONFIG("Cấu hình chatbot"),
-    CHATBOT_POOL("Pool chatbot"),
-    EMBEDDED_MODEL("Mô hình nhúng"),
+    CHAT_MODEL("Mô hình chat"),
     LLM_TRACE_LOG("Nhật ký LLM"),
     INGEST("Nạp liệu"),
 
@@ -29,7 +26,6 @@ public enum ResourceType {
 
     // Logs
     AUDIT_LOG("Nhật ký hệ thống"),
-    DOCUMENT_PROCESS_LOG("Nhật ký xử lý tài liệu"),
 
     // System
     SYSTEM("Hệ thống"),

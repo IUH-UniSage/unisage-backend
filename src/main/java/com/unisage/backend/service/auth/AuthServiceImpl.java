@@ -1,20 +1,14 @@
 package com.unisage.backend.service.auth;
 
 import com.unisage.backend.dto.request.LoginRequest;
-import com.unisage.backend.dto.request.SelectProfileRequest;
 import com.unisage.backend.dto.response.AuthResponse;
 import com.unisage.backend.dto.response.PermissionInfo;
-import com.unisage.backend.dto.response.SelectProfileResponse;
-import com.unisage.backend.dto.response.UserProfileResponse;
-import com.unisage.backend.entity.Account;
 import com.unisage.backend.entity.Permission;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.UserRepository;
-import com.unisage.backend.repository.AccountRepository;
 import com.unisage.backend.security.JwtUtil;
-import com.unisage.backend.service.auth.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -30,99 +24,31 @@ import java.util.stream.Collectors;
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
-    private final AccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
     @Override
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        Account account = accountRepository.findByCode(request.code())
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        User user = userRepository.findByCode(request.code())
+                .orElseThrow(() -> new AppException(ErrorCode.AUTH_INVALID_CREDENTIALS));
 
-        if (!account.getIsActive()) {
-            throw new AppException(ErrorCode.ACCOUNT_LOCKED);
-        }
-
-        if (!passwordEncoder.matches(request.password(), account.getPasswordHash())) {
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new AppException(ErrorCode.AUTH_INVALID_CREDENTIALS);
         }
 
-        List<User> users = account.getUsers();
-        if (users.isEmpty()) {
-            throw new AppException(ErrorCode.PROFILE_NOT_FOUND);
-        }
-
-        account.setLastLogin(LocalDateTime.now());
-        accountRepository.save(account);
-
-        List<UserProfileResponse> profiles = users.stream()
-                .filter(u -> u.getRole().getIsActive())
-                .map(u -> UserProfileResponse.builder()
-                        .userId(u.getId())
-                        .fullName(u.getFirstName() + " " + u.getLastName())
-                        .avatarUrl(u.getAvatarUrl())
-                        .role(u.getRole().getName())
-                        .roleDescription(u.getRole().getDescription())
-                        .isSystemRole(Boolean.TRUE.equals(u.getRole().getIsSystemRole()))
-                        .permissions(mapToPermissionInfo(u))
-                        .build())
-                .collect(Collectors.toList());
-
-        String accessToken = null;
-        String refreshToken = null;
-        long refreshTokenExpirationMs = 0;
-
-        if (users.size() == 1) {
-            User user = users.get(0);
-            if (!user.getRole().getIsActive()) {
-                throw new AppException(ErrorCode.USER_BANNED);
-            }
-            AuthResponse session = buildSession(user, account);
-            accessToken = session.accessToken();
-            refreshToken = session.refreshToken();
-            refreshTokenExpirationMs = session.refreshTokenExpirationMs();
-        }
-
-        return AuthResponse.builder()
-                .profiles(profiles)
-                .email(account.getEmail())
-                .code(account.getCode())
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .refreshTokenExpirationMs(refreshTokenExpirationMs)
-                .build();
-    }
-
-    @Override
-    @Transactional
-    public SelectProfileResponse selectProfile(SelectProfileRequest request) {
-        User user = userRepository.findById(request.userId())
-                .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
-        if (!user.getRole().getIsActive()) {
-            throw new AppException(ErrorCode.USER_BANNED);
-        }
-        Account account = user.getAccount();
-
-        if (!account.getIsActive()) {
+        if (!user.getIsActive()) {
             throw new AppException(ErrorCode.ACCOUNT_LOCKED);
         }
 
-        String accessToken = jwtUtil.generateAccessToken(user);
-        String refreshToken = jwtUtil.generateRefreshToken(user);
+        if (!Boolean.TRUE.equals(user.getRole().getIsActive())) {
+            throw new AppException(ErrorCode.USER_BANNED);
+        }
 
-        return SelectProfileResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .refreshTokenExpirationMs(jwtUtil.getRefreshExpirationMs())
-                .email(account.getEmail())
-                .fullName(user.getFirstName() + " " + user.getLastName())
-                .role(user.getRole().getName())
-                .code(account.getCode())
-                .avatarUrl(user.getAvatarUrl())
-                .isSystemRole(Boolean.TRUE.equals(user.getRole().getIsSystemRole()))
-                .permissions(mapToPermissionInfo(user))
-                .build();
+        user.setLastLogin(LocalDateTime.now());
+        userRepository.save(user);
+
+        return buildSession(user);
     }
 
     @Override
@@ -144,25 +70,29 @@ public class AuthServiceImpl implements AuthService {
         UUID userId = UUID.fromString(userIdStr);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-        Account account = user.getAccount();
 
-        if (!account.getIsActive()) {
+        if (!user.getIsActive()) {
             throw new AppException(ErrorCode.ACCOUNT_LOCKED);
         }
 
-        return buildSession(user, account);
+        return buildSession(user);
     }
 
-    private AuthResponse buildSession(User user, Account account) {
+    private AuthResponse buildSession(User user) {
         String accessToken = jwtUtil.generateAccessToken(user);
         String refreshToken = jwtUtil.generateRefreshToken(user);
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
-                .email(account.getEmail())
-                .code(account.getCode())
                 .refreshTokenExpirationMs(jwtUtil.getRefreshExpirationMs())
+                .email(user.getEmail())
+                .code(user.getCode())
+                .fullName(user.getFirstName() + " " + user.getLastName())
+                .avatarUrl(user.getAvatarUrl())
+                .role(user.getRole().getName())
+                .isSystemRole(Boolean.TRUE.equals(user.getRole().getIsSystemRole()))
+                .permissions(mapToPermissionInfo(user))
                 .build();
     }
 

@@ -7,16 +7,15 @@ import com.unisage.backend.dto.response.PageResponse;
 import com.unisage.backend.dto.response.UserResponse;
 import com.unisage.backend.dto.response.UserDetailResponse;
 
+import java.time.LocalDateTime;
 import java.util.*;
 
-import com.unisage.backend.entity.Account;
 import com.unisage.backend.entity.Permission;
 import com.unisage.backend.entity.Role;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.repository.PermissionRepository;
 import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.repository.RoleRepository;
-import com.unisage.backend.repository.AccountRepository;
 import com.unisage.backend.service.user.UserService;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
@@ -31,7 +30,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
-    private final AccountRepository accountRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
@@ -40,40 +38,43 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserResponse createUser(CreateUserRequest request) {
+        if (userRepository.findByEmail(request.email()).isPresent())
+            throw new AppException(ErrorCode.EMAIL_EXISTED);
+        if (request.code() != null && userRepository.findByCode(request.code()).isPresent())
+            throw new AppException(ErrorCode.USER_CODE_EXISTED);
         if (request.phone() != null && userRepository.findByPhone(request.phone()).isPresent())
             throw new AppException(ErrorCode.PHONE_EXISTED);
 
         Role role = roleRepository.findById(request.roleId())
                 .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
 
-        Account account = accountRepository.findById(request.accountId())
-                .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_EXISTED));
-
         User user = User.builder()
-                .account(account)
+                .email(request.email())
+                .code(request.code())
+                .passwordHash(passwordEncoder.encode(request.password()))
                 .firstName(request.firstName())
                 .lastName(request.lastName())
                 .role(role)
                 .phone(request.phone())
                 .gender(request.gender())
-                .personalEmail(request.personalEmail())
+                .status(UserStatus.ACTIVE)
                 .build();
         userRepository.save(user);
 
-        return toResponse(account, user);
+        return toResponse(user);
     }
 
     @Override
     public UserDetailResponse getUserById(UUID id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-        return toDetailResponse(user.getAccount(), user);
+        return toDetailResponse(user);
     }
 
     @Override
     public PageResponse<List<UserResponse>> getAllUsers(Pageable pageable) {
         Page<User> userPage = userRepository.findAll(pageable);
-        return PageResponse.fromPage(userPage, u -> toResponse(u.getAccount(), u));
+        return PageResponse.fromPage(userPage, this::toResponse);
     }
 
     @Override
@@ -81,31 +82,27 @@ public class UserServiceImpl implements UserService {
     public UserDetailResponse updateUser(UUID id, UpdateUserRequest request) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-        Account account = user.getAccount();
 
-        if (request.email() != null && !request.email().equals(account.getEmail())) {
-            if (accountRepository.findByEmail(request.email()).isPresent())
+        if (request.email() != null && !request.email().equals(user.getEmail())) {
+            if (userRepository.findByEmail(request.email()).isPresent())
                 throw new AppException(ErrorCode.EMAIL_EXISTED);
-            account.setEmail(request.email());
+            user.setEmail(request.email());
         }
-        if (request.code() != null && !request.code().equals(account.getCode())) {
-            if (accountRepository.findByCode(request.code()).isPresent())
+        if (request.code() != null && !request.code().equals(user.getCode())) {
+            if (userRepository.findByCode(request.code()).isPresent())
                 throw new AppException(ErrorCode.USER_CODE_EXISTED);
-            account.setCode(request.code());
+            user.setCode(request.code());
         }
         if (request.phone() != null && !request.phone().equals(user.getPhone())) {
             if (userRepository.findByPhone(request.phone()).isPresent())
                 throw new AppException(ErrorCode.PHONE_EXISTED);
+            user.setPhone(request.phone());
         }
 
         user.setFirstName(request.firstName());
         user.setLastName(request.lastName());
-        user.setPhone(request.phone());
         user.setGender(request.gender());
-        user.setAddress(request.address());
-        user.setDepartment(request.department());
-
-        accountRepository.save(account);
+        user.setExtraInfo(request.extraInfo());
 
         if (request.roleId() != null && (user.getRole() == null || !user.getRole().getId().equals(request.roleId()))) {
             Role role = roleRepository.findById(request.roleId())
@@ -113,15 +110,8 @@ public class UserServiceImpl implements UserService {
             user.setRole(role);
         }
 
-        if (request.accountId() != null && !request.accountId().equals(account.getId())) {
-            Account newAccount = accountRepository.findById(request.accountId())
-                    .orElseThrow(() -> new AppException(ErrorCode.ACCOUNT_NOT_EXISTED));
-            user.setAccount(newAccount);
-            account = newAccount;
-        }
-
         userRepository.save(user);
-        return toDetailResponse(account, user);
+        return toDetailResponse(user);
     }
 
     @Override
@@ -130,6 +120,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         user.setStatus(UserStatus.INACTIVE);
+        user.setDeletedAt(LocalDateTime.now());
         userRepository.save(user);
     }
 
@@ -139,6 +130,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         user.setStatus(UserStatus.ACTIVE);
+        user.setDeletedAt(null);
         userRepository.save(user);
     }
 
@@ -146,7 +138,10 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void deleteResources(List<UUID> ids) {
         List<User> users = userRepository.findAllById(ids);
-        users.forEach(user -> user.setStatus(UserStatus.INACTIVE));
+        users.forEach(user -> {
+            user.setStatus(UserStatus.INACTIVE);
+            user.setDeletedAt(LocalDateTime.now());
+        });
         userRepository.saveAll(users);
     }
 
@@ -154,33 +149,43 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void recoverResources(List<UUID> ids) {
         List<User> users = userRepository.findAllById(ids);
-        users.forEach(user -> user.setStatus(UserStatus.ACTIVE));
+        users.forEach(user -> {
+            user.setStatus(UserStatus.ACTIVE);
+            user.setDeletedAt(null);
+        });
         userRepository.saveAll(users);
     }
 
-    private UserResponse toResponse(Account account, User user) {
+    @Override
+    @Transactional
+    public void changePassword(UUID id, String newPassword) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+    }
+
+    private UserResponse toResponse(User user) {
         return UserResponse.builder()
-                .id(user != null ? user.getId() : account.getId())
-                .accountId(account.getId())
-                .email(account.getEmail())
-                .personalEmail(user != null ? user.getPersonalEmail() : null)
-                .firstName(user != null ? user.getFirstName() : null)
-                .lastName(user != null ? user.getLastName() : null)
-                .avtUrl(user != null ? user.getAvatarUrl() : null)
-                .code(account.getCode())
-                .roleName(user != null && user.getRole() != null ? user.getRole().getName() : null)
-                .roleId(user != null && user.getRole() != null ? user.getRole().getId() : null)
-                .phone(user != null ? user.getPhone() : null)
-                .gender(user != null ? user.getGender() : null)
-                .status(user != null ? user.getStatus() : (account.getIsActive() ? UserStatus.ACTIVE : UserStatus.INACTIVE))
-                .lastLogin(account.getLastLogin())
-                .createdAt(user != null ? user.getCreatedAt() : account.getCreatedAt())
+                .id(user.getId())
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .avatarUrl(user.getAvatarUrl())
+                .code(user.getCode())
+                .roleName(user.getRole() != null ? user.getRole().getName() : null)
+                .roleId(user.getRole() != null ? user.getRole().getId() : null)
+                .phone(user.getPhone())
+                .gender(user.getGender())
+                .status(user.getStatus())
+                .lastLogin(user.getLastLogin())
+                .createdAt(user.getCreatedAt())
                 .build();
     }
 
-    private UserDetailResponse toDetailResponse(Account account, User user) {
+    private UserDetailResponse toDetailResponse(User user) {
         Map<String, Integer> permissionsMap = new HashMap<>();
-        if (user != null && user.getRole() != null && user.getRole().getRolePermissions() != null) {
+        if (user.getRole() != null && user.getRole().getRolePermissions() != null) {
             user.getRole().getRolePermissions().forEach(rp -> {
                 Permission p = rp.getPermission();
                 Integer level = p.getAccessLevel();
@@ -194,26 +199,23 @@ public class UserServiceImpl implements UserService {
         }
 
         return UserDetailResponse.builder()
-                .id(user != null ? user.getId() : account.getId())
-                .accountId(account.getId())
-                .email(account.getEmail())
-                .personalEmail(user != null ? user.getPersonalEmail() : null)
-                .firstName(user != null ? user.getFirstName() : null)
-                .lastName(user != null ? user.getLastName() : null)
-                .avtUrl(user != null ? user.getAvatarUrl() : null)
-                .code(account.getCode())
-                .roleName(user != null && user.getRole() != null ? user.getRole().getName() : null)
-                .roleId(user != null && user.getRole() != null ? user.getRole().getId() : null)
-                .phone(user != null ? user.getPhone() : null)
-                .gender(user != null ? user.getGender() : null)
-                .status(user != null ? user.getStatus() : (account.getIsActive() ? UserStatus.ACTIVE : UserStatus.INACTIVE))
-                .lastLogin(account.getLastLogin())
-                .createdAt(user != null ? user.getCreatedAt() : account.getCreatedAt())
-                .createdBy(user != null ? user.getCreatedBy() : account.getCreatedBy())
-                .updatedAt(user != null ? user.getUpdatedAt() : account.getUpdatedAt())
-                .updatedBy(user != null ? user.getUpdatedBy() : account.getUpdatedBy())
-                .address(user != null ? user.getAddress() : null)
-                .department(user != null ? user.getDepartment() : null)
+                .id(user.getId())
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .avatarUrl(user.getAvatarUrl())
+                .code(user.getCode())
+                .roleName(user.getRole() != null ? user.getRole().getName() : null)
+                .roleId(user.getRole() != null ? user.getRole().getId() : null)
+                .phone(user.getPhone())
+                .gender(user.getGender())
+                .status(user.getStatus())
+                .extraInfo(user.getExtraInfo())
+                .lastLogin(user.getLastLogin())
+                .createdAt(user.getCreatedAt())
+                .createdBy(user.getCreatedBy())
+                .updatedAt(user.getUpdatedAt())
+                .updatedBy(user.getUpdatedBy())
                 .totalQueries(0)
                 .topTopics(new ArrayList<>())
                 .permissions(permissionsMap)
