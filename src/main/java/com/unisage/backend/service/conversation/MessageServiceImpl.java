@@ -11,12 +11,15 @@ import com.unisage.backend.dto.response.MessageResponse;
 import com.unisage.backend.entity.ChatModel;
 import com.unisage.backend.entity.Conversation;
 import com.unisage.backend.entity.Message;
+import com.unisage.backend.entity.UsageLimit;
+import com.unisage.backend.entity.enums.MsgRole;
 import com.unisage.backend.entity.enums.MsgStatus;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
 import com.unisage.backend.repository.ConversationRepository;
 import com.unisage.backend.repository.MessageRepository;
+import com.unisage.backend.service.usagelimit.UsageLimitService;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +31,7 @@ public class MessageServiceImpl implements MessageService {
     private final MessageRepository messageRepository;
     private final ConversationRepository conversationRepository;
     private final ChatModelRepository chatModelRepository;
+    private final UsageLimitService usageLimitService;
 
     @Override
     @Transactional
@@ -41,6 +45,11 @@ public class MessageServiceImpl implements MessageService {
                     .orElseThrow(() -> new AppException(ErrorCode.CHAT_MODEL_NOT_FOUND));
         }
 
+        UsageLimit usageLimit = null;
+        if (request.role() == MsgRole.USER) {
+            usageLimit = usageLimitService.checkAndGetOrCreate(conversation.getUser(), conversation.getIpAddress());
+        }
+
         Message message = Message.builder()
                 .conversation(conversation)
                 .role(request.role())
@@ -52,6 +61,8 @@ public class MessageServiceImpl implements MessageService {
                 .metadata(request.metadata())
                 .build();
         message = messageRepository.save(message);
+
+        usageLimitService.increment(usageLimit);
 
         return toResponse(message);
     }

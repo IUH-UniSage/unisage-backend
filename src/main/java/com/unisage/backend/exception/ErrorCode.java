@@ -36,6 +36,8 @@ public enum ErrorCode {
     CONVERSATION_NOT_FOUND(HttpStatus.NOT_FOUND, 2127, "Conversation không tồn tại."),
     MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, 2128, "Message không tồn tại."),
     CONVERSATION_ALREADY_CLAIMED(HttpStatus.BAD_REQUEST, 2129, "Hội thoại này đã thuộc về một người dùng khác."),
+    USAGE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, 2130,
+            "Bạn đã dùng hết số tin nhắn miễn phí hôm nay. Quay lại sau 00:00 hoặc đăng nhập để tiếp tục."),
 
     // Business rule errors
     EMAIL_EXISTED(HttpStatus.BAD_REQUEST, 2115, "Email này đã được sử dụng!"),
