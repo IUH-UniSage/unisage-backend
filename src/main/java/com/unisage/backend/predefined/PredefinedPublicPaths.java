@@ -5,17 +5,25 @@ import java.util.List;
 public final class PredefinedPublicPaths {
     private PredefinedPublicPaths() {}
 
-    public static final List<String> PUBLIC_PATHS = List.of(
+    /** {@code method} is an HTTP method name, or "*" to match any method. */
+    public record PublicPath(String method, String pattern) {}
+
+    public static final List<PublicPath> PUBLIC_PATHS = List.of(
             // Auth
-            "/auth/**",
+            new PublicPath("*", "/auth/**"),
             // AI Agent
-            "/ai/**",
+            new PublicPath("*", "/ai/**"),
             // Swagger / OpenAPI
-            "/swagger-ui/**",
-            "/v3/api-docs/**",
-            "/swagger-resources/**",
-            "/webjars/**",
+            new PublicPath("*", "/swagger-ui/**"),
+            new PublicPath("*", "/v3/api-docs/**"),
+            new PublicPath("*", "/swagger-resources/**"),
+            new PublicPath("*", "/webjars/**"),
             // Actuator health
-            "/actuator/health"
+            new PublicPath("*", "/actuator/health"),
+            // Guest chat — anonymous conversation/message creation & history read.
+            // Everything else on these resources (list-by-user, delete, claim) stays RBAC-gated.
+            new PublicPath("POST", "/conversations"),
+            new PublicPath("POST", "/messages"),
+            new PublicPath("GET", "/messages/conversation/**")
     );
 }

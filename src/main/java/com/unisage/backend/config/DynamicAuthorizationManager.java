@@ -49,7 +49,7 @@ public class DynamicAuthorizationManager implements AuthorizationManager<Request
         log.debug("DynamicAuthZ → {} {}", httpMethod, normalizedPath);
 
         try {
-            if (isPublicPath(normalizedPath)) {
+            if (isPublicPath(normalizedPath, httpMethod)) {
                 log.debug("Public path — granted: {}", normalizedPath);
                 return new AuthorizationDecision(true);
             }
@@ -112,7 +112,9 @@ public class DynamicAuthorizationManager implements AuthorizationManager<Request
         }
     }
 
-    private boolean isPublicPath(String path) {
-        return PUBLIC_PATHS.stream().anyMatch(p -> pathMatcher.match(p, path));
+    private boolean isPublicPath(String path, String method) {
+        return PUBLIC_PATHS.stream().anyMatch(p ->
+                ("*".equals(p.method()) || p.method().equalsIgnoreCase(method))
+                        && pathMatcher.match(p.pattern(), path));
     }
 }

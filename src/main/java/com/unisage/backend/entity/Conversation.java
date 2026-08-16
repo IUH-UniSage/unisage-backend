@@ -31,7 +31,7 @@ public class Conversation extends BaseEntity {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id")
     @JsonBackReference
     private User user;
 
@@ -39,6 +39,9 @@ public class Conversation extends BaseEntity {
     @JoinColumn(name = "department_id")
     @JsonBackReference
     private Department department;
+
+    @Column(name = "ip_address")
+    private String ipAddress;
 
     private String title;
 

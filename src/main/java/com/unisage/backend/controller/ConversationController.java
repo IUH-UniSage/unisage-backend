@@ -13,6 +13,7 @@ import com.unisage.backend.dto.response.ConversationResponse;
 import com.unisage.backend.service.conversation.ConversationService;
 import com.unisage.backend.utils.SecurityUtil;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -26,11 +27,12 @@ public class ConversationController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<ConversationResponse>> create(
-            @RequestParam(required = false) UUID userId,
-            @Valid @RequestBody CreateConversationRequest request) {
-        UUID ownerId = userId != null ? userId : securityUtil.getCurrentUserId();
+            @Valid @RequestBody CreateConversationRequest request,
+            HttpServletRequest httpRequest) {
+        UUID ownerId = securityUtil.getCurrentUserIdOrNull();
+        String ipAddress = extractClientIp(httpRequest);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(conversationService.create(request, ownerId)));
+                .body(ApiResponse.success(conversationService.create(request, ownerId, ipAddress)));
     }
 
     @GetMapping
@@ -42,5 +44,20 @@ public class ConversationController {
     public ResponseEntity<ApiResponse<Void>> softDelete(@PathVariable UUID id) {
         conversationService.softDelete(id);
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @PatchMapping("/{id}/claim")
+    public ResponseEntity<ApiResponse<ConversationResponse>> claim(@PathVariable UUID id) {
+        UUID userId = securityUtil.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(conversationService.claim(id, userId)));
+    }
+
+    /** Traffic arrives via the API Gateway, so prefer the forwarded client IP over the socket's. */
+    private String extractClientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

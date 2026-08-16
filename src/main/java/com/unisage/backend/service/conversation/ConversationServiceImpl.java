@@ -31,9 +31,12 @@ public class ConversationServiceImpl implements ConversationService {
 
     @Override
     @Transactional
-    public ConversationResponse create(CreateConversationRequest request, UUID userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+    public ConversationResponse create(CreateConversationRequest request, UUID userId, String ipAddress) {
+        User user = null;
+        if (userId != null) {
+            user = userRepository.findById(userId)
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        }
 
         Department department = null;
         if (request.departmentId() != null) {
@@ -44,6 +47,7 @@ public class ConversationServiceImpl implements ConversationService {
         Conversation conversation = Conversation.builder()
                 .user(user)
                 .department(department)
+                .ipAddress(ipAddress)
                 .title(request.title())
                 .build();
 
@@ -67,10 +71,28 @@ public class ConversationServiceImpl implements ConversationService {
         conversationRepository.save(conversation);
     }
 
+    @Override
+    @Transactional
+    public ConversationResponse claim(UUID conversationId, UUID userId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
+
+        if (conversation.getUser() != null) {
+            throw new AppException(ErrorCode.CONVERSATION_ALREADY_CLAIMED);
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        conversation.setUser(user);
+        conversation = conversationRepository.save(conversation);
+        return toResponse(conversation);
+    }
+
     private ConversationResponse toResponse(Conversation conversation) {
         return ConversationResponse.builder()
                 .id(conversation.getId())
-                .userId(conversation.getUser().getId())
+                .userId(conversation.getUser() != null ? conversation.getUser().getId() : null)
                 .departmentId(conversation.getDepartment() != null ? conversation.getDepartment().getId() : null)
                 .title(conversation.getTitle())
                 .summary(conversation.getSummary())

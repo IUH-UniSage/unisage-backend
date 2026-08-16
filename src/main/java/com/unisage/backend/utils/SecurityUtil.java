@@ -34,6 +34,18 @@ public class SecurityUtil {
         return getCurrentUserPrincipal().getUserId();
     }
 
+    /**
+     * Like {@link #getCurrentUserId()} but returns null instead of throwing
+     * when the caller is unauthenticated (guest chat).
+     */
+    public UUID getCurrentUserIdOrNull() {
+        try {
+            return getCurrentUserId();
+        } catch (AppException e) {
+            return null;
+        }
+    }
+
 
 
     public List<String> getCurrentRoles() {

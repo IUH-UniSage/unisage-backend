@@ -35,6 +35,7 @@ public enum ErrorCode {
     USER_DEPARTMENT_ACCESS_NOT_FOUND(HttpStatus.NOT_FOUND, 2125, "Phân quyền phòng ban không tồn tại."),
     CONVERSATION_NOT_FOUND(HttpStatus.NOT_FOUND, 2127, "Conversation không tồn tại."),
     MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, 2128, "Message không tồn tại."),
+    CONVERSATION_ALREADY_CLAIMED(HttpStatus.BAD_REQUEST, 2129, "Hội thoại này đã thuộc về một người dùng khác."),
 
     // Business rule errors
     PATH_EXISTED(HttpStatus.BAD_REQUEST, 2114, "Đường dẫn đã tồn tại trong hệ thống!"),

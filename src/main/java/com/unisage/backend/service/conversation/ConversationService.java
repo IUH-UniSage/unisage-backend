@@ -8,9 +8,13 @@ import com.unisage.backend.dto.response.ConversationResponse;
 
 public interface ConversationService {
 
-    ConversationResponse create(CreateConversationRequest request, UUID userId);
+    /** {@code userId} is null for guest chat — see the conversation-ownership ADR. */
+    ConversationResponse create(CreateConversationRequest request, UUID userId, String ipAddress);
 
     List<ConversationResponse> getByUser(UUID userId);
 
     void softDelete(UUID id);
+
+    /** Attaches a previously-guest (user == null) conversation to a now-logged-in user. */
+    ConversationResponse claim(UUID conversationId, UUID userId);
 }
