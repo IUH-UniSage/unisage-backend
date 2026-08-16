@@ -14,7 +14,7 @@ public enum ErrorCode {
     JWT_INVALID_TOKEN(HttpStatus.UNAUTHORIZED, 1003, "Token không hợp lệ."),
     JWT_EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, 1004, "Token đã hết hạn."),
     JWT_SIGNATURE_INVALID(HttpStatus.UNAUTHORIZED, 1005, "Chữ ký token không hợp lệ."),
-    AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, 1006, "Mã tài khoản hoặc mật khẩu không chính xác."),
+    AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, 1006, "Mã sinh viên/giảng viên hoặc mật khẩu không chính xác."),
 
     // User account errors (2xxx)
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, 2004, "Người dùng không tồn tại."),
