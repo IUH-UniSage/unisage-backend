@@ -52,9 +52,6 @@ public class UsageLimit extends BaseEntity {
     @Column(name = "used_count")
     private Integer usedCount = 0;
 
-    @Column(name = "max_count")
-    private Integer maxCount;
-
     @Column(name = "last_used_at")
     private LocalDateTime lastUsedAt;
 }
