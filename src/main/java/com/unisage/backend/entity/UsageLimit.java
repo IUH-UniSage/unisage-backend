@@ -4,8 +4,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.unisage.backend.entity.enums.UsageLimitScope;
+import com.unisage.backend.entity.enums.UsageLimitType;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
@@ -40,10 +45,12 @@ public class UsageLimit extends BaseEntity {
     @Column(name = "ip_address")
     private String ipAddress;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "limit_type")
-    private String limitType;
+    private UsageLimitType limitType;
 
-    private String scope;
+    @Enumerated(EnumType.STRING)
+    private UsageLimitScope scope;
 
     @Column(name = "scope_date")
     private LocalDate scopeDate;

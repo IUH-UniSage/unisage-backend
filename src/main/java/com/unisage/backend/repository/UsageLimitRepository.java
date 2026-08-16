@@ -7,12 +7,14 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.unisage.backend.entity.UsageLimit;
+import com.unisage.backend.entity.enums.UsageLimitScope;
+import com.unisage.backend.entity.enums.UsageLimitType;
 
 public interface UsageLimitRepository extends JpaRepository<UsageLimit, UUID> {
 
     Optional<UsageLimit> findByUserIdAndLimitTypeAndScopeAndScopeDate(
-            UUID userId, String limitType, String scope, LocalDate scopeDate);
+            UUID userId, UsageLimitType limitType, UsageLimitScope scope, LocalDate scopeDate);
 
     Optional<UsageLimit> findByIpAddressAndLimitTypeAndScopeAndScopeDate(
-            String ipAddress, String limitType, String scope, LocalDate scopeDate);
+            String ipAddress, UsageLimitType limitType, UsageLimitScope scope, LocalDate scopeDate);
 }
