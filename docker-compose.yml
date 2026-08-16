@@ -21,7 +21,7 @@ services:
     depends_on:
       - unisage-db
     env_file:
-      - .ENV
+      - .env
     environment:
       - DB_HOST=unisage-db
       - DB_PORT=5432

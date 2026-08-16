@@ -2,28 +2,30 @@
 
 ## Chạy bằng IDE (Chỉ chạy Database bằng Docker)
 
-1. Cấu hình `.ENV`:
-```ini
-COMPOSE_PROFILES=
+1. Tạo cấu hình local:
+```powershell
+Copy-Item .env.example .env
 ```
 
 2. Khởi chạy Database:
 ```bash
-docker compose up -d
+docker compose up -d unisage-db
 ```
 
 3. Chạy ứng dụng bằng IDE hoặc chạy lệnh:
-```bash
-./mvnw spring-boot:run
+```powershell
+.\mvnw.cmd spring-boot:run
 ```
+
+Backend chạy tại `http://localhost:8081/api/v1`.
 
 ---
 
 ## Chạy hoàn toàn bằng Docker
 
-1. Cấu hình `.ENV`:
-```ini
-COMPOSE_PROFILES=app
+1. Tạo cấu hình local:
+```powershell
+Copy-Item .env.example .env
 ```
 
 2. Build ứng dụng:

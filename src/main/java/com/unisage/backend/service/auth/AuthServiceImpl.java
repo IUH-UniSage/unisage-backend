@@ -37,13 +37,7 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(ErrorCode.AUTH_INVALID_CREDENTIALS);
         }
 
-        if (!user.getIsActive()) {
-            throw new AppException(ErrorCode.ACCOUNT_LOCKED);
-        }
-
-        if (!Boolean.TRUE.equals(user.getRole().getIsActive())) {
-            throw new AppException(ErrorCode.USER_BANNED);
-        }
+        validateActiveAccount(user);
 
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
@@ -71,11 +65,19 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
+        validateActiveAccount(user);
+
+        return buildSession(user);
+    }
+
+    private void validateActiveAccount(User user) {
         if (!user.getIsActive()) {
             throw new AppException(ErrorCode.ACCOUNT_LOCKED);
         }
 
-        return buildSession(user);
+        if (user.getRole() == null || !Boolean.TRUE.equals(user.getRole().getIsActive())) {
+            throw new AppException(ErrorCode.USER_BANNED);
+        }
     }
 
     private AuthResponse buildSession(User user) {
@@ -83,6 +85,7 @@ public class AuthServiceImpl implements AuthService {
         String refreshToken = jwtUtil.generateRefreshToken(user);
 
         return AuthResponse.builder()
+                .userId(user.getId())
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .refreshTokenExpirationMs(jwtUtil.getRefreshExpirationMs())

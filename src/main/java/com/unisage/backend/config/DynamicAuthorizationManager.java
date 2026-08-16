@@ -87,6 +87,11 @@ public class DynamicAuthorizationManager implements AuthorizationManager<Request
                 return new AuthorizationDecision(false);
             }
 
+            if (!Boolean.TRUE.equals(user.getRole().getIsActive())) {
+                log.warn("User {} has an inactive role - denied", userId);
+                return new AuthorizationDecision(false);
+            }
+
             boolean granted = user.getRole().getRolePermissions().stream()
                     .map(rp -> rp.getPermission())
                     .filter(p -> p != null && Boolean.TRUE.equals(p.getIsActive()))
