@@ -79,7 +79,6 @@ public class UserDepartmentAccessServiceImpl implements UserDepartmentAccessServ
                 .roleName(access.getRole().getName())
                 .departmentId(access.getDepartment().getId())
                 .departmentName(access.getDepartment().getName())
-                .departmentPath(access.getDepartment().getPath())
                 .accessLevel(access.getAccessLevel())
                 .build();
     }

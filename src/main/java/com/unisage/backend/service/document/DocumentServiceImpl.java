@@ -201,7 +201,7 @@ public class DocumentServiceImpl implements DocumentService {
                 .minAccessLevel(document.getMinAccessLevel())
                 .version(document.getVersion())
                 .departmentId(document.getDocPackage() != null ? document.getDocPackage().getId() : null)
-                .departmentPath(document.getDocPackage() != null ? document.getDocPackage().getPath() : null)
+                .departmentName(document.getDocPackage() != null ? document.getDocPackage().getName() : null)
                 .categoryId(document.getCategory() != null ? document.getCategory().getId() : null)
                 .categoryName(document.getCategory() != null ? document.getCategory().getName() : null)
                 .ingestedByUserId(document.getIngestedBy() != null ? document.getIngestedBy().getId() : null)

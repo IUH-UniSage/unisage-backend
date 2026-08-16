@@ -18,7 +18,7 @@ public record DocumentResponse(
     Integer minAccessLevel,
     Integer version,
     UUID departmentId,
-    String departmentPath,
+    String departmentName,
     UUID categoryId,
     String categoryName,
     UUID ingestedByUserId,

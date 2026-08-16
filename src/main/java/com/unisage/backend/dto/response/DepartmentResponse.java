@@ -10,7 +10,6 @@ import lombok.Builder;
 public record DepartmentResponse(
     UUID id,
     String name,
-    String path,
     String description,
     UUID parentId,
     Boolean isActive,

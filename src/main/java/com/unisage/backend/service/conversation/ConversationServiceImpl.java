@@ -10,12 +10,10 @@ import org.springframework.stereotype.Service;
 import com.unisage.backend.dto.request.CreateConversationRequest;
 import com.unisage.backend.dto.response.ConversationResponse;
 import com.unisage.backend.entity.Conversation;
-import com.unisage.backend.entity.Department;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ConversationRepository;
-import com.unisage.backend.repository.DepartmentRepository;
 import com.unisage.backend.repository.UserRepository;
 
 import jakarta.transaction.Transactional;
@@ -27,7 +25,6 @@ public class ConversationServiceImpl implements ConversationService {
 
     private final ConversationRepository conversationRepository;
     private final UserRepository userRepository;
-    private final DepartmentRepository departmentRepository;
 
     @Override
     @Transactional
@@ -38,15 +35,8 @@ public class ConversationServiceImpl implements ConversationService {
                     .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         }
 
-        Department department = null;
-        if (request.departmentId() != null) {
-            department = departmentRepository.findById(request.departmentId())
-                    .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND));
-        }
-
         Conversation conversation = Conversation.builder()
                 .user(user)
-                .department(department)
                 .ipAddress(ipAddress)
                 .title(request.title())
                 .build();
@@ -93,10 +83,7 @@ public class ConversationServiceImpl implements ConversationService {
         return ConversationResponse.builder()
                 .id(conversation.getId())
                 .userId(conversation.getUser() != null ? conversation.getUser().getId() : null)
-                .departmentId(conversation.getDepartment() != null ? conversation.getDepartment().getId() : null)
                 .title(conversation.getTitle())
-                .summary(conversation.getSummary())
-                .messageCount(conversation.getMessageCount())
                 .createdAt(conversation.getCreatedAt())
                 .build();
     }

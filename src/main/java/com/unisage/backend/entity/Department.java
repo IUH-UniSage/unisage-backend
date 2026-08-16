@@ -37,8 +37,6 @@ public class Department extends BaseEntity {
     @Column(nullable = false)
     private String name;
 
-    private String path;
-
     private String description;
 
     @Column(name = "deleted_at")

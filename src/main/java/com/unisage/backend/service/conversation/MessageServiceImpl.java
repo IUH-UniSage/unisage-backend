@@ -53,10 +53,6 @@ public class MessageServiceImpl implements MessageService {
                 .build();
         message = messageRepository.save(message);
 
-        conversation.setMessageCount(
-                (conversation.getMessageCount() != null ? conversation.getMessageCount() : 0) + 1);
-        conversationRepository.save(conversation);
-
         return toResponse(message);
     }
 

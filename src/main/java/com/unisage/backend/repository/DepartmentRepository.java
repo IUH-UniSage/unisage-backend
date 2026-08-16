@@ -27,9 +27,5 @@ public interface DepartmentRepository extends JpaRepository<Department, UUID> {
 
     List<Department> findByParentIsNull();
 
-    boolean existsByPathAndIsActive(String path, boolean isActive);
-
-    boolean existsByPath(String path);
-
     Optional<Department> findByName(String name);
 }

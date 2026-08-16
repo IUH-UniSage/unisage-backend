@@ -38,7 +38,6 @@ public enum ErrorCode {
     CONVERSATION_ALREADY_CLAIMED(HttpStatus.BAD_REQUEST, 2129, "Hội thoại này đã thuộc về một người dùng khác."),
 
     // Business rule errors
-    PATH_EXISTED(HttpStatus.BAD_REQUEST, 2114, "Đường dẫn đã tồn tại trong hệ thống!"),
     EMAIL_EXISTED(HttpStatus.BAD_REQUEST, 2115, "Email này đã được sử dụng!"),
     PHONE_EXISTED(HttpStatus.BAD_REQUEST, 2116, "Số điện thoại này đã được sử dụng!"),
     USER_CODE_EXISTED(HttpStatus.BAD_REQUEST, 2117, "Mã người dùng này đã tồn tại!"),

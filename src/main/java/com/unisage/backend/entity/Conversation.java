@@ -14,9 +14,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
@@ -35,22 +34,15 @@ public class Conversation extends BaseEntity {
     @JsonBackReference
     private User user;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "department_id")
-    @JsonBackReference
-    private Department department;
-
+    /**
+     * Captured at creation time for every conversation (guest and logged-in alike).
+     * For guest chat (user == null) this is the only trace of who made the request —
+     * no TTL/cleanup job by design, see the conversation-ownership ADR.
+     */
     @Column(name = "ip_address")
     private String ipAddress;
 
     private String title;
-
-    @Column(columnDefinition = "text")
-    private String summary;
-
-    @Builder.Default
-    @Column(name = "message_count")
-    private Integer messageCount = 0;
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;

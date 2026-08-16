@@ -9,9 +9,6 @@ import lombok.Builder;
 public record ConversationResponse(
     UUID id,
     UUID userId,
-    UUID departmentId,
     String title,
-    String summary,
-    Integer messageCount,
     LocalDateTime createdAt
 ) {}

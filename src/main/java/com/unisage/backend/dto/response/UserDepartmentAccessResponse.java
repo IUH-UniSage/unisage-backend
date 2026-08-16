@@ -10,6 +10,5 @@ public record UserDepartmentAccessResponse(
     String roleName,
     UUID departmentId,
     String departmentName,
-    String departmentPath,
     Integer accessLevel
 ) {}

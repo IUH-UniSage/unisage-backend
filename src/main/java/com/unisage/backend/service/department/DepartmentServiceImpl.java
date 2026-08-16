@@ -28,24 +28,15 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional
     public DepartmentResponse createDepartment(DepartmentRequest request) {
         Department parent = null;
-        String path;
 
         if (request.parentId() != null) {
             parent = departmentRepository.findById(request.parentId())
                     .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND));
-            path = parent.getPath() + "/" + request.name();
-        } else {
-            path = "/" + request.name();
-        }
-
-        if (departmentRepository.existsByPathAndIsActive(path, true)) {
-            throw new AppException(ErrorCode.PATH_EXISTED);
         }
 
         Department department = Department.builder()
                 .parent(parent)
                 .name(request.name())
-                .path(path)
                 .description(request.description())
                 .build();
 
@@ -77,10 +68,6 @@ public class DepartmentServiceImpl implements DepartmentService {
     public void recoverDepartment(UUID id) {
         Department department = departmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND));
-
-        if (departmentRepository.existsByPathAndIsActive(department.getPath(), true)) {
-            throw new AppException(ErrorCode.PATH_EXISTED);
-        }
 
         department.setIsActive(true);
         department.setDeletedAt(null);
@@ -131,7 +118,6 @@ public class DepartmentServiceImpl implements DepartmentService {
         return DepartmentResponse.builder()
                 .id(department.getId())
                 .name(department.getName())
-                .path(department.getPath())
                 .description(department.getDescription())
                 .parentId(department.getParent() != null ? department.getParent().getId() : null)
                 .isActive(department.getIsActive())
@@ -153,7 +139,6 @@ public class DepartmentServiceImpl implements DepartmentService {
         return DepartmentResponse.builder()
                 .id(department.getId())
                 .name(department.getName())
-                .path(department.getPath())
                 .description(department.getDescription())
                 .parentId(department.getParent() != null ? department.getParent().getId() : null)
                 .isActive(department.getIsActive())
