@@ -11,12 +11,11 @@
       "installMaven": "true"
     }
   },
-  "forwardPorts": [8081, 5433],
+  "forwardPorts": [8401],
   "portsAttributes": {
-    "8081": { "label": "backend-java" },
-    "5433": { "label": "unisage-postgres" }
+    "8401": { "label": "backend-java" }
   },
-  "postCreateCommand": "chmod +x mvnw && ./mvnw -q -DskipTests dependency:go-offline",
+  "postCreateCommand": "sh ./mvnw -q -DskipTests dependency:go-offline",
   "customizations": {
     "vscode": {
       "extensions": [
