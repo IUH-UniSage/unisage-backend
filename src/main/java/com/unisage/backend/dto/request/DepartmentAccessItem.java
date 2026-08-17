@@ -6,8 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
 
 @Builder
-public record UserDepartmentAccessRequest(
-    @NotNull UUID roleId,
+public record DepartmentAccessItem(
     @NotNull UUID departmentId,
     @NotNull Integer accessLevel
 ) {}

@@ -51,12 +51,6 @@ public final class PredefinedPermissions {
     public static final String DEPARTMENT_UPDATE = "DEPARTMENT_UPDATE";
     public static final String DEPARTMENT_DELETE = "DEPARTMENT_DELETE";
 
-    // ─── UserDepartmentAccess ───────────────────────────────────────────────
-    public static final String USER_DEPARTMENT_ACCESS_ALL    = "USER_DEPARTMENT_ACCESS_ALL";
-    public static final String USER_DEPARTMENT_ACCESS_READ   = "USER_DEPARTMENT_ACCESS_READ";
-    public static final String USER_DEPARTMENT_ACCESS_CREATE = "USER_DEPARTMENT_ACCESS_CREATE";
-    public static final String USER_DEPARTMENT_ACCESS_DELETE = "USER_DEPARTMENT_ACCESS_DELETE";
-
     // ─── Document ─────────────────────────────────────────────────────────
     // DOCUMENT with access levels
     public static final String DOCUMENT_ALL    = "DOCUMENT_ALL";

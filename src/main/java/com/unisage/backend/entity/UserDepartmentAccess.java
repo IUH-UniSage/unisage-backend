@@ -28,9 +28,9 @@ public class UserDepartmentAccess {
 
     @Id
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "role_id")
+    @JoinColumn(name = "user_id")
     @JsonBackReference
-    private Role role;
+    private User user;
 
     @Id
     @ManyToOne(fetch = FetchType.LAZY)
@@ -45,7 +45,7 @@ public class UserDepartmentAccess {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class UserDepartmentAccessId implements Serializable {
-        private UUID role;
+        private UUID user;
         private UUID department;
     }
 }

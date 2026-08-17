@@ -28,5 +28,6 @@ public record UserDetailResponse(
     String updatedBy,
     Integer totalQueries,
     List<String> topTopics,
-    Map<String, Integer> permissions
+    Map<String, Integer> permissions,
+    List<DepartmentAccessResponse> departmentAccesses
 ) {}

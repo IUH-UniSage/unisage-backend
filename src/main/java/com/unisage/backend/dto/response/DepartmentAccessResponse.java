@@ -5,9 +5,7 @@ import java.util.UUID;
 import lombok.Builder;
 
 @Builder
-public record UserDepartmentAccessResponse(
-    UUID roleId,
-    String roleName,
+public record DepartmentAccessResponse(
     UUID departmentId,
     String departmentName,
     Integer accessLevel

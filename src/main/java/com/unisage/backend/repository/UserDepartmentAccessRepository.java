@@ -15,16 +15,20 @@ import com.unisage.backend.entity.UserDepartmentAccess;
 public interface UserDepartmentAccessRepository
         extends JpaRepository<UserDepartmentAccess, UserDepartmentAccess.UserDepartmentAccessId> {
 
-    @Query("SELECT COUNT(u) > 0 FROM UserDepartmentAccess u WHERE u.role.id = :roleId AND u.department.id = :departmentId")
-    boolean existsByRoleIdAndDepartmentId(@Param("roleId") UUID roleId, @Param("departmentId") UUID departmentId);
+    @Query("SELECT COUNT(u) > 0 FROM UserDepartmentAccess u WHERE u.user.id = :userId AND u.department.id = :departmentId")
+    boolean existsByUserIdAndDepartmentId(@Param("userId") UUID userId, @Param("departmentId") UUID departmentId);
 
-    @Query("SELECT u FROM UserDepartmentAccess u WHERE u.role.id = :roleId")
-    List<UserDepartmentAccess> findByRoleId(@Param("roleId") UUID roleId);
+    @Query("SELECT u FROM UserDepartmentAccess u WHERE u.user.id = :userId")
+    List<UserDepartmentAccess> findByUserId(@Param("userId") UUID userId);
 
     @Query("SELECT u FROM UserDepartmentAccess u WHERE u.department.id = :departmentId")
     List<UserDepartmentAccess> findByDepartmentId(@Param("departmentId") UUID departmentId);
 
     @Modifying
-    @Query("DELETE FROM UserDepartmentAccess u WHERE u.role.id = :roleId AND u.department.id = :departmentId")
-    int deleteByRoleIdAndDepartmentId(@Param("roleId") UUID roleId, @Param("departmentId") UUID departmentId);
+    @Query("DELETE FROM UserDepartmentAccess u WHERE u.user.id = :userId AND u.department.id = :departmentId")
+    int deleteByUserIdAndDepartmentId(@Param("userId") UUID userId, @Param("departmentId") UUID departmentId);
+
+    @Modifying
+    @Query("DELETE FROM UserDepartmentAccess u WHERE u.user.id = :userId")
+    int deleteByUserId(@Param("userId") UUID userId);
 }

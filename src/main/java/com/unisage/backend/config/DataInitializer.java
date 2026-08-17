@@ -25,6 +25,7 @@ public class DataInitializer implements CommandLineRunner {
     private final PermissionRepository      permissionRepository;
     private final RolePermissionRepository  rolePermissionRepository;
     private final UserRepository            userRepository;
+    private final DepartmentRepository      departmentRepository;
     private final PasswordEncoder           passwordEncoder;
 
     @Value("${DEFAULT_SUPERADMIN_PASS:Admin@123456}")
@@ -40,6 +41,10 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        // Runs independently of the RBAC skip-guard below, so re-running on an already
+        // initialised system still fills in any department still missing.
+        seedDepartments();
+
         if (roleRepository.findByName(PredefinedRoles.SUPER_ADMIN).isPresent()) {
             log.info(">>> System already initialised — skipping DataInitializer.");
             return;
@@ -204,21 +209,7 @@ public class DataInitializer implements CommandLineRunner {
                 "Cập nhật phòng ban", null),
             def(PredefinedPermissions.DEPARTMENT_DELETE,
                 "/departments/**", PermissionMethod.DELETE, ResourceType.DEPARTMENT,
-                "Xóa phòng ban", null),
-
-            // ── UserDepartmentAccess ─────────────────────────────────────
-            def(PredefinedPermissions.USER_DEPARTMENT_ACCESS_ALL,
-                "/user-department-access/**", PermissionMethod.ALL, ResourceType.USER_DEPARTMENT_ACCESS,
-                "Toàn quyền phân quyền phòng ban", null),
-            def(PredefinedPermissions.USER_DEPARTMENT_ACCESS_READ,
-                "/user-department-access/**", PermissionMethod.GET, ResourceType.USER_DEPARTMENT_ACCESS,
-                "Xem phân quyền phòng ban", null),
-            def(PredefinedPermissions.USER_DEPARTMENT_ACCESS_CREATE,
-                "/user-department-access", PermissionMethod.POST, ResourceType.USER_DEPARTMENT_ACCESS,
-                "Gán phân quyền phòng ban", null),
-            def(PredefinedPermissions.USER_DEPARTMENT_ACCESS_DELETE,
-                "/user-department-access/**", PermissionMethod.DELETE, ResourceType.USER_DEPARTMENT_ACCESS,
-                "Thu hồi phân quyền phòng ban", null)
+                "Xóa phòng ban", null)
 
             // ── Document (CREATE = ingest) ────────────────────────────────
 
@@ -415,6 +406,42 @@ public class DataInitializer implements CommandLineRunner {
         userRepository.save(user);
 
         log.info("  User seeded: {} [{}]", email, role.getName());
+    }
+
+    // ─── Department seeding ────────────────────────────────────────────────
+    private void seedDepartments() {
+        seedDepartment("PHONG_DAO_TAO", null, "Phòng Đào Tạo");
+        seedDepartment("PHONG_CTSV", null, "Phòng Công Tác Sinh Viên");
+        seedDepartment("PHONG_TC_KT", null, "Phòng Tài Chính - Kế Toán");
+
+        Department khoa = seedDepartment("Khoa", null, null);
+
+        Department khoaCntt = seedDepartment("KHOA_CNTT", khoa, "Khoa Công Nghệ Thông Tin");
+        seedDepartment("BM_CONG_NGHE_PHAN_MEM", khoaCntt, "Bộ môn Công Nghệ Phần Mềm");
+        seedDepartment("BM_TRI_TUE_NHAN_TAI", khoaCntt, "Bộ môn Trí Tuệ Nhân Tạo");
+        seedDepartment("BM_MANG_VIEN_THONG", khoaCntt, "Bộ môn Mạng Viễn Thông");
+
+        Department khoaKinhTe = seedDepartment("KHOA_KINH_TE", khoa, "Khoa Kinh Tế");
+        seedDepartment("BM_KE_TOAN", khoaKinhTe, "Bộ môn Kế Toán");
+        seedDepartment("BM_QUAN_TRI_KINH_DOANH", khoaKinhTe, "Bộ môn Quản Trị Kinh Doanh");
+        seedDepartment("BM_TAI_CHINH_NGAN_HANG", khoaKinhTe, "Bộ môn Tài Chính Ngân Hàng");
+
+        seedDepartment("KHOA_LY_LUAN_CHINH_TRI", khoa, "Khoa Lý Luận Chính Trị");
+
+        log.info("  Departments ready.");
+    }
+
+    private Department seedDepartment(String name, Department parent, String description) {
+        return departmentRepository.findByName(name).orElseGet(() -> {
+            Department d = Department.builder()
+                    .parent(parent)
+                    .name(name)
+                    .description(description)
+                    .build();
+            departmentRepository.save(d);
+            log.info("  Department seeded: {}", name);
+            return d;
+        });
     }
 
     // ─── Compact builder record ──────────────────────────────────────────

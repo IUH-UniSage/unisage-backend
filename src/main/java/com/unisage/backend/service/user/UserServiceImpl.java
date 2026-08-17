@@ -10,10 +10,16 @@ import com.unisage.backend.dto.response.UserDetailResponse;
 import java.time.LocalDateTime;
 import java.util.*;
 
+import com.unisage.backend.dto.request.DepartmentAccessItem;
+import com.unisage.backend.dto.response.DepartmentAccessResponse;
+import com.unisage.backend.entity.Department;
 import com.unisage.backend.entity.Permission;
 import com.unisage.backend.entity.Role;
 import com.unisage.backend.entity.User;
+import com.unisage.backend.entity.UserDepartmentAccess;
+import com.unisage.backend.repository.DepartmentRepository;
 import com.unisage.backend.repository.PermissionRepository;
+import com.unisage.backend.repository.UserDepartmentAccessRepository;
 import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.repository.RoleRepository;
 import com.unisage.backend.service.user.UserService;
@@ -34,6 +40,8 @@ public class UserServiceImpl implements UserService {
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final PasswordEncoder passwordEncoder;
+    private final DepartmentRepository departmentRepository;
+    private final UserDepartmentAccessRepository userDepartmentAccessRepository;
 
     @Override
     @Transactional
@@ -61,7 +69,33 @@ public class UserServiceImpl implements UserService {
                 .build();
         userRepository.save(user);
 
+        if (request.departmentAccesses() != null && !request.departmentAccesses().isEmpty()) {
+            saveDepartmentAccesses(user, request.departmentAccesses());
+        }
+
         return toResponse(user);
+    }
+
+    private void saveDepartmentAccesses(User user, List<DepartmentAccessItem> items) {
+        List<UUID> departmentIds = items.stream().map(DepartmentAccessItem::departmentId).toList();
+        if (new HashSet<>(departmentIds).size() != departmentIds.size()) {
+            throw new AppException(ErrorCode.USER_DEPARTMENT_ACCESS_EXISTED);
+        }
+
+        Map<UUID, Department> departments = departmentRepository.findAllById(departmentIds).stream()
+                .collect(java.util.stream.Collectors.toMap(Department::getId, d -> d));
+        if (departments.size() != departmentIds.size()) {
+            throw new AppException(ErrorCode.DEPARTMENT_NOT_FOUND);
+        }
+
+        List<UserDepartmentAccess> accesses = items.stream()
+                .map(item -> UserDepartmentAccess.builder()
+                        .user(user)
+                        .department(departments.get(item.departmentId()))
+                        .accessLevel(item.accessLevel())
+                        .build())
+                .toList();
+        userDepartmentAccessRepository.saveAll(accesses);
     }
 
     @Override
@@ -111,6 +145,14 @@ public class UserServiceImpl implements UserService {
         }
 
         userRepository.save(user);
+
+        if (request.departmentAccesses() != null) {
+            userDepartmentAccessRepository.deleteByUserId(user.getId());
+            if (!request.departmentAccesses().isEmpty()) {
+                saveDepartmentAccesses(user, request.departmentAccesses());
+            }
+        }
+
         return toDetailResponse(user);
     }
 
@@ -180,7 +222,18 @@ public class UserServiceImpl implements UserService {
                 .status(user.getStatus())
                 .lastLogin(user.getLastLogin())
                 .createdAt(user.getCreatedAt())
+                .departmentAccesses(mapDepartmentAccesses(user.getId()))
                 .build();
+    }
+
+    private List<DepartmentAccessResponse> mapDepartmentAccesses(UUID userId) {
+        return userDepartmentAccessRepository.findByUserId(userId).stream()
+                .map(access -> DepartmentAccessResponse.builder()
+                        .departmentId(access.getDepartment().getId())
+                        .departmentName(access.getDepartment().getName())
+                        .accessLevel(access.getAccessLevel())
+                        .build())
+                .toList();
     }
 
     private UserDetailResponse toDetailResponse(User user) {
@@ -216,9 +269,11 @@ public class UserServiceImpl implements UserService {
                 .createdBy(user.getCreatedBy())
                 .updatedAt(user.getUpdatedAt())
                 .updatedBy(user.getUpdatedBy())
+                //TODO: Imeplement after completing message service
                 .totalQueries(0)
                 .topTopics(new ArrayList<>())
                 .permissions(permissionsMap)
+                .departmentAccesses(mapDepartmentAccesses(user.getId()))
                 .build();
     }
 }
