@@ -14,7 +14,7 @@ public record DepartmentResponse(
     UUID parentId,
     Boolean isActive,
     LocalDateTime deletedAt,
-    List<DepartmentResponse> children,
+    List<DepartmentNodeResponse> children,
     String createdBy,
     LocalDateTime createdAt,
     String updatedBy,

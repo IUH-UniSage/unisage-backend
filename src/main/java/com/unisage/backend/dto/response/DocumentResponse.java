@@ -12,6 +12,7 @@ public record DocumentResponse(
     UUID id,
     String title,
     String sourceUrl,
+    String fileUrl,
     String fileType,
     DocStatus status,
     Boolean isPublic,

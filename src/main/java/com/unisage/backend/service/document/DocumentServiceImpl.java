@@ -1,20 +1,12 @@
 package com.unisage.backend.service.document;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import com.unisage.backend.dto.request.CreateDocumentRequest;
 import com.unisage.backend.dto.request.UpdateDocumentRequest;
@@ -31,6 +23,7 @@ import com.unisage.backend.repository.CategoryRepository;
 import com.unisage.backend.repository.DepartmentRepository;
 import com.unisage.backend.repository.DocumentRepository;
 import com.unisage.backend.repository.UserRepository;
+import com.unisage.backend.service.file.FileService;
 import com.unisage.backend.utils.SecurityUtil;
 
 import jakarta.transaction.Transactional;
@@ -45,9 +38,7 @@ public class DocumentServiceImpl implements DocumentService {
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
     private final SecurityUtil securityUtil;
-
-    @Value("${file.upload-dir}")
-    private String uploadDir;
+    private final FileService fileService;
 
     @Override
     @Transactional
@@ -77,7 +68,7 @@ public class DocumentServiceImpl implements DocumentService {
 
         String sourceUrl = request.sourceUrl();
         if (request.file() != null && !request.file().isEmpty()) {
-            sourceUrl = storeFile(request.file());
+            sourceUrl = fileService.upload(request.file());
         }
 
         Document document = Document.builder()
@@ -121,7 +112,9 @@ public class DocumentServiceImpl implements DocumentService {
         }
 
         if (request.file() != null && !request.file().isEmpty()) {
-            document.setSourceUrl(storeFile(request.file()));
+            String oldObjectKey = document.getSourceUrl();
+            document.setSourceUrl(fileService.upload(request.file()));
+            fileService.delete(oldObjectKey);
         } else if (request.sourceUrl() != null) {
             document.setSourceUrl(request.sourceUrl());
         }
@@ -172,22 +165,36 @@ public class DocumentServiceImpl implements DocumentService {
         documentRepository.save(document);
     }
 
-    private String storeFile(MultipartFile file) {
-        try {
-            Path uploadPath = Paths.get(uploadDir);
-            if (!Files.exists(uploadPath)) {
-                Files.createDirectories(uploadPath);
-            }
-            String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
-            String storedFilename = UUID.randomUUID() + "_" + originalFilename;
-            Path targetPath = uploadPath.resolve(storedFilename);
-            try (InputStream inputStream = file.getInputStream()) {
-                Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
-            }
-            return storedFilename;
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to store file", e);
+    /**
+     * Only issues a presigned URL when the caller is actually allowed to see this
+     * document: public documents are always resolvable, everything else requires
+     * an authenticated user whose max access level clears the document's
+     * minAccessLevel — the same check createDocument()/updateDocument() apply when
+     * a document's access level is set. Replaces the old unguarded /uploads/**
+     * static route, where any RBAC permission matching that path could read any
+     * file regardless of the document's own minAccessLevel.
+     */
+    private String resolveFileUrl(Document document) {
+        if (document.getSourceUrl() == null) {
+            return null;
         }
+        if (Boolean.TRUE.equals(document.getIsPublic())) {
+            return fileService.getPresignedUrl(document.getSourceUrl());
+        }
+
+        UUID userId = securityUtil.getCurrentUserIdOrNull();
+        if (userId == null) {
+            return null;
+        }
+
+        Integer maxAccessLevel = userRepository.findMaxAccessLevelByUserId(userId);
+        int effectiveMax = maxAccessLevel != null ? maxAccessLevel : 0;
+        int required = document.getMinAccessLevel() != null ? document.getMinAccessLevel() : 0;
+        if (effectiveMax < required) {
+            return null;
+        }
+
+        return fileService.getPresignedUrl(document.getSourceUrl());
     }
 
     private DocumentResponse mapToResponse(Document document) {
@@ -195,6 +202,7 @@ public class DocumentServiceImpl implements DocumentService {
                 .id(document.getId())
                 .title(document.getTitle())
                 .sourceUrl(document.getSourceUrl())
+                .fileUrl(resolveFileUrl(document))
                 .fileType(document.getFileType())
                 .status(document.getStatus())
                 .isPublic(document.getIsPublic())

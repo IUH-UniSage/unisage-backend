@@ -45,7 +45,13 @@ public enum ErrorCode {
     USER_CODE_EXISTED(HttpStatus.BAD_REQUEST, 2117, "Mã người dùng này đã tồn tại!"),
     ROLE_EXISTED(HttpStatus.BAD_REQUEST, 2119, "Vai trò này đã tồn tại!"),
     CATEGORY_NAME_EXISTED(HttpStatus.BAD_REQUEST, 2120, "Tên danh mục này đã tồn tại!"),
-    USER_DEPARTMENT_ACCESS_EXISTED(HttpStatus.BAD_REQUEST, 2126, "Phân quyền phòng ban này đã tồn tại!")
+    USER_DEPARTMENT_ACCESS_EXISTED(HttpStatus.BAD_REQUEST, 2126, "Phân quyền phòng ban này đã tồn tại!"),
+
+    // File storage errors (24xx)
+    FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),
+    FILE_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2402, "Không thể xoá file khỏi hệ thống lưu trữ."),
+    FILE_NOT_FOUND(HttpStatus.NOT_FOUND, 2403, "File không tồn tại trong hệ thống lưu trữ."),
+    FILE_ACCESS_DENIED(HttpStatus.FORBIDDEN, 2404, "Bạn không đủ quyền truy cập file này."),
     ;
 
     private final HttpStatus httpStatus;

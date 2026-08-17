@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.unisage.backend.dto.request.DepartmentRequest;
+import com.unisage.backend.dto.response.DepartmentNodeResponse;
 import com.unisage.backend.dto.response.DepartmentResponse;
 import com.unisage.backend.entity.Department;
 import com.unisage.backend.exception.AppException;
@@ -111,8 +112,8 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     private DepartmentResponse toResponseTree(Department department, Map<UUID, List<Department>> childrenByParent) {
         List<Department> children = childrenByParent.getOrDefault(department.getId(), List.of());
-        List<DepartmentResponse> childResponses = children.stream()
-                .map(child -> toResponseTree(child, childrenByParent))
+        List<DepartmentNodeResponse> childNodes = children.stream()
+                .map(child -> toNode(child, childrenByParent))
                 .collect(Collectors.toList());
 
         return DepartmentResponse.builder()
@@ -122,7 +123,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .parentId(department.getParent() != null ? department.getParent().getId() : null)
                 .isActive(department.getIsActive())
                 .deletedAt(department.getDeletedAt())
-                .children(childResponses)
+                .children(childNodes)
                 .createdBy(department.getCreatedBy())
                 .createdAt(department.getCreatedAt())
                 .updatedBy(department.getUpdatedBy())
@@ -130,10 +131,27 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .build();
     }
 
+    private DepartmentNodeResponse toNode(Department department, Map<UUID, List<Department>> childrenByParent) {
+        List<Department> children = childrenByParent.getOrDefault(department.getId(), List.of());
+        List<DepartmentNodeResponse> childNodes = children.stream()
+                .map(child -> toNode(child, childrenByParent))
+                .collect(Collectors.toList());
+
+        return DepartmentNodeResponse.builder()
+                .id(department.getId())
+                .name(department.getName())
+                .description(department.getDescription())
+                .parentId(department.getParent() != null ? department.getParent().getId() : null)
+                .isActive(department.getIsActive())
+                .deletedAt(department.getDeletedAt())
+                .children(childNodes)
+                .build();
+    }
+
     private DepartmentResponse toResponse(Department department) {
         List<Department> children = departmentRepository.findByParentId(department.getId());
-        List<DepartmentResponse> childResponses = children.stream()
-                .map(this::toResponse)
+        List<DepartmentNodeResponse> childNodes = children.stream()
+                .map(this::toNode)
                 .collect(Collectors.toList());
 
         return DepartmentResponse.builder()
@@ -143,11 +161,28 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .parentId(department.getParent() != null ? department.getParent().getId() : null)
                 .isActive(department.getIsActive())
                 .deletedAt(department.getDeletedAt())
-                .children(childResponses)
+                .children(childNodes)
                 .createdBy(department.getCreatedBy())
                 .createdAt(department.getCreatedAt())
                 .updatedBy(department.getUpdatedBy())
                 .updatedAt(department.getUpdatedAt())
+                .build();
+    }
+
+    private DepartmentNodeResponse toNode(Department department) {
+        List<Department> children = departmentRepository.findByParentId(department.getId());
+        List<DepartmentNodeResponse> childNodes = children.stream()
+                .map(this::toNode)
+                .collect(Collectors.toList());
+
+        return DepartmentNodeResponse.builder()
+                .id(department.getId())
+                .name(department.getName())
+                .description(department.getDescription())
+                .parentId(department.getParent() != null ? department.getParent().getId() : null)
+                .isActive(department.getIsActive())
+                .deletedAt(department.getDeletedAt())
+                .children(childNodes)
                 .build();
     }
 }
