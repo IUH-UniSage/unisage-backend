@@ -50,6 +50,7 @@ Mở thư mục này bằng "Reopen in Container" — devcontainer chỉ khởi 
 
 ```bash
 sh ./mvnw spring-boot:run
+sh ./mvnw test
 ```
 
 App sẽ nghe ở cổng `8401` (đã khai báo trong `forwardPorts` để VS Code tự forward ra `localhost`).

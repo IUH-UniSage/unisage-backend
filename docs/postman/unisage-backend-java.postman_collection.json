@@ -1,0 +1,1458 @@
+{
+  "info": {
+    "_postman_id": "b3a2f0a0-6e1a-4c9d-9b4e-9a5b7f8b6d10",
+    "name": "Unisage - API Gateway",
+    "description": "API của backend-java (master-data service) trong hệ thống Unisage, gọi qua API Gateway (Spring Cloud Gateway) thay vì gọi thẳng backend-java.\n\n- Java master-data service: {{gateway_url}}/api/v1/master/**  ->  rewritten to backend-java's /api/v1/**\n\nAuth: chạy request \"Login\" trong folder Auth trước - nó tự lưu accessToken vào collection variable, các request khác dùng Bearer {{accessToken}} kế thừa từ collection.\n\n/api/v1/master/auth/** là public (không cần token) theo AuthenticationFilter của gateway.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.response.code >= 200 && pm.response.code < 300) {",
+          "    pm.test('Status code is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+          "} else {",
+          "    pm.test('Request failed with status ' + pm.response.code, function () { console.warn(pm.response.text()); });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "gateway_url", "value": "http://localhost:8400" },
+    { "key": "accessToken", "value": "" },
+    { "key": "userId", "value": "" },
+    { "key": "roleId", "value": "" },
+    { "key": "permissionId", "value": "" },
+    { "key": "departmentId", "value": "" },
+    { "key": "categoryId", "value": "" },
+    { "key": "chatModelId", "value": "" },
+    { "key": "documentId", "value": "" },
+    { "key": "conversationId", "value": "" },
+    { "key": "messageId", "value": "" },
+    { "key": "accessLevelId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "auth": { "type": "noauth" },
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.accessToken) {",
+                  "    pm.collectionVariables.set('accessToken', json.data.accessToken);",
+                  "    pm.test('accessToken saved', function () { pm.expect(json.data.accessToken).to.be.a('string'); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SA-001\",\n  \"password\": \"123123\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/auth/login",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "auth", "login"]
+            },
+            "description": "Tài khoản super-admin mặc định do DataInitializer seed (code=SA-001, password lấy từ env DEFAULT_SUPERADMIN_PASS trong .ENV/docker-compose.yml). Nếu DB đang dùng đã seed từ trước với giá trị env khác thì phải dùng đúng mật khẩu lúc seed lần đầu, không phải giá trị mặc định này."
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/auth/refresh",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "auth", "refresh"]
+            },
+            "description": "Dựa vào refreshToken cookie do Login set, Postman tự gửi lại cookie khi bật cookie jar."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/auth/logout",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Create User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) {",
+                  "    pm.collectionVariables.set('userId', json.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test.user@unisage.com\",\n  \"code\": \"U-{{$randomInt}}\",\n  \"password\": \"Test@123456\",\n  \"firstName\": \"Test\",\n  \"lastName\": \"User\",\n  \"roleId\": \"{{roleId}}\",\n  \"phone\": \"09{{$randomInt}}\",\n  \"gender\": \"MALE\",\n  \"departmentAccesses\": [\n    { \"departmentId\": \"{{departmentId}}\", \"accessLevel\": 2 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/users",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "users"]
+            },
+            "description": "departmentAccesses là optional - có thể bỏ hẳn field này nếu chưa muốn gán quyền phòng ban."
+          }
+        },
+        {
+          "name": "Get User By Id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/users/{{userId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "users", "{{userId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/users?page=1&limit=10",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"User Updated\",\n  \"email\": \"test.user@unisage.com\",\n  \"roleId\": \"{{roleId}}\",\n  \"phone\": \"0912345678\",\n  \"gender\": \"MALE\",\n  \"extraInfo\": null,\n  \"departmentAccesses\": [\n    { \"departmentId\": \"{{departmentId}}\", \"accessLevel\": 3 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/users/{{userId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "users", "{{userId}}"]
+            },
+            "description": "departmentAccesses: null (bỏ field) => giữ nguyên access hiện có; [] (mảng rỗng) => xoá hết access; danh sách => xoá hết rồi insert lại toàn bộ (full replace)."
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"NewPass@123456\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/users/{{userId}}/password",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "users", "{{userId}}", "password"]
+            }
+          }
+        },
+        {
+          "name": "Recover User",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/users/{{userId}}/recover",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "users", "{{userId}}", "recover"]
+            }
+          }
+        },
+        {
+          "name": "Recover Users (Bulk)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "[\n  \"{{userId}}\"\n]" },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/users/bulk/recover",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "users", "bulk", "recover"]
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/users/{{userId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "users", "{{userId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Users (Bulk)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "[\n  \"{{userId}}\"\n]" },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/users/bulk",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "users", "bulk"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RBAC - Roles",
+      "item": [
+        {
+          "name": "Create Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('roleId', json.data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Role\",\n  \"isSystemRole\": false,\n  \"description\": \"Role tạo để test Postman\",\n  \"isActive\": true,\n  \"permissionIds\": [\n    \"{{permissionId}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/roles",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "rbac", "roles"]
+            }
+          }
+        },
+        {
+          "name": "Get Roles",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/roles?page=1&limit=10",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "rbac", "roles"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Role By Id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/roles/{{roleId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "rbac", "roles", "{{roleId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Role",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Role Updated\",\n  \"isSystemRole\": false,\n  \"description\": \"Đã cập nhật\",\n  \"isActive\": true,\n  \"permissionIds\": [\n    \"{{permissionId}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/roles/{{roleId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "rbac", "roles", "{{roleId}}"]
+            }
+          }
+        },
+        {
+          "name": "Recover Role",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/roles/{{roleId}}/recover",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "rbac",
+                "roles",
+                "{{roleId}}",
+                "recover"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Recover Roles (Bulk)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "[\n  \"{{roleId}}\"\n]" },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/roles/bulk/recover",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "rbac",
+                "roles",
+                "bulk",
+                "recover"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Role",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/roles/{{roleId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "rbac", "roles", "{{roleId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Roles (Bulk)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "[\n  \"{{roleId}}\"\n]" },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/roles/bulk",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "rbac", "roles", "bulk"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RBAC - Permissions",
+      "item": [
+        {
+          "name": "Create Permission",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('permissionId', json.data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"TEST_PERMISSION\",\n  \"accessLevel\": 1,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/permissions",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "rbac", "permissions"]
+            }
+          }
+        },
+        {
+          "name": "Get Permissions",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/permissions?page=1&limit=10",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "rbac", "permissions"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Permission",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"TEST_PERMISSION_UPDATED\",\n  \"accessLevel\": 2,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/permissions/{{permissionId}}",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "rbac",
+                "permissions",
+                "{{permissionId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Recover Permission",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/permissions/{{permissionId}}/recover",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "rbac",
+                "permissions",
+                "{{permissionId}}",
+                "recover"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Recover Permissions (Bulk)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "[\n  \"{{permissionId}}\"\n]" },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/permissions/bulk/recover",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "rbac",
+                "permissions",
+                "bulk",
+                "recover"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Permission",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/permissions/{{permissionId}}",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "rbac",
+                "permissions",
+                "{{permissionId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Permissions (Bulk)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "[\n  \"{{permissionId}}\"\n]" },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/permissions/bulk",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "rbac", "permissions", "bulk"]
+            }
+          }
+        },
+        {
+          "name": "Assign Permission To Role",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleId\": \"{{roleId}}\",\n  \"permissionId\": \"{{permissionId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/rbac/assign",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "rbac", "assign"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Access Levels",
+      "item": [
+        {
+          "name": "Create Access Level - Valid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('accessLevelId', json.data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"level\": 1,\n  \"description\": \"Cap do 1 - Sinh vien\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/access-levels",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "access-levels"]
+            },
+            "description": "Valid: level chưa tồn tại. Kỳ vọng: 201 Created."
+          }
+        },
+        {
+          "name": "Create Access Level - Invalid (Duplicate Level)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"level\": 1,\n  \"description\": \"Trung lap level 1\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/access-levels",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "access-levels"]
+            },
+            "description": "Invalid: level=1 đã tồn tại (unique). Kỳ vọng: 400 Bad Request, errorCode ACCESS_LEVEL_EXISTED (2132)."
+          }
+        },
+        {
+          "name": "Create Access Level - Invalid (Missing Level)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Khong co level\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/access-levels",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "access-levels"]
+            },
+            "description": "Invalid: thiếu field bắt buộc 'level' (@NotNull). Kỳ vọng: 400 Bad Request, errorCode VALIDATION_ERROR (2300)."
+          }
+        },
+        {
+          "name": "Get Access Levels List",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/access-levels",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "access-levels"]
+            }
+          }
+        },
+        {
+          "name": "Get Access Level By Id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/access-levels/{{accessLevelId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "access-levels", "{{accessLevelId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Access Level By Id - Invalid (Not Found)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/access-levels/00000000-0000-0000-0000-000000000000",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api", "v1", "master", "access-levels",
+                "00000000-0000-0000-0000-000000000000"
+              ]
+            },
+            "description": "Invalid: id không tồn tại. Kỳ vọng: 404 Not Found, errorCode ACCESS_LEVEL_NOT_FOUND (2131)."
+          }
+        },
+        {
+          "name": "Update Access Level - Valid",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"level\": 1,\n  \"description\": \"Cap do 1 - Sinh vien (cap nhat)\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/access-levels/{{accessLevelId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "access-levels", "{{accessLevelId}}"]
+            },
+            "description": "Valid: giữ nguyên level, chỉ đổi description. Kỳ vọng: 200 OK."
+          }
+        },
+        {
+          "name": "Update Access Level - Invalid (Not Found)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"level\": 2,\n  \"description\": \"Khong ton tai\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/access-levels/00000000-0000-0000-0000-000000000000",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api", "v1", "master", "access-levels",
+                "00000000-0000-0000-0000-000000000000"
+              ]
+            },
+            "description": "Invalid: id không tồn tại. Kỳ vọng: 404 Not Found, errorCode ACCESS_LEVEL_NOT_FOUND (2131)."
+          }
+        },
+        {
+          "name": "Delete Access Level",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/access-levels/{{accessLevelId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "access-levels", "{{accessLevelId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Access Level - Invalid (Not Found)",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/access-levels/00000000-0000-0000-0000-000000000000",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api", "v1", "master", "access-levels",
+                "00000000-0000-0000-0000-000000000000"
+              ]
+            },
+            "description": "Invalid: id không tồn tại. Kỳ vọng: 404 Not Found, errorCode ACCESS_LEVEL_NOT_FOUND (2131)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Departments",
+      "item": [
+        {
+          "name": "Create Department",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('departmentId', json.data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Phòng Test\",\n  \"description\": \"Phòng ban tạo để test Postman\",\n  \"parentId\": null\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/departments",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "departments"]
+            }
+          }
+        },
+        {
+          "name": "Get Root Departments",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/departments/roots?isActive=true",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "departments", "roots"],
+              "query": [{ "key": "isActive", "value": "true" }]
+            }
+          }
+        },
+        {
+          "name": "Get Children Departments",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/departments/{{departmentId}}/children?isActive=true",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "departments",
+                "{{departmentId}}",
+                "children"
+              ],
+              "query": [{ "key": "isActive", "value": "true" }]
+            }
+          }
+        },
+        {
+          "name": "Get Department By Id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/departments/{{departmentId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "departments", "{{departmentId}}"]
+            }
+          }
+        },
+        {
+          "name": "Recover Department",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/departments/{{departmentId}}/recover",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "departments",
+                "{{departmentId}}",
+                "recover"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Department",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/departments/{{departmentId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "departments", "{{departmentId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "Create Category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('categoryId', json.data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Danh mục Test\",\n  \"description\": \"Danh mục tạo để test Postman\",\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/categories",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "categories"]
+            }
+          }
+        },
+        {
+          "name": "Get Category By Id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/categories/{{categoryId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "categories", "{{categoryId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get All Categories",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/categories",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "categories"]
+            }
+          }
+        },
+        {
+          "name": "Update Category",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Danh mục Test Updated\",\n  \"description\": \"Đã cập nhật\",\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/categories/{{categoryId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "categories", "{{categoryId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Category",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/categories/{{categoryId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "categories", "{{categoryId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chat Models",
+      "item": [
+        {
+          "name": "Create Chat Model",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('chatModelId', json.data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceType\": \"CLOUD_API\",\n  \"llmProvider\": \"openai\",\n  \"llmModelName\": \"gpt-4o-mini\",\n  \"apiKey\": \"sk-xxxxxxxxxxxxxxxx\",\n  \"apiBaseUrl\": \"https://api.openai.com/v1\",\n  \"maxRpm\": 60,\n  \"priority\": 1\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/chat-models",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "chat-models"]
+            }
+          }
+        },
+        {
+          "name": "Create Chat Model - Self Hosted",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceType\": \"SELF_HOSTED\",\n  \"llmModelName\": \"mistral-7b-instruct\",\n  \"modelSourceRef\": \"mistralai/Mistral-7B-Instruct-v0.3\",\n  \"apiBaseUrl\": \"http://localhost:8000/v1\",\n  \"maxRpm\": 60,\n  \"priority\": 1\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/chat-models",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "chat-models"]
+            }
+          }
+        },
+        {
+          "name": "Get Chat Model By Id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/chat-models/{{chatModelId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "chat-models", "{{chatModelId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get All Chat Models",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/chat-models?page=1&limit=10",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "chat-models"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Chat Model",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceType\": \"CLOUD_API\",\n  \"llmProvider\": \"openai\",\n  \"llmModelName\": \"gpt-4o-mini\",\n  \"apiKey\": \"sk-xxxxxxxxxxxxxxxx\",\n  \"apiBaseUrl\": \"https://api.openai.com/v1\",\n  \"maxRpm\": 120,\n  \"priority\": 2\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/chat-models/{{chatModelId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "chat-models", "{{chatModelId}}"]
+            }
+          }
+        },
+        {
+          "name": "Recover Chat Model",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/chat-models/{{chatModelId}}/recover",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "chat-models",
+                "{{chatModelId}}",
+                "recover"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Chat Model",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/chat-models/{{chatModelId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "chat-models", "{{chatModelId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Documents",
+      "item": [
+        {
+          "name": "Create Document - Valid (Full Fields)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('documentId', json.data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "docPackageId",
+                  "value": "{{departmentId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "{{categoryId}}",
+                  "type": "text"
+                },
+                { "key": "title", "value": "Tài liệu test", "type": "text" },
+                {
+                  "key": "sourceUrl",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true
+                },
+                { "key": "fileType", "value": "PDF", "type": "text" },
+                { "key": "minAccessLevelId", "value": "{{accessLevelId}}", "type": "text" },
+                { "key": "isPublic", "value": "false", "type": "text" },
+                { "key": "file", "type": "file", "src": [] }
+              ]
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/documents",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "documents"]
+            },
+            "description": "Valid: user đã đăng nhập, minAccessLevelId trỏ tới AccessLevel <= access level của uploader, docPackageId/categoryId tồn tại, có file kèm theo. Kỳ vọng: 201 Created."
+          }
+        },
+        {
+          "name": "Create Document - Valid (Public, Source URL Only, No Package/Category)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title", "value": "Thong bao lich thi hoc ky 1", "type": "text" },
+                { "key": "sourceUrl", "value": "https://example.com/files/thong-bao-lich-thi.pdf", "type": "text" },
+                { "key": "fileType", "value": "pdf", "type": "text" },
+                { "key": "isPublic", "value": "true", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/documents",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "documents"]
+            },
+            "description": "Valid: không truyền file (chỉ sourceUrl), không truyền docPackageId/categoryId/minAccessLevelId (đều optional). Kỳ vọng: 201 Created, status = PENDING."
+          }
+        },
+        {
+          "name": "Create Document - Invalid (Missing Title)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "sourceUrl", "value": "https://example.com/files/no-title.pdf", "type": "text" },
+                { "key": "fileType", "value": "pdf", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/documents",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "documents"]
+            },
+            "description": "Invalid: thiếu field bắt buộc 'title' (cột title NOT NULL trong DB, chưa có bean validation ở tầng request). Kỳ vọng: lỗi khi lưu (constraint violation / 500 SYS_UNCATEGORIZED)."
+          }
+        },
+        {
+          "name": "Create Document - Invalid (Missing Source URL and File)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title", "value": "Document khong co nguon", "type": "text" },
+                { "key": "fileType", "value": "pdf", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/documents",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "documents"]
+            },
+            "description": "Invalid: không truyền cả 'file' lẫn 'sourceUrl' nên sourceUrl = null (cột source_url NOT NULL). Kỳ vọng: lỗi khi lưu (constraint violation / 500 SYS_UNCATEGORIZED)."
+          }
+        },
+        {
+          "name": "Create Document - Invalid (Department Not Found)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "docPackageId", "value": "00000000-0000-0000-0000-000000000000", "type": "text" },
+                { "key": "title", "value": "Document voi department khong ton tai", "type": "text" },
+                { "key": "sourceUrl", "value": "https://example.com/files/doc.pdf", "type": "text" },
+                { "key": "fileType", "value": "pdf", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/documents",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "documents"]
+            },
+            "description": "Invalid: docPackageId không tồn tại trong bảng departments. Kỳ vọng: 404 Not Found, errorCode DEPARTMENT_NOT_FOUND (2105)."
+          }
+        },
+        {
+          "name": "Create Document - Invalid (Category Not Found)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "categoryId", "value": "00000000-0000-0000-0000-000000000000", "type": "text" },
+                { "key": "title", "value": "Document voi category khong ton tai", "type": "text" },
+                { "key": "sourceUrl", "value": "https://example.com/files/doc.pdf", "type": "text" },
+                { "key": "fileType", "value": "pdf", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/documents",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "documents"]
+            },
+            "description": "Invalid: categoryId không tồn tại trong bảng categories. Kỳ vọng: 404 Not Found, errorCode CATEGORY_NOT_FOUND (2101)."
+          }
+        },
+        {
+          "name": "Create Document - Invalid (Access Level Forbidden)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title", "value": "Document voi minAccessLevelId qua cao", "type": "text" },
+                { "key": "sourceUrl", "value": "https://example.com/files/doc.pdf", "type": "text" },
+                { "key": "fileType", "value": "pdf", "type": "text" },
+                { "key": "minAccessLevelId", "value": "PASTE-AN-ACCESS-LEVEL-5-ID-HERE", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/documents",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "documents"]
+            },
+            "description": "Invalid: minAccessLevelId trỏ tới AccessLevel vượt quá access level hiện có của user đăng nhập (User.accessLevel). Kỳ vọng: 403 Forbidden, errorCode DOCUMENT_PERMISSION_FORBIDDEN (2310)."
+          }
+        },
+        {
+          "name": "Create Document - Invalid (Access Level Not Found)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title", "value": "Document voi accessLevelId khong ton tai", "type": "text" },
+                { "key": "sourceUrl", "value": "https://example.com/files/doc.pdf", "type": "text" },
+                { "key": "fileType", "value": "pdf", "type": "text" },
+                { "key": "minAccessLevelId", "value": "00000000-0000-0000-0000-000000000000", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/documents",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "documents"]
+            },
+            "description": "Invalid: minAccessLevelId không tồn tại trong bảng access_levels. Kỳ vọng: 404 Not Found, errorCode ACCESS_LEVEL_NOT_FOUND (2131)."
+          }
+        },
+        {
+          "name": "Create Document - Invalid (Unauthenticated)",
+          "auth": { "type": "noauth" },
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title", "value": "Document tao khi chua dang nhap", "type": "text" },
+                { "key": "sourceUrl", "value": "https://example.com/files/doc.pdf", "type": "text" },
+                { "key": "fileType", "value": "pdf", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/documents",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "documents"]
+            },
+            "description": "Invalid: gọi API khi chưa đăng nhập (auth override = noauth trên request này). Kỳ vọng: 401 Unauthorized, errorCode AUTH_UNAUTHENTICATED (1001)."
+          }
+        },
+        {
+          "name": "Update Document",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "categoryId",
+                  "value": "{{categoryId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "title",
+                  "value": "Tài liệu test (updated)",
+                  "type": "text"
+                },
+                { "key": "fileType", "value": "PDF", "type": "text" },
+                { "key": "minAccessLevelId", "value": "{{accessLevelId}}", "type": "text" },
+                { "key": "isPublic", "value": "false", "type": "text" },
+                { "key": "file", "type": "file", "src": [], "disabled": true }
+              ]
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/documents/{{documentId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "documents", "{{documentId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Document By Id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/documents/{{documentId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "documents", "{{documentId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get All Documents",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/documents?page=1&limit=10",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "documents"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Document",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/documents/{{documentId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "documents", "{{documentId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Conversations",
+      "item": [
+        {
+          "name": "Create Conversation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('conversationId', json.data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Hội thoại test\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/conversations",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "conversations"]
+            }
+          }
+        },
+        {
+          "name": "Get Conversations By User",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/conversations?userId={{userId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "conversations"],
+              "query": [{ "key": "userId", "value": "{{userId}}" }]
+            }
+          }
+        },
+        {
+          "name": "Claim Conversation",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/conversations/{{conversationId}}/claim",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "conversations",
+                "{{conversationId}}",
+                "claim"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Conversation (soft)",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/conversations/{{conversationId}}",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "conversations",
+                "{{conversationId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Messages",
+      "item": [
+        {
+          "name": "Send Message",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('messageId', json.data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversationId\": \"{{conversationId}}\",\n  \"role\": \"USER\",\n  \"content\": \"Xin chào, đây là tin nhắn test.\",\n  \"chatModelId\": \"{{chatModelId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/messages",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "messages"]
+            }
+          }
+        },
+        {
+          "name": "Get Messages By Conversation",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/messages/conversation/{{conversationId}}",
+              "host": ["{{gateway_url}}"],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "messages",
+                "conversation",
+                "{{conversationId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Message By Id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/messages/{{messageId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "messages", "{{messageId}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
