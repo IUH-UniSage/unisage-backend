@@ -20,6 +20,7 @@ target/
 *.ipr
 .env
 uploads
+changes
 
 ### NetBeans ###
 /nbproject/private/

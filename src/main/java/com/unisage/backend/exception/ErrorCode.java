@@ -54,6 +54,9 @@ public enum ErrorCode {
     FILE_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2402, "Không thể xoá file khỏi hệ thống lưu trữ."),
     FILE_NOT_FOUND(HttpStatus.NOT_FOUND, 2403, "File không tồn tại trong hệ thống lưu trữ."),
     FILE_ACCESS_DENIED(HttpStatus.FORBIDDEN, 2404, "Bạn không đủ quyền truy cập file này."),
+    FILE_SIZE_EXCEEDED(HttpStatus.BAD_REQUEST, 2405, "Kích thước file vượt quá giới hạn cho phép."),
+    FILE_TYPE_NOT_ALLOWED(HttpStatus.BAD_REQUEST, 2406, "Định dạng file không được hỗ trợ."),
+    FILE_TOO_MANY_FILES(HttpStatus.BAD_REQUEST, 2407, "Chỉ được phép tải lên một file trong mỗi lần gửi."),
     ;
 
     private final HttpStatus httpStatus;

@@ -14,7 +14,9 @@ import com.unisage.backend.dto.response.ApiResponse;
 import com.unisage.backend.dto.response.DocumentResponse;
 import com.unisage.backend.dto.response.PageResponse;
 import com.unisage.backend.service.document.DocumentService;
+import com.unisage.backend.utils.MultipartRequestValidator;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -22,18 +24,24 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class DocumentController {
 
+    private static final String FILE_FIELD_NAME = "file";
+
     private final DocumentService documentService;
+    private final MultipartRequestValidator multipartRequestValidator;
 
     @PostMapping
     public ResponseEntity<ApiResponse<DocumentResponse>> createDocument(
-            @ModelAttribute CreateDocumentRequest request) {
+            @ModelAttribute CreateDocumentRequest request, HttpServletRequest servletRequest) {
+        multipartRequestValidator.validateSingleFile(servletRequest, FILE_FIELD_NAME);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(documentService.createDocument(request)));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<DocumentResponse>> updateDocument(
-            @PathVariable UUID id, @ModelAttribute UpdateDocumentRequest request) {
+            @PathVariable UUID id, @ModelAttribute UpdateDocumentRequest request,
+            HttpServletRequest servletRequest) {
+        multipartRequestValidator.validateSingleFile(servletRequest, FILE_FIELD_NAME);
         return ResponseEntity.ok(ApiResponse.success(documentService.updateDocument(id, request)));
     }
 

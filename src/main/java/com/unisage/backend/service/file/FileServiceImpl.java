@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.unisage.backend.entity.enums.AllowedFileType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 
@@ -44,6 +45,7 @@ public class FileServiceImpl implements FileService {
     public String upload(MultipartFile file) {
         String originalFilename = file.getOriginalFilename() != null
                 ? file.getOriginalFilename() : "file";
+        validateFileType(originalFilename);
         String objectKey = UUID.randomUUID() + "_" + originalFilename;
 
         try (InputStream inputStream = file.getInputStream()) {
@@ -57,6 +59,13 @@ public class FileServiceImpl implements FileService {
         } catch (Exception e) {
             log.error("MinIO upload failed for {}", originalFilename, e);
             throw new AppException(ErrorCode.FILE_UPLOAD_FAILED);
+        }
+    }
+
+    private void validateFileType(String originalFilename) {
+        if (AllowedFileType.fromExtension(originalFilename).isEmpty()) {
+            log.warn("Rejected upload of '{}': not in the allowed file type whitelist", originalFilename);
+            throw new AppException(ErrorCode.FILE_TYPE_NOT_ALLOWED);
         }
     }
 
