@@ -12,6 +12,7 @@ import com.unisage.backend.dto.request.CreateDocumentRequest;
 import com.unisage.backend.dto.request.UpdateDocumentRequest;
 import com.unisage.backend.dto.response.DocumentResponse;
 import com.unisage.backend.dto.response.PageResponse;
+import com.unisage.backend.entity.AccessLevel;
 import com.unisage.backend.entity.Category;
 import com.unisage.backend.entity.Department;
 import com.unisage.backend.entity.Document;
@@ -19,6 +20,7 @@ import com.unisage.backend.entity.User;
 import com.unisage.backend.entity.enums.DocStatus;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
+import com.unisage.backend.repository.AccessLevelRepository;
 import com.unisage.backend.repository.CategoryRepository;
 import com.unisage.backend.repository.DepartmentRepository;
 import com.unisage.backend.repository.DocumentRepository;
@@ -37,6 +39,7 @@ public class DocumentServiceImpl implements DocumentService {
     private final DepartmentRepository departmentRepository;
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
+    private final AccessLevelRepository accessLevelRepository;
     private final SecurityUtil securityUtil;
     private final FileService fileService;
 
@@ -47,12 +50,7 @@ public class DocumentServiceImpl implements DocumentService {
         User uploader = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        Integer minAccessLevel = request.minAccessLevel() != null ? request.minAccessLevel() : 0;
-        Integer maxAccessLevel = userRepository.findMaxAccessLevelByUserId(userId);
-        int effectiveMax = maxAccessLevel != null ? maxAccessLevel : 0;
-        if (effectiveMax < minAccessLevel) {
-            throw new AppException(ErrorCode.DOCUMENT_PERMISSION_FORBIDDEN);
-        }
+        AccessLevel minAccessLevel = resolveMinAccessLevel(request.minAccessLevelId(), uploader);
 
         Department docPackage = null;
         if (request.docPackageId() != null) {
@@ -123,14 +121,11 @@ public class DocumentServiceImpl implements DocumentService {
             document.setFileType(request.fileType());
         }
 
-        if (request.minAccessLevel() != null) {
+        if (request.minAccessLevelId() != null) {
             UUID userId = securityUtil.getCurrentUserId();
-            Integer maxAccessLevel = userRepository.findMaxAccessLevelByUserId(userId);
-            int effectiveMax = maxAccessLevel != null ? maxAccessLevel : 0;
-            if (effectiveMax < request.minAccessLevel()) {
-                throw new AppException(ErrorCode.DOCUMENT_PERMISSION_FORBIDDEN);
-            }
-            document.setMinAccessLevel(request.minAccessLevel());
+            User requester = userRepository.findById(userId)
+                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+            document.setMinAccessLevel(resolveMinAccessLevel(request.minAccessLevelId(), requester));
         }
 
         if (request.isPublic() != null) {
@@ -166,14 +161,23 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     /**
-     * Only issues a presigned URL when the caller is actually allowed to see this
-     * document: public documents are always resolvable, everything else requires
-     * an authenticated user whose max access level clears the document's
-     * minAccessLevel — the same check createDocument()/updateDocument() apply when
-     * a document's access level is set. Replaces the old unguarded /uploads/**
-     * static route, where any RBAC permission matching that path could read any
-     * file regardless of the document's own minAccessLevel.
+     * Resolves the requested AccessLevel (if any) and enforces that the requester's own
+     * access level clears it — shared by createDocument() and updateDocument().
      */
+    private AccessLevel resolveMinAccessLevel(UUID minAccessLevelId, User requester) {
+        AccessLevel minAccessLevel = null;
+        if (minAccessLevelId != null) {
+            minAccessLevel = accessLevelRepository.findById(minAccessLevelId)
+                    .orElseThrow(() -> new AppException(ErrorCode.ACCESS_LEVEL_NOT_FOUND));
+        }
+        int requiredLevel = minAccessLevel != null ? minAccessLevel.getLevel() : 0;
+        int effectiveLevel = requester.getAccessLevel() != null ? requester.getAccessLevel().getLevel() : 0;
+        if (effectiveLevel < requiredLevel) {
+            throw new AppException(ErrorCode.DOCUMENT_PERMISSION_FORBIDDEN);
+        }
+        return minAccessLevel;
+    }
+
     private String resolveFileUrl(Document document) {
         if (document.getSourceUrl() == null) {
             return null;
@@ -187,10 +191,11 @@ public class DocumentServiceImpl implements DocumentService {
             return null;
         }
 
-        Integer maxAccessLevel = userRepository.findMaxAccessLevelByUserId(userId);
-        int effectiveMax = maxAccessLevel != null ? maxAccessLevel : 0;
-        int required = document.getMinAccessLevel() != null ? document.getMinAccessLevel() : 0;
-        if (effectiveMax < required) {
+        User requester = userRepository.findById(userId).orElse(null);
+        int effectiveLevel = requester != null && requester.getAccessLevel() != null
+                ? requester.getAccessLevel().getLevel() : 0;
+        int required = document.getMinAccessLevel() != null ? document.getMinAccessLevel().getLevel() : 0;
+        if (effectiveLevel < required) {
             return null;
         }
 
@@ -206,7 +211,8 @@ public class DocumentServiceImpl implements DocumentService {
                 .fileType(document.getFileType())
                 .status(document.getStatus())
                 .isPublic(document.getIsPublic())
-                .minAccessLevel(document.getMinAccessLevel())
+                .minAccessLevelId(document.getMinAccessLevel() != null ? document.getMinAccessLevel().getId() : null)
+                .minAccessLevel(document.getMinAccessLevel() != null ? document.getMinAccessLevel().getLevel() : null)
                 .version(document.getVersion())
                 .departmentId(document.getDocPackage() != null ? document.getDocPackage().getId() : null)
                 .departmentName(document.getDocPackage() != null ? document.getDocPackage().getName() : null)

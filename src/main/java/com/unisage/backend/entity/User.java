@@ -60,6 +60,11 @@ public class User extends BaseEntity {
     @JsonBackReference
     private Role role;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "access_level_id")
+    @JsonBackReference
+    private AccessLevel accessLevel;
+
     private String phone;
 
     private String gender;

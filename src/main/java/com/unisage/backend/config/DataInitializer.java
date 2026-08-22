@@ -26,6 +26,7 @@ public class DataInitializer implements CommandLineRunner {
     private final RolePermissionRepository  rolePermissionRepository;
     private final UserRepository            userRepository;
     private final DepartmentRepository      departmentRepository;
+    private final AccessLevelRepository     accessLevelRepository;
     private final PasswordEncoder           passwordEncoder;
 
     @Value("${DEFAULT_SUPERADMIN_PASS:Admin@123456}")
@@ -44,6 +45,7 @@ public class DataInitializer implements CommandLineRunner {
         // Runs independently of the RBAC skip-guard below, so re-running on an already
         // initialised system still fills in any department still missing.
         seedDepartments();
+        Map<Integer, AccessLevel> accessLevels = seedAccessLevels();
 
         if (roleRepository.findByName(PredefinedRoles.SUPER_ADMIN).isPresent()) {
             log.info(">>> System already initialised — skipping DataInitializer.");
@@ -66,9 +68,9 @@ public class DataInitializer implements CommandLineRunner {
         assignUser(userRole, perms);
 
         // 4. Seed one default user per role
-        seedUser("admin@unisage.com",    "SA-001", "System",   "Administrator", "0999999999", superAdmin,  defaultSuperAdminPassword);
-        seedUser("ingest@unisage.com",   "IA-001", "Ingest",   "Admin",         "0888888888", ingestAdmin, defaultIngestAdminPassword);
-        seedUser("user@unisage.com",     "US-001", "Default",  "User",          "0777777777", userRole,    defaultUserPassword);
+        seedUser("admin@unisage.com",    "SA-001", "System",   "Administrator", "0999999999", superAdmin,  defaultSuperAdminPassword, accessLevels.get(5));
+        seedUser("ingest@unisage.com",   "IA-001", "Ingest",   "Admin",         "0888888888", ingestAdmin, defaultIngestAdminPassword, accessLevels.get(5));
+        seedUser("user@unisage.com",     "US-001", "Default",  "User",          "0777777777", userRole,    defaultUserPassword, accessLevels.get(0));
 
         log.info(">>> [SUCCESS] RBAC initialisation complete.");
     }
@@ -209,7 +211,24 @@ public class DataInitializer implements CommandLineRunner {
                 "Cập nhật phòng ban", null),
             def(PredefinedPermissions.DEPARTMENT_DELETE,
                 "/departments/**", PermissionMethod.DELETE, ResourceType.DEPARTMENT,
-                "Xóa phòng ban", null)
+                "Xóa phòng ban", null),
+
+            // ── AccessLevel ──────────────────────────────────────────────
+            def(PredefinedPermissions.ACCESS_LEVEL_ALL,
+                "/access-levels/**", PermissionMethod.ALL, ResourceType.ACCESS_LEVEL,
+                "Toàn quyền cấp độ truy cập", null),
+            def(PredefinedPermissions.ACCESS_LEVEL_READ,
+                "/access-levels/**", PermissionMethod.GET, ResourceType.ACCESS_LEVEL,
+                "Xem cấp độ truy cập", null),
+            def(PredefinedPermissions.ACCESS_LEVEL_CREATE,
+                "/access-levels", PermissionMethod.POST, ResourceType.ACCESS_LEVEL,
+                "Tạo cấp độ truy cập", null),
+            def(PredefinedPermissions.ACCESS_LEVEL_UPDATE,
+                "/access-levels/**", PermissionMethod.PUT, ResourceType.ACCESS_LEVEL,
+                "Cập nhật cấp độ truy cập", null),
+            def(PredefinedPermissions.ACCESS_LEVEL_DELETE,
+                "/access-levels/**", PermissionMethod.DELETE, ResourceType.ACCESS_LEVEL,
+                "Xóa cấp độ truy cập", null)
 
             // ── Document (CREATE = ingest) ────────────────────────────────
 
@@ -389,7 +408,7 @@ public class DataInitializer implements CommandLineRunner {
      */
     private void seedUser(String email, String code,
                           String firstName, String lastName, String phone,
-                          Role role, String rawPassword) {
+                          Role role, String rawPassword, AccessLevel accessLevel) {
         if (userRepository.findByEmail(email).isPresent()) return;
 
         User user = User.builder()
@@ -399,6 +418,7 @@ public class DataInitializer implements CommandLineRunner {
                 .firstName(firstName)
                 .lastName(lastName)
                 .role(role)
+                .accessLevel(accessLevel)
                 .phone(phone)
                 .gender("NAM")
                 .isActive(true)
@@ -406,6 +426,34 @@ public class DataInitializer implements CommandLineRunner {
         userRepository.save(user);
 
         log.info("  User seeded: {} [{}]", email, role.getName());
+    }
+
+    // ─── AccessLevel seeding ───────────────────────────────────────────────
+    /** Seeds levels 0 (no restriction) through 5, matching the DOCUMENT and INGEST permission levels. */
+    private Map<Integer, AccessLevel> seedAccessLevels() {
+        Map<Integer, AccessLevel> map = new LinkedHashMap<>();
+        Map<Integer, String> descriptions = Map.of(
+                0, "Không giới hạn — tài liệu công khai nội bộ",
+                1, "Cấp độ 1",
+                2, "Cấp độ 2",
+                3, "Cấp độ 3",
+                4, "Cấp độ 4",
+                5, "Cấp độ 5 — tối cao"
+        );
+        for (int level = 0; level <= 5; level++) {
+            int finalLevel = level;
+            AccessLevel accessLevel = accessLevelRepository.findByLevel(level).orElseGet(() -> {
+                AccessLevel a = AccessLevel.builder()
+                        .level(finalLevel)
+                        .description(descriptions.get(finalLevel))
+                        .build();
+                accessLevelRepository.save(a);
+                log.info("  AccessLevel seeded: L{}", finalLevel);
+                return a;
+            });
+            map.put(level, accessLevel);
+        }
+        return map;
     }
 
     // ─── Department seeding ────────────────────────────────────────────────

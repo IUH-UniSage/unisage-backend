@@ -20,6 +20,8 @@ public record UserDetailResponse(
     String phone,
     String gender,
     UserStatus status,
+    UUID accessLevelId,
+    Integer accessLevel,
     String extraInfo,
     LocalDateTime lastLogin,
     LocalDateTime createdAt,

@@ -15,6 +15,9 @@ public class MinioConfig {
     @Value("${minio.endpoint}")
     private String endpoint;
 
+    @Value("${minio.public-endpoint}")
+    private String publicEndpoint;
+
     @Value("${minio.access-key}")
     private String accessKey;
 
@@ -24,14 +27,31 @@ public class MinioConfig {
     @Value("${minio.bucket}")
     private String bucket;
 
+    @Value("${minio.region}")
+    private String region;
+
+    /**
+     * Used for actual object operations (put/remove) — reaches MinIO over the
+     * internal/container network (e.g. "http://unisage-minio:9000" in docker-compose).
+     */
     @Bean
     public MinioClient minioClient() {
         MinioClient client = MinioClient.builder()
                 .endpoint(endpoint)
                 .credentials(accessKey, secretKey)
+                .region(region)
                 .build();
         ensureBucket(client);
         return client;
+    }
+
+    @Bean
+    public MinioClient publicMinioClient() {
+        return MinioClient.builder()
+                .endpoint(publicEndpoint)
+                .credentials(accessKey, secretKey)
+                .region(region)
+                .build();
     }
 
     private void ensureBucket(MinioClient client) {

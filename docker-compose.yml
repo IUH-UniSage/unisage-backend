@@ -40,6 +40,7 @@ services:
       - DB_HOST=unisage-db
       - DB_PORT=5432
       - MINIO_ENDPOINT=http://unisage-minio:9000
+      - MINIO_PUBLIC_ENDPOINT=http://localhost:9000
 
   devcontainer:
     profiles:
@@ -67,6 +68,7 @@ services:
       - DEFAULT_INGESTADMIN_PASS=123123
       - DEFAULT_USER_PASS=123123
       - MINIO_ENDPOINT=http://unisage-minio:9000
+      - MINIO_PUBLIC_ENDPOINT=http://localhost:9000
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin123
       - MINIO_BUCKET=unisage-documents

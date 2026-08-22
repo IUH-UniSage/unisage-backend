@@ -15,8 +15,8 @@ import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import io.minio.Http.Method;
 import io.minio.errors.ErrorResponseException;
-import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -26,6 +26,13 @@ import lombok.extern.slf4j.Slf4j;
 public class FileServiceImpl implements FileService {
 
     private final MinioClient minioClient;
+
+    /**
+     * Field name intentionally matches the "publicMinioClient" @Bean method name in
+     * MinioConfig — with two MinioClient beans present, Spring's constructor autowiring
+     * falls back to matching the parameter name against the bean name to disambiguate.
+     */
+    private final MinioClient publicMinioClient;
 
     @Value("${minio.bucket}")
     private String bucket;
@@ -43,7 +50,7 @@ public class FileServiceImpl implements FileService {
             minioClient.putObject(PutObjectArgs.builder()
                     .bucket(bucket)
                     .object(objectKey)
-                    .stream(inputStream, file.getSize(), -1)
+                    .stream(inputStream, file.getSize(), -1L)
                     .contentType(file.getContentType())
                     .build());
             return objectKey;
@@ -70,7 +77,7 @@ public class FileServiceImpl implements FileService {
     @Override
     public String getPresignedUrl(String objectKey) {
         try {
-            return minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+            return publicMinioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                     .method(Method.GET)
                     .bucket(bucket)
                     .object(objectKey)

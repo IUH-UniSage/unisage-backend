@@ -16,6 +16,7 @@ public record DocumentResponse(
     String fileType,
     DocStatus status,
     Boolean isPublic,
+    UUID minAccessLevelId,
     Integer minAccessLevel,
     Integer version,
     UUID departmentId,

@@ -12,11 +12,13 @@ import java.util.*;
 
 import com.unisage.backend.dto.request.DepartmentAccessItem;
 import com.unisage.backend.dto.response.DepartmentAccessResponse;
+import com.unisage.backend.entity.AccessLevel;
 import com.unisage.backend.entity.Department;
 import com.unisage.backend.entity.Permission;
 import com.unisage.backend.entity.Role;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.entity.UserDepartmentAccess;
+import com.unisage.backend.repository.AccessLevelRepository;
 import com.unisage.backend.repository.DepartmentRepository;
 import com.unisage.backend.repository.PermissionRepository;
 import com.unisage.backend.repository.UserDepartmentAccessRepository;
@@ -42,6 +44,7 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final DepartmentRepository departmentRepository;
     private final UserDepartmentAccessRepository userDepartmentAccessRepository;
+    private final AccessLevelRepository accessLevelRepository;
 
     @Override
     @Transactional
@@ -56,6 +59,12 @@ public class UserServiceImpl implements UserService {
         Role role = roleRepository.findById(request.roleId())
                 .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
 
+        AccessLevel accessLevel = null;
+        if (request.accessLevelId() != null) {
+            accessLevel = accessLevelRepository.findById(request.accessLevelId())
+                    .orElseThrow(() -> new AppException(ErrorCode.ACCESS_LEVEL_NOT_FOUND));
+        }
+
         User user = User.builder()
                 .email(request.email())
                 .code(request.code())
@@ -63,6 +72,7 @@ public class UserServiceImpl implements UserService {
                 .firstName(request.firstName())
                 .lastName(request.lastName())
                 .role(role)
+                .accessLevel(accessLevel)
                 .phone(request.phone())
                 .gender(request.gender())
                 .status(UserStatus.ACTIVE)
@@ -144,6 +154,12 @@ public class UserServiceImpl implements UserService {
             user.setRole(role);
         }
 
+        if (request.accessLevelId() != null) {
+            AccessLevel accessLevel = accessLevelRepository.findById(request.accessLevelId())
+                    .orElseThrow(() -> new AppException(ErrorCode.ACCESS_LEVEL_NOT_FOUND));
+            user.setAccessLevel(accessLevel);
+        }
+
         userRepository.save(user);
 
         if (request.departmentAccesses() != null) {
@@ -220,6 +236,8 @@ public class UserServiceImpl implements UserService {
                 .phone(user.getPhone())
                 .gender(user.getGender())
                 .status(user.getStatus())
+                .accessLevelId(user.getAccessLevel() != null ? user.getAccessLevel().getId() : null)
+                .accessLevel(user.getAccessLevel() != null ? user.getAccessLevel().getLevel() : null)
                 .lastLogin(user.getLastLogin())
                 .createdAt(user.getCreatedAt())
                 .departmentAccesses(mapDepartmentAccesses(user.getId()))
@@ -263,6 +281,8 @@ public class UserServiceImpl implements UserService {
                 .phone(user.getPhone())
                 .gender(user.getGender())
                 .status(user.getStatus())
+                .accessLevelId(user.getAccessLevel() != null ? user.getAccessLevel().getId() : null)
+                .accessLevel(user.getAccessLevel() != null ? user.getAccessLevel().getLevel() : null)
                 .extraInfo(user.getExtraInfo())
                 .lastLogin(user.getLastLogin())
                 .createdAt(user.getCreatedAt())

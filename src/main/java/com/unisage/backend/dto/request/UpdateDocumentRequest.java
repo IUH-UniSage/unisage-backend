@@ -13,7 +13,7 @@ public record UpdateDocumentRequest(
     String title,
     String sourceUrl,
     String fileType,
-    Integer minAccessLevel,
+    UUID minAccessLevelId,
     Boolean isPublic,
     MultipartFile file
 ) {}

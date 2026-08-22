@@ -19,6 +19,8 @@ public record UserResponse(
     String phone,
     String gender,
     UserStatus status,
+    UUID accessLevelId,
+    Integer accessLevel,
     LocalDateTime lastLogin,
     LocalDateTime createdAt,
     List<DepartmentAccessResponse> departmentAccesses

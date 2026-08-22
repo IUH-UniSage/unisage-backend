@@ -16,6 +16,7 @@ public record UpdateUserRequest(
     String phone,
     String gender,
     String extraInfo,
+    UUID accessLevelId,
 
     List<DepartmentAccessItem> departmentAccesses
 ) {}

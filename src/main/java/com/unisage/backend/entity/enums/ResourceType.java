@@ -14,6 +14,7 @@ public enum ResourceType {
     USER_DEPARTMENT_ACCESS("Phân quyền truy cập phòng ban"),
     DOCUMENT("Tài liệu"),
     CATEGORY("Danh mục"),
+    ACCESS_LEVEL("Cấp độ truy cập"),
 
     // AI / Chatbot
     CHAT_MODEL("Mô hình chat"),

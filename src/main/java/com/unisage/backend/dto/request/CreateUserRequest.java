@@ -29,6 +29,7 @@ public record CreateUserRequest(
 
     String phone,
     String gender,
+    UUID accessLevelId,
 
     List<DepartmentAccessItem> departmentAccesses
 ) {}

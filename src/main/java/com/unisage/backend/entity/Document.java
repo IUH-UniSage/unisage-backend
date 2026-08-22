@@ -52,9 +52,10 @@ public class Document extends BaseEntity {
     @Column(name = "file_type", nullable = false)
     private String fileType;
 
-    @Builder.Default
-    @Column(name = "min_access_level")
-    private Integer minAccessLevel = 0;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "min_access_level_id")
+    @JsonBackReference
+    private AccessLevel minAccessLevel;
 
     @Enumerated(EnumType.STRING)
     private DocStatus status;

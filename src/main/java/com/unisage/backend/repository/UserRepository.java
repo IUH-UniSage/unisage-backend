@@ -26,13 +26,4 @@ public interface UserRepository extends JpaRepository<User, UUID> {
         WHERE u.id = :id
         """)
     Optional<User> findByIdWithPermissions(@Param("id") UUID id);
-    @Query("""
-            SELECT MAX(p.accessLevel)
-            FROM User u
-            JOIN u.role r
-            JOIN r.rolePermissions rp
-            JOIN rp.permission p
-            WHERE u.id = :userId
-        """)
-    Integer findMaxAccessLevelByUserId(@Param("userId") UUID userId);
 }

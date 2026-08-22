@@ -38,6 +38,7 @@ public enum ErrorCode {
     CONVERSATION_ALREADY_CLAIMED(HttpStatus.BAD_REQUEST, 2129, "Hội thoại này đã thuộc về một người dùng khác."),
     USAGE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, 2130,
             "Bạn đã dùng hết số tin nhắn miễn phí hôm nay. Quay lại sau 00:00 hoặc đăng nhập để tiếp tục."),
+    ACCESS_LEVEL_NOT_FOUND(HttpStatus.NOT_FOUND, 2131, "Access Level không tồn tại."),
 
     // Business rule errors
     EMAIL_EXISTED(HttpStatus.BAD_REQUEST, 2115, "Email này đã được sử dụng!"),
@@ -46,6 +47,7 @@ public enum ErrorCode {
     ROLE_EXISTED(HttpStatus.BAD_REQUEST, 2119, "Vai trò này đã tồn tại!"),
     CATEGORY_NAME_EXISTED(HttpStatus.BAD_REQUEST, 2120, "Tên danh mục này đã tồn tại!"),
     USER_DEPARTMENT_ACCESS_EXISTED(HttpStatus.BAD_REQUEST, 2126, "Phân quyền phòng ban này đã tồn tại!"),
+    ACCESS_LEVEL_EXISTED(HttpStatus.BAD_REQUEST, 2132, "Access Level này đã tồn tại!"),
 
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),
