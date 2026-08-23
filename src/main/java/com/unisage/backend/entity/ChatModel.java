@@ -5,6 +5,7 @@ import com.unisage.backend.security.ApiKeyConverter;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -42,7 +43,8 @@ public class ChatModel extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Builder.Default
-    @Column(name = "source_type", columnDefinition = "varchar(20) default 'CLOUD_API'")
+    @Column(name = "source_type", length = 20)
+    @ColumnDefault("'CLOUD_API'")
     private ChatModelSourceType sourceType = ChatModelSourceType.CLOUD_API;
 
     /** Bắt buộc khi {@code sourceType == CLOUD_API} (vd "openai", "anthropic", "google"); không dùng cho {@code SELF_HOSTED}. */

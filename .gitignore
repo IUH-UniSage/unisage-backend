@@ -21,6 +21,7 @@ target/
 .env
 uploads
 changes
+_to_delete
 
 ### NetBeans ###
 /nbproject/private/

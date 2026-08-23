@@ -36,7 +36,10 @@
     { "key": "documentId", "value": "" },
     { "key": "conversationId", "value": "" },
     { "key": "messageId", "value": "" },
-    { "key": "accessLevelId", "value": "" }
+    { "key": "accessLevelId", "value": "" },
+    { "key": "objectKey", "value": "" },
+    { "key": "excelObjectKey", "value": "" },
+    { "key": "embeddingTaskId", "value": "" }
   ],
   "item": [
     {
@@ -1028,7 +1031,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "const json = pm.response.json();",
-                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('documentId', json.data.id); }"
+                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('documentId', json.data.id); }",
+                  "if (json && json.data && json.data.sourceUrl) { pm.collectionVariables.set('objectKey', json.data.sourceUrl); }"
                 ]
               }
             }
@@ -1450,6 +1454,179 @@
               "host": ["{{gateway_url}}"],
               "path": ["api", "v1", "master", "messages", "{{messageId}}"]
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI - Ingestion",
+      "description": "APIs của unisage-agent (Python/FastAPI), gọi qua API Gateway ở prefix `/api/v1/ai/**` (rewritten thành `/api/v1/**` trên unisage-agent), gateway tự gắn header `X-Internal-Secret` khi forward - không cần set thủ công trong Postman.\n\n{{objectKey}} được set tự động sau khi chạy \"Create Document - Valid (Full Fields)\" trong folder Documents (lấy từ `data.sourceUrl`, chỉ đúng khi request đó có kèm file upload thật). {{excelObjectKey}} phải set thủ công tới object_key của một file .xlsx đã có trong MinIO - lưu ý AllowedFileType của backend-java hiện CHƯA whitelist .xlsx nên chưa có đường upload end-to-end cho .xlsx qua Documents API (xem docs/specs/known-gaps.md của unisage-agent).\n\nWebSocket (không thể chạy trực tiếp bằng Postman collection JSON dạng REST): `ws://<gateway_url_ws>/api/v1/ai/ingestion/embedding/{{embeddingTaskId}}/progress` - dùng Postman's WebSocket request riêng hoặc `wscat` để test, sau khi chạy \"Embed Chunks\" bên dưới để có embeddingTaskId.\n\nCác request \"Embed Chunks\" bên dưới đang set X-User-Department / X-User-Access-Level thủ công như header thường - đây là workaround tạm thời vì AuthenticationFilter của gateway hiện chưa derive và inject 2 header này từ JWT claims (known gap, xem plan.md của unisage-agent). Khi gateway đã làm việc này, xoá 2 header thủ công khỏi các request bên dưới.",
+      "item": [
+        {
+          "name": "Preview Document",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"object_key\": \"{{objectKey}}\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/preview",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "preview"]
+            },
+            "description": "Fetch object từ MinIO (qua unisage-agent, dùng credentials riêng của Python service) và trả về raw text. Hỗ trợ .txt/.pdf/.docx - .doc (legacy binary) chưa hỗ trợ, xem known-gaps.md."
+          }
+        },
+        {
+          "name": "Chunking - Recursive",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"{{documentId}}\",\n  \"object_key\": \"{{objectKey}}\",\n  \"strategy\": \"recursive\",\n  \"params\": {\n    \"chunk_size\": 800,\n    \"overlap\": 120\n  }\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/chunking",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "chunking"]
+            }
+          }
+        },
+        {
+          "name": "Chunking - Token Based",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"{{documentId}}\",\n  \"object_key\": \"{{objectKey}}\",\n  \"strategy\": \"token_based\",\n  \"params\": {\n    \"chunk_size\": 400,\n    \"overlap\": 40\n  }\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/chunking",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "chunking"]
+            }
+          }
+        },
+        {
+          "name": "Chunking - Semantic",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"{{documentId}}\",\n  \"object_key\": \"{{objectKey}}\",\n  \"strategy\": \"semantic\",\n  \"params\": {\n    \"target_tokens\": 400,\n    \"overlap_ratio\": 0.2,\n    \"similarity_threshold\": 0.5\n  }\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/chunking",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "chunking"]
+            },
+            "description": "Gọi OpenAI embeddings đồng bộ trong lúc chunk (per-sentence) để nhóm câu theo similarity - chậm hơn recursive/token_based, cần OPENAI_API_KEY hợp lệ trên unisage-agent."
+          }
+        },
+        {
+          "name": "Chunking - Markdown Aware",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"{{documentId}}\",\n  \"object_key\": \"{{objectKey}}\",\n  \"strategy\": \"markdown_aware\",\n  \"params\": {\n    \"chunk_size\": 800,\n    \"overlap\": 120\n  }\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/chunking",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "chunking"]
+            },
+            "description": "Text regions dùng recursive chunking (theo params), table regions (PDF/DOCX) giữ nguyên mỗi bảng là 1 chunk markdown."
+          }
+        },
+        {
+          "name": "Chunking - Excel Row",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"{{documentId}}\",\n  \"object_key\": \"{{excelObjectKey}}\",\n  \"strategy\": \"excel_row\",\n  \"params\": {\n    \"rows_per_chunk\": 1\n  }\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/chunking",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "chunking"]
+            },
+            "description": "Chỉ chạy được với object_key trỏ tới file .xlsx thật trong MinIO - set {{excelObjectKey}} thủ công. Xem known-gaps.md: backend-java chưa whitelist .xlsx nên chưa upload được qua Documents API."
+          }
+        },
+        {
+          "name": "Chunking - Invalid (Strategy/File Type Mismatch)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"{{documentId}}\",\n  \"object_key\": \"{{objectKey}}\",\n  \"strategy\": \"excel_row\",\n  \"params\": {}\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/chunking",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "chunking"]
+            },
+            "description": "Invalid: strategy excel_row nhưng object_key không phải .xlsx. Kỳ vọng: 422, errorCode UNISAGE_4005_STRATEGY_FILE_TYPE_MISMATCH."
+          }
+        },
+        {
+          "name": "Embed Chunks",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.task_id) { pm.collectionVariables.set('embeddingTaskId', json.task_id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Department", "value": "CNTT" },
+              { "key": "X-User-Access-Level", "value": "STUDENT" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"{{documentId}}\",\n  \"object_key\": \"{{objectKey}}\",\n  \"chunks\": [\n    {\n      \"chunk_index\": 0,\n      \"content\": \"Nội dung chunk mẫu để test embedding.\",\n      \"region_type\": \"text\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/embedding",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "embedding"]
+            },
+            "description": "Dùng chunks lấy được từ 1 trong các request Chunking ở trên (client tự chọn/sửa rồi mới gửi - client-approved). Kỳ vọng: 202 Accepted + task_id, worker Celery chạy nền enrich + embed (3 named vectors) + upsert vào Qdrant. Theo dõi tiến độ qua WebSocket (xem mô tả folder)."
+          }
+        },
+        {
+          "name": "Embed Chunks - Invalid (Missing Trusted Headers)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"{{documentId}}\",\n  \"object_key\": \"{{objectKey}}\",\n  \"chunks\": [\n    {\n      \"chunk_index\": 0,\n      \"content\": \"Nội dung chunk mẫu để test embedding.\",\n      \"region_type\": \"text\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/embedding",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "embedding"]
+            },
+            "description": "Invalid: không gửi X-User-Department/X-User-Access-Level. Kỳ vọng: 400 Bad Request, errorCode UNISAGE_4003_MISSING_TRUSTED_CONTEXT."
           }
         }
       ]
