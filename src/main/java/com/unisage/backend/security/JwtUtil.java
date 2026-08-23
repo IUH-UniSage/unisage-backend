@@ -10,6 +10,8 @@ import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
 
 @Component
 public class JwtUtil {
@@ -30,12 +32,14 @@ public class JwtUtil {
     private long refreshTokenExpiration;
 
     // Generate access token
-    public String generateAccessToken(User user) {
+    public String generateAccessToken(User user, List<Map<String, Object>> departmentAccess, List<String> permissions) {
         return Jwts.builder()
                 .setSubject(user.getId().toString())
                 .claim("code", user.getCode())
                 .claim("role", user.getRole().getName())
                 .claim("type", "access")
+                .claim("department_access", departmentAccess)
+                .claim("permissions", permissions)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + accessTokenExpiration))
                 .signWith(key)
@@ -66,6 +70,18 @@ public class JwtUtil {
 
     public String getTokenType(String token) {
         return (String) parseClaims(token).get("type");
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> getDepartmentAccess(String token) {
+        List<?> raw = parseClaims(token).get("department_access", List.class);
+        return raw == null ? null : (List<Map<String, Object>>) raw;
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<String> getPermissions(String token) {
+        List<?> raw = parseClaims(token).get("permissions", List.class);
+        return raw == null ? null : (List<String>) raw;
     }
 
     public boolean isRefreshToken(String token) {

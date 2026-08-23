@@ -16,10 +16,6 @@ public interface PermissionRepository extends JpaRepository<Permission, UUID> {
 
     boolean existsByName(String name);
 
-    boolean existsByNameAndAccessLevel(String name, Integer accessLevel);
-
-    Optional<Permission> findByNameAndAccessLevel(String name, Integer accessLevel);
-
     boolean existsByPathAndMethod(String path, PermissionMethod method);
 
     @Query("SELECT p FROM Permission p WHERE p.path = :path AND p.method = :method")

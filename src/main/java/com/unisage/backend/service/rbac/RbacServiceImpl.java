@@ -46,23 +46,7 @@ public class RbacServiceImpl implements RbacService {
         role = roleRepository.save(role);
 
         if (request.permissionIds() != null && !request.permissionIds().isEmpty()) {
-            List<Permission> permissions = permissionRepository.findAllById(request.permissionIds());
-
-            List<UUID> filteredIds = permissions.stream()
-                .collect(Collectors.toMap(
-                    Permission::getName,
-                    p -> p,
-                    (p1, p2) -> {
-                        Integer l1 = p1.getAccessLevel();
-                        Integer l2 = p2.getAccessLevel();
-                        return (l1 != null ? l1 : 0) >= (l2 != null ? l2 : 0) ? p1 : p2;
-                    }
-                ))
-                .values().stream()
-                .map(Permission::getId)
-                .collect(Collectors.toList());
-
-            for (UUID pId : filteredIds) {
+            for (UUID pId : request.permissionIds()) {
                 assignPermissionToRole(role.getId(), pId);
             }
         }
@@ -93,23 +77,7 @@ public class RbacServiceImpl implements RbacService {
         if (request.permissionIds() != null) {
             rolePermissionRepository.deleteByRoleId(roleId);
 
-            List<Permission> permissions = permissionRepository.findAllById(request.permissionIds());
-
-            List<UUID> filteredIds = permissions.stream()
-                .collect(Collectors.toMap(
-                    Permission::getName,
-                    p -> p,
-                    (p1, p2) -> {
-                        Integer l1 = p1.getAccessLevel();
-                        Integer l2 = p2.getAccessLevel();
-                        return (l1 != null ? l1 : 0) >= (l2 != null ? l2 : 0) ? p1 : p2;
-                    }
-                ))
-                .values().stream()
-                .map(Permission::getId)
-                .collect(Collectors.toList());
-
-            for (UUID pId : filteredIds) {
+            for (UUID pId : request.permissionIds()) {
                 assignPermissionToRole(roleId, pId);
             }
         }
@@ -157,20 +125,10 @@ public class RbacServiceImpl implements RbacService {
         List<RolePermission> mappings = rolePermissionRepository.findByRoleId(roleId);
 
         List<PermissionInfo> perms = mappings.stream()
-                .collect(Collectors.toMap(
-                    rp -> rp.getPermission().getName(),
-                    rp -> PermissionInfo.builder()
+                .map(rp -> PermissionInfo.builder()
                         .id(rp.getPermission().getId())
                         .name(rp.getPermission().getName())
-                        .accessLevel(rp.getPermission().getAccessLevel())
-                        .build(),
-                    (p1, p2) -> {
-                        Integer l1 = p1.accessLevel();
-                        Integer l2 = p2.accessLevel();
-                        return (l1 != null ? l1 : 0) >= (l2 != null ? l2 : 0) ? p1 : p2;
-                    }
-                ))
-                .values().stream()
+                        .build())
                 .collect(Collectors.toList());
 
         return mapToRoleResponse(role, perms);
@@ -187,7 +145,6 @@ public class RbacServiceImpl implements RbacService {
     public PermissionResponse createPermission(PermissionRequest request) {
         Permission permission = Permission.builder()
                 .name(request.name())
-                .accessLevel(request.accessLevel())
                 .isActive(request.isActive() != null ? request.isActive() : true)
                 .build();
         return mapToPermissionResponse(permissionRepository.save(permission));
@@ -200,7 +157,6 @@ public class RbacServiceImpl implements RbacService {
                 .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_FOUND));
 
         p.setName(request.name());
-        p.setAccessLevel(request.accessLevel());
         if (request.isActive() != null) {
             p.setIsActive(request.isActive());
         }
@@ -280,7 +236,6 @@ public class RbacServiceImpl implements RbacService {
         return PermissionResponse.builder()
                 .id(p.getId())
                 .name(p.getName())
-                .accessLevel(p.getAccessLevel())
                 .createdAt(p.getCreatedAt())
                 .createdBy(p.getCreatedBy())
                 .updatedAt(p.getUpdatedAt())

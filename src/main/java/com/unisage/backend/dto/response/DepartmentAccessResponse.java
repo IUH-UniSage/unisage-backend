@@ -8,5 +8,6 @@ import lombok.Builder;
 public record DepartmentAccessResponse(
     UUID departmentId,
     String departmentName,
+    UUID accessLevelId,
     Integer accessLevel
 ) {}

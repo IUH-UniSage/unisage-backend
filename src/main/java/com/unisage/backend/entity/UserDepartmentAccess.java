@@ -38,8 +38,9 @@ public class UserDepartmentAccess {
     @JsonBackReference
     private Department department;
 
-    @Column(name = "access_level")
-    private Integer accessLevel;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "access_level_id")
+    private AccessLevel accessLevel;
 
     @Data
     @NoArgsConstructor

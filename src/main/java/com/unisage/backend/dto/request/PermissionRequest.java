@@ -5,6 +5,5 @@ import lombok.Builder;
 @Builder
 public record PermissionRequest(
     String name,
-    Integer accessLevel,
     Boolean isActive
 ) {}

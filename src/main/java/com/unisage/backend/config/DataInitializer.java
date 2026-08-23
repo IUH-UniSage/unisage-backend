@@ -76,30 +76,25 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     // ─── Permission seeding ──────────────────────────────────────────────
-    /**
-     * Map key = "NAME:LEVEL" (e.g. "DOCUMENT_ALL:3", "USER_READ:null").
-     * This allows multiple rows with the same name but different access levels.
-     */
     private Map<String, Permission> seedPermissions() {
         List<PermDef> defs = buildPermissionDefinitions();
         Map<String, Permission> map = new LinkedHashMap<>();
         for (PermDef d : defs) {
-            String key = permKey(d.name(), d.accessLevel());
-            if (!permissionRepository.existsByNameAndAccessLevel(d.name(), d.accessLevel())) {
+            String key = permKey(d.name());
+            if (!permissionRepository.existsByName(d.name())) {
                 Permission p = Permission.builder()
                         .name(d.name())
                         .path(d.path())
                         .method(d.method())
                         .resourceType(d.resource())
                         .description(d.description())
-                        .accessLevel(d.accessLevel())
                         .isActive(true)
                         .build();
                 permissionRepository.save(p);
                 map.put(key, p);
                 log.debug("  Permission seeded: {}", key);
             } else {
-                permissionRepository.findByNameAndAccessLevel(d.name(), d.accessLevel())
+                permissionRepository.findByName(d.name())
                         .ifPresent(p -> map.put(key, p));
             }
         }
@@ -107,9 +102,8 @@ public class DataInitializer implements CommandLineRunner {
         return map;
     }
 
-    /** Composite map key: name + ":" + (level == null ? "null" : level). */
-    private static String permKey(String name, Integer level) {
-        return name + ":" + (level == null ? "null" : level);
+    private static String permKey(String name) {
+        return name;
     }
 
     /**
@@ -126,188 +120,189 @@ public class DataInitializer implements CommandLineRunner {
             // ── SUPER_ADMIN wildcard ──────────────────────────────────────
             def(PredefinedPermissions.SUPER_ADMIN_ALL,
                 "/**", PermissionMethod.ALL, ResourceType.SYSTEM,
-                "Toàn quyền hệ thống", null),
+                "Toàn quyền hệ thống"),
 
             // ── User ─────────────────────────────────────────────────────
             def(PredefinedPermissions.USER_ALL,
                 "/users/**", PermissionMethod.ALL, ResourceType.USER,
-                "Toàn quyền người dùng", null),
+                "Toàn quyền người dùng"),
             def(PredefinedPermissions.USER_READ,
                 "/users/**", PermissionMethod.GET, ResourceType.USER,
-                "Xem hồ sơ người dùng", null),
+                "Xem hồ sơ người dùng"),
             def(PredefinedPermissions.USER_CREATE,
                 "/users", PermissionMethod.POST, ResourceType.USER,
-                "Tạo người dùng mới", null),
+                "Tạo người dùng mới"),
             def(PredefinedPermissions.USER_UPDATE,
                 "/users/**", PermissionMethod.PUT, ResourceType.USER,
-                "Cập nhật hồ sơ người dùng", null),
+                "Cập nhật hồ sơ người dùng"),
             def(PredefinedPermissions.USER_DELETE,
                 "/users/**", PermissionMethod.DELETE, ResourceType.USER,
-                "Xóa người dùng", null),
+                "Xóa người dùng"),
 
             // ── Role ─────────────────────────────────────────────────────
             def(PredefinedPermissions.ROLE_ALL,
                 "/rbac/roles/**", PermissionMethod.ALL, ResourceType.ROLE,
-                "Toàn quyền vai trò", null),
+                "Toàn quyền vai trò"),
             def(PredefinedPermissions.ROLE_READ,
                 "/rbac/roles/**", PermissionMethod.GET, ResourceType.ROLE,
-                "Xem vai trò", null),
+                "Xem vai trò"),
             def(PredefinedPermissions.ROLE_CREATE,
                 "/rbac/roles", PermissionMethod.POST, ResourceType.ROLE,
-                "Tạo vai trò", null),
+                "Tạo vai trò"),
             def(PredefinedPermissions.ROLE_UPDATE,
                 "/rbac/roles/**", PermissionMethod.PUT, ResourceType.ROLE,
-                "Cập nhật vai trò", null),
+                "Cập nhật vai trò"),
             def(PredefinedPermissions.ROLE_DELETE,
                 "/rbac/roles/**", PermissionMethod.DELETE, ResourceType.ROLE,
-                "Xóa vai trò", null),
+                "Xóa vai trò"),
 
             // ── Permission ───────────────────────────────────────────────
             def(PredefinedPermissions.PERMISSION_ALL,
                 "/rbac/permissions/**", PermissionMethod.ALL, ResourceType.PERMISSION,
-                "Toàn quyền permission", null),
+                "Toàn quyền permission"),
             def(PredefinedPermissions.PERMISSION_READ,
                 "/rbac/permissions/**", PermissionMethod.GET, ResourceType.PERMISSION,
-                "Xem danh sách quyền", null),
+                "Xem danh sách quyền"),
             def(PredefinedPermissions.PERMISSION_CREATE,
                 "/rbac/permissions", PermissionMethod.POST, ResourceType.PERMISSION,
-                "Tạo quyền mới", null),
+                "Tạo quyền mới"),
             def(PredefinedPermissions.PERMISSION_UPDATE,
                 "/rbac/permissions/**", PermissionMethod.PUT, ResourceType.PERMISSION,
-                "Cập nhật quyền", null),
+                "Cập nhật quyền"),
             def(PredefinedPermissions.PERMISSION_DELETE,
                 "/rbac/permissions/**", PermissionMethod.DELETE, ResourceType.PERMISSION,
-                "Xóa quyền", null),
+                "Xóa quyền"),
 
             // ── Category ─────────────────────────────────────────────────
             def(PredefinedPermissions.CATEGORY_ALL,
                 "/categories/**", PermissionMethod.ALL, ResourceType.CATEGORY,
-                "Toàn quyền danh mục", null),
+                "Toàn quyền danh mục"),
             def(PredefinedPermissions.CATEGORY_READ,
                 "/categories/**", PermissionMethod.GET, ResourceType.CATEGORY,
-                "Xem danh mục", null),
+                "Xem danh mục"),
             def(PredefinedPermissions.CATEGORY_CREATE,
                 "/categories", PermissionMethod.POST, ResourceType.CATEGORY,
-                "Tạo danh mục", null),
+                "Tạo danh mục"),
             def(PredefinedPermissions.CATEGORY_UPDATE,
                 "/categories/**", PermissionMethod.PUT, ResourceType.CATEGORY,
-                "Cập nhật danh mục", null),
+                "Cập nhật danh mục"),
             def(PredefinedPermissions.CATEGORY_DELETE,
                 "/categories/**", PermissionMethod.DELETE, ResourceType.CATEGORY,
-                "Xóa danh mục", null),
+                "Xóa danh mục"),
 
             // ── Department ───────────────────────────────────────────────
             def(PredefinedPermissions.DEPARTMENT_ALL,
                 "/departments/**", PermissionMethod.ALL, ResourceType.DEPARTMENT,
-                "Toàn quyền phòng ban", null),
+                "Toàn quyền phòng ban"),
             def(PredefinedPermissions.DEPARTMENT_READ,
                 "/departments/**", PermissionMethod.GET, ResourceType.DEPARTMENT,
-                "Xem phòng ban", null),
+                "Xem phòng ban"),
             def(PredefinedPermissions.DEPARTMENT_CREATE,
                 "/departments", PermissionMethod.POST, ResourceType.DEPARTMENT,
-                "Tạo phòng ban", null),
+                "Tạo phòng ban"),
             def(PredefinedPermissions.DEPARTMENT_UPDATE,
                 "/departments/**", PermissionMethod.PUT, ResourceType.DEPARTMENT,
-                "Cập nhật phòng ban", null),
+                "Cập nhật phòng ban"),
             def(PredefinedPermissions.DEPARTMENT_DELETE,
                 "/departments/**", PermissionMethod.DELETE, ResourceType.DEPARTMENT,
-                "Xóa phòng ban", null),
+                "Xóa phòng ban"),
 
             // ── AccessLevel ──────────────────────────────────────────────
             def(PredefinedPermissions.ACCESS_LEVEL_ALL,
                 "/access-levels/**", PermissionMethod.ALL, ResourceType.ACCESS_LEVEL,
-                "Toàn quyền cấp độ truy cập", null),
+                "Toàn quyền cấp độ truy cập"),
             def(PredefinedPermissions.ACCESS_LEVEL_READ,
                 "/access-levels/**", PermissionMethod.GET, ResourceType.ACCESS_LEVEL,
-                "Xem cấp độ truy cập", null),
+                "Xem cấp độ truy cập"),
             def(PredefinedPermissions.ACCESS_LEVEL_CREATE,
                 "/access-levels", PermissionMethod.POST, ResourceType.ACCESS_LEVEL,
-                "Tạo cấp độ truy cập", null),
+                "Tạo cấp độ truy cập"),
             def(PredefinedPermissions.ACCESS_LEVEL_UPDATE,
                 "/access-levels/**", PermissionMethod.PUT, ResourceType.ACCESS_LEVEL,
-                "Cập nhật cấp độ truy cập", null),
+                "Cập nhật cấp độ truy cập"),
             def(PredefinedPermissions.ACCESS_LEVEL_DELETE,
                 "/access-levels/**", PermissionMethod.DELETE, ResourceType.ACCESS_LEVEL,
-                "Xóa cấp độ truy cập", null)
+                "Xóa cấp độ truy cập"),
 
             // ── Document (CREATE = ingest) ────────────────────────────────
+            def(PredefinedPermissions.DOCUMENT_ALL,
+                "/documents/**", PermissionMethod.ALL, ResourceType.DOCUMENT,
+                "Toàn quyền tài liệu"),
+            def(PredefinedPermissions.DOCUMENT_READ,
+                "/documents/**", PermissionMethod.GET, ResourceType.DOCUMENT,
+                "Xem tài liệu"),
+            def(PredefinedPermissions.DOCUMENT_CREATE,
+                "/documents/**", PermissionMethod.POST, ResourceType.DOCUMENT,
+                "Tạo tài liệu"),
+            def(PredefinedPermissions.DOCUMENT_UPDATE,
+                "/documents/**", PermissionMethod.PUT, ResourceType.DOCUMENT,
+                "Cập nhật tài liệu"),
+            def(PredefinedPermissions.DOCUMENT_DELETE,
+                "/documents/**", PermissionMethod.DELETE, ResourceType.DOCUMENT,
+                "Xóa tài liệu")
 
         ));
-
-        // DOCUMENT WITH ACCESS LEVELS (L1-L5)
-        for (int i = 1; i <= 5; i++) {
-            list.add(def(PredefinedPermissions.DOCUMENT_ALL , "/documents/**", PermissionMethod.ALL, ResourceType.DOCUMENT, "Toàn quyền tài liệu L" + i, i));
-            list.add(def(PredefinedPermissions.DOCUMENT_READ , "/documents/**", PermissionMethod.GET, ResourceType.DOCUMENT, "Xem tài liệu L" + i, i));
-            list.add(def(PredefinedPermissions.DOCUMENT_CREATE , "/documents/**", PermissionMethod.POST, ResourceType.DOCUMENT, "Tạo tài liệu L" + i, i));
-            list.add(def(PredefinedPermissions.DOCUMENT_UPDATE , "/documents/**", PermissionMethod.PUT, ResourceType.DOCUMENT, "Cập nhật tài liệu L" + i, i));
-            list.add(def(PredefinedPermissions.DOCUMENT_DELETE , "/documents/**", PermissionMethod.DELETE, ResourceType.DOCUMENT, "Xóa tài liệu L" + i, i));
-        }
 
         list.addAll(List.of(
 
             // ── ChatModel ────────────────────────────────────────────────
             def(PredefinedPermissions.CHAT_MODEL_ALL,
                 "/chat-models/**", PermissionMethod.ALL, ResourceType.CHAT_MODEL,
-                "Toàn quyền mô hình chat", null),
+                "Toàn quyền mô hình chat"),
             def(PredefinedPermissions.CHAT_MODEL_READ,
                 "/chat-models/**", PermissionMethod.GET, ResourceType.CHAT_MODEL,
-                "Xem mô hình chat", null),
+                "Xem mô hình chat"),
             def(PredefinedPermissions.CHAT_MODEL_CREATE,
                 "/chat-models", PermissionMethod.POST, ResourceType.CHAT_MODEL,
-                "Tạo mô hình chat", null),
+                "Tạo mô hình chat"),
             def(PredefinedPermissions.CHAT_MODEL_UPDATE,
                 "/chat-models/**", PermissionMethod.PUT, ResourceType.CHAT_MODEL,
-                "Cập nhật mô hình chat", null),
+                "Cập nhật mô hình chat"),
             def(PredefinedPermissions.CHAT_MODEL_DELETE,
                 "/chat-models/**", PermissionMethod.DELETE, ResourceType.CHAT_MODEL,
-                "Xóa mô hình chat", null),
+                "Xóa mô hình chat"),
 
             // ── Conversation ─────────────────────────────────────────────
             def(PredefinedPermissions.CONVERSATION_ALL,
                 "/conversations/**", PermissionMethod.ALL, ResourceType.CONVERSATION,
-                "Toàn quyền hội thoại", null),
+                "Toàn quyền hội thoại"),
             def(PredefinedPermissions.CONVERSATION_READ,
                 "/conversations/**", PermissionMethod.GET, ResourceType.CONVERSATION,
-                "Xem hội thoại", null),
+                "Xem hội thoại"),
             def(PredefinedPermissions.CONVERSATION_CREATE,
                 "/conversations", PermissionMethod.POST, ResourceType.CONVERSATION,
-                "Tạo hội thoại mới", null),
+                "Tạo hội thoại mới"),
             def(PredefinedPermissions.CONVERSATION_DELETE,
                 "/conversations/**", PermissionMethod.DELETE, ResourceType.CONVERSATION,
-                "Xóa hội thoại", null),
+                "Xóa hội thoại"),
 
             // ── Message ──────────────────────────────────────────────────
             def(PredefinedPermissions.MESSAGE_ALL,
                 "/messages/**", PermissionMethod.ALL, ResourceType.MESSAGE,
-                "Toàn quyền tin nhắn", null),
+                "Toàn quyền tin nhắn"),
             def(PredefinedPermissions.MESSAGE_READ,
                 "/messages/**", PermissionMethod.GET, ResourceType.MESSAGE,
-                "Xem tin nhắn", null),
+                "Xem tin nhắn"),
             def(PredefinedPermissions.MESSAGE_SEND,
                 "/messages", PermissionMethod.POST, ResourceType.MESSAGE,
-                "Gửi tin nhắn", null),
+                "Gửi tin nhắn"),
 
             // ── AuditLog ─────────────────────────────────────────────────
             def(PredefinedPermissions.AUDIT_LOG_ALL,
                 "/audit-logs/**", PermissionMethod.ALL, ResourceType.AUDIT_LOG,
-                "Toàn quyền nhật ký hệ thống", null),
+                "Toàn quyền nhật ký hệ thống"),
             def(PredefinedPermissions.AUDIT_LOG_READ,
                 "/audit-logs/**", PermissionMethod.GET, ResourceType.AUDIT_LOG,
-                "Xem nhật ký hệ thống", null),
+                "Xem nhật ký hệ thống"),
 
             // ── LlmTraceLog ──────────────────────────────────────────────
             def(PredefinedPermissions.LLM_TRACE_LOG_ALL,
                 "/llm-trace-logs/**", PermissionMethod.ALL, ResourceType.LLM_TRACE_LOG,
-                "Toàn quyền nhật ký LLM", null),
+                "Toàn quyền nhật ký LLM"),
             def(PredefinedPermissions.LLM_TRACE_LOG_READ,
                 "/llm-trace-logs/**", PermissionMethod.GET, ResourceType.LLM_TRACE_LOG,
-                "Xem nhật ký LLM", null)
+                "Xem nhật ký LLM")
         ));
-
-        // INGEST WITH ACCESS LEVELS (L1-L5)
-        for (int i = 1; i <= 5; i++) {
-            list.add(def(PredefinedPermissions.INGEST_ALL, "/ai/ingest/**", PermissionMethod.ALL, ResourceType.INGEST, "Toàn quyền nạp liệu L" + i, i));
-        }
 
         return list;
     }
@@ -327,15 +322,13 @@ public class DataInitializer implements CommandLineRunner {
         });
     }
 
-    /** SUPER_ADMIN gets _ALL permissions, plus DOCUMENT_ALL at level 5. */
+    /** SUPER_ADMIN gets every _ALL permission. */
     private void assignSuperAdmin(Role role, Map<String, Permission> perms) {
         int count = 0;
         for (Permission p : perms.values()) {
             if (p.getName().endsWith("_ALL")) {
-                if (p.getAccessLevel() == null || (p.getName().equals(PredefinedPermissions.DOCUMENT_ALL) && p.getAccessLevel() == 5)) {
-                    assignPermission(role, p);
-                    count++;
-                }
+                assignPermission(role, p);
+                count++;
             }
         }
         log.info("  {} _ALL permissions assigned to role '{}'.", count, role.getName());
@@ -347,12 +340,11 @@ public class DataInitializer implements CommandLineRunner {
      */
     private void assignIngestAdmin(Role role, Map<String, Permission> perms) {
         List<String> keys = List.of(
-            permKey(PredefinedPermissions.DEPARTMENT_READ, null),
-            permKey(PredefinedPermissions.DOCUMENT_ALL, 5),
-            permKey(PredefinedPermissions.CATEGORY_ALL, null),
-            permKey(PredefinedPermissions.CHAT_MODEL_READ, null),
-            permKey(PredefinedPermissions.LLM_TRACE_LOG_READ, null),
-            permKey(PredefinedPermissions.INGEST_ALL, 5)
+            permKey(PredefinedPermissions.DEPARTMENT_READ),
+            permKey(PredefinedPermissions.DOCUMENT_ALL),
+            permKey(PredefinedPermissions.CATEGORY_ALL),
+            permKey(PredefinedPermissions.CHAT_MODEL_READ),
+            permKey(PredefinedPermissions.LLM_TRACE_LOG_READ)
         );
         assign(role, perms, keys);
         log.info("  {} permissions assigned to role '{}'.", keys.size(), role.getName());
@@ -364,15 +356,15 @@ public class DataInitializer implements CommandLineRunner {
      */
     private void assignUser(Role role, Map<String, Permission> perms) {
         List<String> keys = List.of(
-            permKey(PredefinedPermissions.CONVERSATION_ALL, null),
-            permKey(PredefinedPermissions.MESSAGE_READ, null),
-            permKey(PredefinedPermissions.MESSAGE_SEND, null),
-            permKey(PredefinedPermissions.DOCUMENT_READ, 5),
-            permKey(PredefinedPermissions.DEPARTMENT_READ, null),
-            permKey(PredefinedPermissions.CATEGORY_READ, null),
-            permKey(PredefinedPermissions.CHAT_MODEL_READ, null),
-            permKey(PredefinedPermissions.USER_READ, null),
-            permKey(PredefinedPermissions.USER_UPDATE, null)
+            permKey(PredefinedPermissions.CONVERSATION_ALL),
+            permKey(PredefinedPermissions.MESSAGE_READ),
+            permKey(PredefinedPermissions.MESSAGE_SEND),
+            permKey(PredefinedPermissions.DOCUMENT_READ),
+            permKey(PredefinedPermissions.DEPARTMENT_READ),
+            permKey(PredefinedPermissions.CATEGORY_READ),
+            permKey(PredefinedPermissions.CHAT_MODEL_READ),
+            permKey(PredefinedPermissions.USER_READ),
+            permKey(PredefinedPermissions.USER_UPDATE)
         );
         assign(role, perms, keys);
         log.info("  {} permissions assigned to role '{}'.", keys.size(), role.getName());
@@ -429,7 +421,7 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     // ─── AccessLevel seeding ───────────────────────────────────────────────
-    /** Seeds levels 0 (no restriction) through 5, matching the DOCUMENT and INGEST permission levels. */
+    /** Seeds levels 0 (no restriction) through 5, used by User.accessLevel and UserDepartmentAccess.accessLevel. */
     private Map<Integer, AccessLevel> seedAccessLevels() {
         Map<Integer, AccessLevel> map = new LinkedHashMap<>();
         Map<Integer, String> descriptions = Map.of(
@@ -494,10 +486,10 @@ public class DataInitializer implements CommandLineRunner {
 
     // ─── Compact builder record ──────────────────────────────────────────
     private record PermDef(String name, String path, PermissionMethod method,
-                           ResourceType resource, String description, Integer accessLevel) {}
+                           ResourceType resource, String description) {}
 
     private static PermDef def(String name, String path, PermissionMethod method,
-                               ResourceType resource, String description, Integer accessLevel) {
-        return new PermDef(name, path, method, resource, description, accessLevel);
+                               ResourceType resource, String description) {
+        return new PermDef(name, path, method, resource, description);
     }
 }

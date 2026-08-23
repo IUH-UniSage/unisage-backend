@@ -91,7 +91,4 @@ public final class PredefinedPermissions {
     // ─── LlmTraceLog ──────────────────────────────────────────────────────
     public static final String LLM_TRACE_LOG_ALL  = "LLM_TRACE_LOG_ALL";
     public static final String LLM_TRACE_LOG_READ = "LLM_TRACE_LOG_READ";
-
-    // ─── Ingest ──────────────────────────────────────────────────────────
-    public static final String INGEST_ALL = "INGEST_ALL";
 }

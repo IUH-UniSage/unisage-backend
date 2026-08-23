@@ -48,8 +48,4 @@ public class Permission extends BaseEntity {
 
     @OneToMany(mappedBy = "permission", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<RolePermission> rolePermissions;
-
-    @Builder.Default
-    @Column(name = "access_level")
-    private Integer accessLevel = null;    
 }

@@ -8,5 +8,5 @@ import lombok.Builder;
 @Builder
 public record DepartmentAccessItem(
     @NotNull UUID departmentId,
-    @NotNull Integer accessLevel
+    @NotNull UUID accessLevelId
 ) {}

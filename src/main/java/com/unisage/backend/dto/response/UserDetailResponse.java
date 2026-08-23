@@ -4,7 +4,7 @@ import com.unisage.backend.entity.enums.UserStatus;
 import lombok.Builder;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Builder
@@ -30,6 +30,6 @@ public record UserDetailResponse(
     String updatedBy,
     Integer totalQueries,
     List<String> topTopics,
-    Map<String, Integer> permissions,
+    Set<String> permissions,
     List<DepartmentAccessResponse> departmentAccesses
 ) {}
