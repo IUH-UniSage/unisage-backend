@@ -27,6 +27,7 @@ public class DataInitializer implements CommandLineRunner {
     private final UserRepository            userRepository;
     private final DepartmentRepository      departmentRepository;
     private final AccessLevelRepository     accessLevelRepository;
+    private final UserDepartmentAccessRepository userDepartmentAccessRepository;
     private final PasswordEncoder           passwordEncoder;
 
     @Value("${DEFAULT_SUPERADMIN_PASS:Admin@123456}")
@@ -68,9 +69,18 @@ public class DataInitializer implements CommandLineRunner {
         assignUser(userRole, perms);
 
         // 4. Seed one default user per role
-        seedUser("admin@unisage.com",    "SA-001", "System",   "Administrator", "0999999999", superAdmin,  defaultSuperAdminPassword, accessLevels.get(5));
+        User superAdminUser = seedUser("admin@unisage.com",    "SA-001", "System",   "Administrator", "0999999999", superAdmin,  defaultSuperAdminPassword, accessLevels.get(5));
         seedUser("ingest@unisage.com",   "IA-001", "Ingest",   "Admin",         "0888888888", ingestAdmin, defaultIngestAdminPassword, accessLevels.get(5));
+        User ingestAdminDaoTaoUser = seedUser("ingest.daotao@unisage.com", "IA-002", "Ingest", "Admin (Phong Dao Tao)", "0888888887", ingestAdmin, defaultIngestAdminPassword, null);
         seedUser("user@unisage.com",     "US-001", "Default",  "User",          "0777777777", userRole,    defaultUserPassword, accessLevels.get(0));
+
+        // 5. SUPER_ADMIN quan tri moi phong ban - user_department_access khong cascade nen can 1 row
+        //    rieng cho tung department (ke ca node cha lan con), o access_level toi da.
+        assignAllDepartmentsToUser(superAdminUser, accessLevels.get(5));
+
+        // 6. Mock ingestAdmin thu 2 - chi co quyen department_access o PHONG_DAO_TAO, level 3 - dung de
+        //    test permission gate/department scoping ma khong bi lan voi ingestAdmin toan quyen o buoc 4.
+        assignDepartmentToUser(ingestAdminDaoTaoUser, "PHONG_DAO_TAO", accessLevels.get(3));
 
         log.info(">>> [SUCCESS] RBAC initialisation complete.");
     }
@@ -398,10 +408,11 @@ public class DataInitializer implements CommandLineRunner {
      * Creates one User (login identity + profile merged) for the given role
      * if the email is not yet taken.
      */
-    private void seedUser(String email, String code,
+    private User seedUser(String email, String code,
                           String firstName, String lastName, String phone,
                           Role role, String rawPassword, AccessLevel accessLevel) {
-        if (userRepository.findByEmail(email).isPresent()) return;
+        Optional<User> existing = userRepository.findByEmail(email);
+        if (existing.isPresent()) return existing.get();
 
         User user = User.builder()
                 .email(email)
@@ -415,9 +426,49 @@ public class DataInitializer implements CommandLineRunner {
                 .gender("NAM")
                 .isActive(true)
                 .build();
-        userRepository.save(user);
+        user = userRepository.save(user);
 
         log.info("  User seeded: {} [{}]", email, role.getName());
+        return user;
+    }
+
+    /**
+     * Gan user vao TAT CA department hien co, cung 1 access_level - dung cho SUPER_ADMIN, nguoi can
+     * quan tri toan bo he thong. user_department_access khong cascade theo cay department, nen phai
+     * tao du 1 row cho tung department, ke ca node cha lan con.
+     */
+    private void assignAllDepartmentsToUser(User user, AccessLevel accessLevel) {
+        List<Department> departments = departmentRepository.findAll();
+        for (Department d : departments) {
+            if (userDepartmentAccessRepository.existsByUserIdAndDepartmentId(user.getId(), d.getId())) {
+                continue;
+            }
+            UserDepartmentAccess access = UserDepartmentAccess.builder()
+                    .user(user)
+                    .department(d)
+                    .accessLevel(accessLevel)
+                    .build();
+            userDepartmentAccessRepository.save(access);
+        }
+        log.info("  {} department-access rows seeded for {}.", departments.size(), user.getEmail());
+    }
+
+    /** Gan user vao dung 1 department, o 1 access_level cu the - dung cho mock user scoped-department. */
+    private void assignDepartmentToUser(User user, String departmentName, AccessLevel accessLevel) {
+        Department department = departmentRepository.findByName(departmentName)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Department not seeded yet: " + departmentName));
+        if (userDepartmentAccessRepository.existsByUserIdAndDepartmentId(user.getId(), department.getId())) {
+            return;
+        }
+        UserDepartmentAccess access = UserDepartmentAccess.builder()
+                .user(user)
+                .department(department)
+                .accessLevel(accessLevel)
+                .build();
+        userDepartmentAccessRepository.save(access);
+        log.info("  Department access seeded: {} -> {} (L{}).", user.getEmail(), departmentName,
+                accessLevel.getLevel());
     }
 
     // ─── AccessLevel seeding ───────────────────────────────────────────────
