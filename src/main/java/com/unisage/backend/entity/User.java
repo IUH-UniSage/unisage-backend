@@ -77,4 +77,12 @@ public class User extends BaseEntity {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    @Transient
+    public String getFullName() {
+        String first = firstName != null ? firstName.trim() : "";
+        String last = lastName != null ? lastName.trim() : "";
+        String fullName = (first + " " + last).trim();
+        return fullName.isEmpty() ? null : fullName;
+    }
 }

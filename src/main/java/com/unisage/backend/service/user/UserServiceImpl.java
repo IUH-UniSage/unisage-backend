@@ -240,6 +240,11 @@ public class UserServiceImpl implements UserService {
                 .accessLevel(user.getAccessLevel() != null ? user.getAccessLevel().getLevel() : null)
                 .lastLogin(user.getLastLogin())
                 .createdAt(user.getCreatedAt())
+                .createdBy(user.getCreatedBy() != null ? user.getCreatedBy().getId().toString() : null)
+                .createdByName(user.getCreatedBy() != null ? user.getCreatedBy().getFullName() : null)
+                .updatedAt(user.getUpdatedAt())
+                .updatedBy(user.getUpdatedBy() != null ? user.getUpdatedBy().getId().toString() : null)
+                .updatedByName(user.getUpdatedBy() != null ? user.getUpdatedBy().getFullName() : null)
                 .departmentAccesses(mapDepartmentAccesses(user.getId()))
                 .build();
     }
@@ -286,9 +291,11 @@ public class UserServiceImpl implements UserService {
                 .extraInfo(user.getExtraInfo())
                 .lastLogin(user.getLastLogin())
                 .createdAt(user.getCreatedAt())
-                .createdBy(user.getCreatedBy())
+                .createdBy(user.getCreatedBy() != null ? user.getCreatedBy().getId().toString() : null)
+                .createdByName(user.getCreatedBy() != null ? user.getCreatedBy().getFullName() : null)
                 .updatedAt(user.getUpdatedAt())
-                .updatedBy(user.getUpdatedBy())
+                .updatedBy(user.getUpdatedBy() != null ? user.getUpdatedBy().getId().toString() : null)
+                .updatedByName(user.getUpdatedBy() != null ? user.getUpdatedBy().getFullName() : null)
                 //TODO: Imeplement after completing message service
                 .totalQueries(0)
                 .topTopics(new ArrayList<>())

@@ -14,7 +14,9 @@ public record RoleResponse(
     List<PermissionInfo> permissions,
     LocalDateTime createdAt,
     String createdBy,
+    String createdByName,
     LocalDateTime updatedAt,
     String updatedBy,
+    String updatedByName,
     Boolean isActive
 ) {}

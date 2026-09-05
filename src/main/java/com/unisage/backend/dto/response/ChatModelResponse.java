@@ -22,6 +22,8 @@ public record ChatModelResponse(
     Boolean isActive,
     LocalDateTime createdAt,
     String createdBy,
+    String createdByName,
     LocalDateTime updatedAt,
-    String updatedBy
+    String updatedBy,
+    String updatedByName
 ) {}

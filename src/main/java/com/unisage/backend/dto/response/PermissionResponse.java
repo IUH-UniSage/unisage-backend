@@ -11,7 +11,9 @@ public record PermissionResponse(
     Integer accessLevel,
     LocalDateTime createdAt,
     String createdBy,
+    String createdByName,
     LocalDateTime updatedAt,
     String updatedBy,
+    String updatedByName,
     Boolean isActive
 ) {}
