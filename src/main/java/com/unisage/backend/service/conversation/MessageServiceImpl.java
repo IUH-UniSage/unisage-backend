@@ -112,8 +112,12 @@ public class MessageServiceImpl implements MessageService {
                 || (request.status() != MsgStatus.COMPLETED && request.status() != MsgStatus.ERROR)) {
             throw new AppException(ErrorCode.MESSAGE_INVALID_STATUS_TRANSITION);
         }
+        if (request.status() == MsgStatus.COMPLETED
+                && (request.content() == null || request.content().isBlank())) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR);
+        }
 
-        message.setContent(request.content());
+        message.setContent(request.content() != null ? request.content() : "");
         message.setStatus(request.status());
         if (request.citations() != null) {
             message.setCitations(request.citations());

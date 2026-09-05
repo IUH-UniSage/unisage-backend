@@ -139,6 +139,46 @@ class MessageServiceImplTest {
     }
 
     @Test
+    void update_streamingToErrorWithBlankContent_succeeds() {
+        UUID messageId = UUID.randomUUID();
+        UUID conversationId = UUID.randomUUID();
+        Conversation conversation = conversation(conversationId);
+        Message message = assistantMessage(messageId, conversation, MsgStatus.STREAMING, "");
+        when(messageRepository.findById(messageId)).thenReturn(Optional.of(message));
+
+        UpdateMessageRequest request = UpdateMessageRequest.builder()
+                .conversationId(conversationId)
+                .content("")
+                .status(MsgStatus.ERROR)
+                .build();
+
+        MessageResponse response = messageService.update(messageId, request);
+
+        assertThat(response.status()).isEqualTo(MsgStatus.ERROR);
+        assertThat(response.content()).isEmpty();
+    }
+
+    @Test
+    void update_streamingToCompletedWithBlankContent_throwsValidationError() {
+        UUID messageId = UUID.randomUUID();
+        UUID conversationId = UUID.randomUUID();
+        Conversation conversation = conversation(conversationId);
+        Message message = assistantMessage(messageId, conversation, MsgStatus.STREAMING, "");
+        when(messageRepository.findById(messageId)).thenReturn(Optional.of(message));
+
+        UpdateMessageRequest request = UpdateMessageRequest.builder()
+                .conversationId(conversationId)
+                .content("")
+                .status(MsgStatus.COMPLETED)
+                .build();
+
+        assertThatThrownBy(() -> messageService.update(messageId, request))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.VALIDATION_ERROR);
+    }
+
+    @Test
     void update_streamingToPending_throwsInvalidTransition() {
         UUID messageId = UUID.randomUUID();
         UUID conversationId = UUID.randomUUID();
