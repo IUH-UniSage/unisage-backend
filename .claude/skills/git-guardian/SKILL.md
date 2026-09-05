@@ -45,18 +45,14 @@ Require English conventional commits without emojis:
 ```text
 <type>(<scope>): [UNISAGE-N] <short outcome>
 
-<Context/Root cause>:
-- <why>
-
-<Changes/Fix>:
-- <what>
-
-Verification:
-- <actual checks and outcomes>
+<optional 1-3 line body: why, only when not obvious>
 ```
 
 Reject messages that describe intent instead of the staged diff, omit the Jira key, use the wrong
-type, or claim verification that did not run.
+type, or carry PR-style sections (Context/Root cause, Changes/Fix, Verification) — that detail
+belongs in the PR description, not the commit. Verification still has to have actually run (see
+`git-commit-instructions`'s Verification Matrix); it just doesn't get quoted into the commit
+message.
 
 ## Output
 

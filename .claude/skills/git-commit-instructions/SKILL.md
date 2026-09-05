@@ -73,18 +73,19 @@ Use English, no emojis, and an uppercase Jira key:
 ```text
 <type>(<scope>): [UNISAGE-N] <short outcome>
 
-<Context/Root cause>:
-- <why>
-
-<Changes/Fix>:
-- <what changed>
-
-Verification:
-- <commands and results>
+<optional 1-3 line body: why this change, only when the subject alone doesn't explain it>
 ```
 
 Use `feat`, `fix`, `enhance`, `refactor`, `chore`, `docs`, `test`, `style`, or `revert` based on
 the staged diff.
+
+Keep the subject a single line. Add a body only when the *why* isn't obvious from the subject or
+diff — skip it for routine changes. Never put verification commands/results, a change-by-change
+changelog, or PR-style sections (Context/Root cause, Changes/Fix, Verification) in the commit
+message — that level of detail belongs in the PR description (see
+`.claude/skills/pr/SKILL.md`), not in git history that every `git log` has to scroll past. A
+squash-merge commit follows the same rule: rewrite the squash title/body to this format instead of
+letting GitHub concatenate all the individual commit messages.
 
 Do not add a `Co-Authored-By: Claude ...` trailer — the user asked not to have Claude attached to
 commits on this repo, overriding the harness's usual default.
@@ -102,6 +103,9 @@ commits on this repo, overriding the harness's usual default.
 7. Commit and push only within the user's authorization.
 
 ## Verification Matrix
+
+Run these before committing, and carry the results into the PR description (via
+`.claude/skills/pr/SKILL.md`) — not into the commit message itself:
 
 - Skills and PR templates: run `quick_validate.py` for each skill (if present) plus
   `git diff --check`.
