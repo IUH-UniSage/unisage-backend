@@ -16,7 +16,12 @@ import com.unisage.backend.entity.enums.DocStatus;
 @Repository
 public interface DocumentRepository extends JpaRepository<Document, UUID> {
 
-    @Query("SELECT d FROM Document d WHERE d.deletedAt IS NULL")
+    @Query("""
+        SELECT d FROM Document d
+        LEFT JOIN FETCH d.createdBy
+        LEFT JOIN FETCH d.updatedBy
+        WHERE d.deletedAt IS NULL
+        """)
     Page<Document> findAllActive(Pageable pageable);
 
     List<Document> findByDocPackageIdAndDeletedAtIsNull(UUID docPackageId);

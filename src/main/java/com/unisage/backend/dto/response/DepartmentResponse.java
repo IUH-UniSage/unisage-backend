@@ -16,7 +16,9 @@ public record DepartmentResponse(
     LocalDateTime deletedAt,
     List<DepartmentNodeResponse> children,
     String createdBy,
+    String createdByName,
     LocalDateTime createdAt,
     String updatedBy,
+    String updatedByName,
     LocalDateTime updatedAt
 ) {}

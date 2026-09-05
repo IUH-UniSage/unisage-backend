@@ -1,5 +1,8 @@
 package com.unisage.backend.repository;
 import com.unisage.backend.entity.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,6 +15,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByPhone(String phone);
     Optional<User> findByEmail(String email);
     Optional<User> findByCode(String code);
+
+    @Override
+    @EntityGraph(attributePaths = {"createdBy", "updatedBy"})
+    Page<User> findAll(Pageable pageable);
 
     /**
      * Loads the user together with its Role, RolePermissions and Permission

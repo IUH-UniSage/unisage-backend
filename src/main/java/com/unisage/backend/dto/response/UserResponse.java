@@ -23,5 +23,10 @@ public record UserResponse(
     Integer accessLevel,
     LocalDateTime lastLogin,
     LocalDateTime createdAt,
+    String createdBy,
+    String createdByName,
+    LocalDateTime updatedAt,
+    String updatedBy,
+    String updatedByName,
     List<DepartmentAccessResponse> departmentAccesses
 ) {}

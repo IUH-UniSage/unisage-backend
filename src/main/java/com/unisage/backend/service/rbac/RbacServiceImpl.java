@@ -269,9 +269,11 @@ public class RbacServiceImpl implements RbacService {
                 .description(role.getDescription())
                 .permissions(permissions)
                 .createdAt(role.getCreatedAt())
-                .createdBy(role.getCreatedBy())
+                .createdBy(role.getCreatedBy() != null ? role.getCreatedBy().getId().toString() : null)
+                .createdByName(role.getCreatedBy() != null ? role.getCreatedBy().getFullName() : null)
                 .updatedAt(role.getUpdatedAt())
-                .updatedBy(role.getUpdatedBy())
+                .updatedBy(role.getUpdatedBy() != null ? role.getUpdatedBy().getId().toString() : null)
+                .updatedByName(role.getUpdatedBy() != null ? role.getUpdatedBy().getFullName() : null)
                 .isActive(role.getIsActive())
                 .build();
     }
@@ -282,9 +284,11 @@ public class RbacServiceImpl implements RbacService {
                 .name(p.getName())
                 .accessLevel(p.getAccessLevel())
                 .createdAt(p.getCreatedAt())
-                .createdBy(p.getCreatedBy())
+                .createdBy(p.getCreatedBy() != null ? p.getCreatedBy().getId().toString() : null)
+                .createdByName(p.getCreatedBy() != null ? p.getCreatedBy().getFullName() : null)
                 .updatedAt(p.getUpdatedAt())
-                .updatedBy(p.getUpdatedBy())
+                .updatedBy(p.getUpdatedBy() != null ? p.getUpdatedBy().getId().toString() : null)
+                .updatedByName(p.getUpdatedBy() != null ? p.getUpdatedBy().getFullName() : null)
                 .isActive(p.getIsActive())
                 .build();
     }

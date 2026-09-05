@@ -124,9 +124,11 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .isActive(department.getIsActive())
                 .deletedAt(department.getDeletedAt())
                 .children(childNodes)
-                .createdBy(department.getCreatedBy())
+                .createdBy(department.getCreatedBy() != null ? department.getCreatedBy().getId().toString() : null)
+                .createdByName(department.getCreatedBy() != null ? department.getCreatedBy().getFullName() : null)
                 .createdAt(department.getCreatedAt())
-                .updatedBy(department.getUpdatedBy())
+                .updatedBy(department.getUpdatedBy() != null ? department.getUpdatedBy().getId().toString() : null)
+                .updatedByName(department.getUpdatedBy() != null ? department.getUpdatedBy().getFullName() : null)
                 .updatedAt(department.getUpdatedAt())
                 .build();
     }
@@ -162,9 +164,11 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .isActive(department.getIsActive())
                 .deletedAt(department.getDeletedAt())
                 .children(childNodes)
-                .createdBy(department.getCreatedBy())
+                .createdBy(department.getCreatedBy() != null ? department.getCreatedBy().getId().toString() : null)
+                .createdByName(department.getCreatedBy() != null ? department.getCreatedBy().getFullName() : null)
                 .createdAt(department.getCreatedAt())
-                .updatedBy(department.getUpdatedBy())
+                .updatedBy(department.getUpdatedBy() != null ? department.getUpdatedBy().getId().toString() : null)
+                .updatedByName(department.getUpdatedBy() != null ? department.getUpdatedBy().getFullName() : null)
                 .updatedAt(department.getUpdatedAt())
                 .build();
     }
