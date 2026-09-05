@@ -36,9 +36,15 @@
     { "key": "documentId", "value": "" },
     { "key": "conversationId", "value": "" },
     { "key": "messageId", "value": "" },
+    { "key": "assistantMessageId", "value": "" },
     { "key": "accessLevelId", "value": "" },
     { "key": "ingestAdminDaoTaoToken", "value": "" },
-    { "key": "regularUserToken", "value": "" }
+    { "key": "regularUserToken", "value": "" },
+    {
+      "key": "internalSecret",
+      "value": "unisage-internal-secret-key-2026",
+      "description": "Must match INTERNAL_SECRET_KEY on both backend-java and unisage-agent. Only needed for requests backend-java treats as Python-only (e.g. PATCH /messages/{id}) - the gateway auto-adds this header for /api/v1/ai/** but NOT for /api/v1/master/**, so it must be set manually here."
+    }
   ],
   "item": [
     {
@@ -1396,6 +1402,7 @@
     },
     {
       "name": "Messages",
+      "description": "send() defaults `status` to COMPLETED when omitted and requires non-blank `content` in that case. `status: \"STREAMING\"` is only valid together with `role: \"ASSISTANT\"` and allows blank content - it's how unisage-agent creates the placeholder it later finalizes via PATCH (see 'Update Message' below), not a normal client flow.",
       "item": [
         {
           "name": "Send Message",
@@ -1426,11 +1433,81 @@
           }
         },
         {
+          "name": "Send Message - Assistant Placeholder (STREAMING)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('assistantMessageId', json.data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversationId\": \"{{conversationId}}\",\n  \"role\": \"ASSISTANT\",\n  \"content\": \"\",\n  \"status\": \"STREAMING\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/messages",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "messages"]
+            },
+            "description": "Creates the empty STREAMING assistant message unisage-agent finalizes with 'Update Message (PATCH)' once the answer has fully streamed. Saves the new id to {{assistantMessageId}}."
+          }
+        },
+        {
+          "name": "Update Message (PATCH) - Complete",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "X-Internal-Secret",
+                "value": "{{internalSecret}}",
+                "description": "Required - InternalSecretFilter rejects PATCH /messages/{id} without it. The gateway only injects this automatically on /api/v1/ai/**, not /api/v1/master/**, so it's set manually here."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversationId\": \"{{conversationId}}\",\n  \"content\": \"Đây là câu trả lời đã hoàn tất.\",\n  \"status\": \"COMPLETED\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/messages/{{assistantMessageId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "messages", "{{assistantMessageId}}"]
+            },
+            "description": "Only role=ASSISTANT, only STREAMING -> COMPLETED|ERROR. Retrying with identical content/status on an already-terminal message returns 200 unchanged; a different payload returns 409. Run 'Send Message - Assistant Placeholder (STREAMING)' first."
+          }
+        },
+        {
+          "name": "Update Message (PATCH) - Invalid (Missing X-Internal-Secret)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversationId\": \"{{conversationId}}\",\n  \"content\": \"Trying to finalize without the internal secret.\",\n  \"status\": \"COMPLETED\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/messages/{{assistantMessageId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "messages", "{{assistantMessageId}}"]
+            },
+            "description": "Expected: 403, InternalSecretFilter rejects before the request reaches MessageService."
+          }
+        },
+        {
           "name": "Get Messages By Conversation",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{gateway_url}}/api/v1/master/messages/conversation/{{conversationId}}",
+              "raw": "{{gateway_url}}/api/v1/master/messages/conversation/{{conversationId}}?limit=20",
               "host": ["{{gateway_url}}"],
               "path": [
                 "api",
@@ -1439,6 +1516,13 @@
                 "messages",
                 "conversation",
                 "{{conversationId}}"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Optional. Always capped server-side by MAX_MESSAGE_HISTORY regardless of what's requested here."
+                }
               ]
             }
           }
@@ -1452,6 +1536,47 @@
               "host": ["{{gateway_url}}"],
               "path": ["api", "v1", "master", "messages", "{{messageId}}"]
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI - Chat (Streaming)",
+      "description": "Đi qua Gateway {{gateway_url}}/api/v1/ai/chat/stream -> rewritten tới unisage-agent POST /api/v1/chat/stream (X-Internal-Secret tự động được gateway thêm cho mọi request /api/v1/ai/**). Response là text/event-stream (SSE) - Postman hiển thị raw body, không render như một chat UI.\n\nRun 'Conversations > Create Conversation' trước để có {{conversationId}}. `/chat/stream` dùng optional-auth: có Bearer token hợp lệ -> chạy như user đã đăng nhập; không có header Authorization nào -> chạy như khách (role=KHACH); token sai/hết hạn -> 401 (gateway chặn trước khi tới unisage-agent).\n\nMỗi lượt gọi khiến unisage-agent tạo 1 message USER + 1 message ASSISTANT (STREAMING -> COMPLETED/ERROR) bên backend-java - xem lại bằng 'Messages > Get Messages By Conversation'.",
+      "item": [
+        {
+          "name": "Chat Stream - Guest (No Auth)",
+          "auth": { "type": "noauth" },
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversation_id\": \"{{conversationId}}\",\n  \"message\": \"Xin chào, học phí học kỳ này bao nhiêu?\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/chat/stream",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "chat", "stream"]
+            },
+            "description": "No Authorization header at all -> unisage-agent treats this as an anonymous guest (role=KHACH, department_access=[]), not a 401."
+          }
+        },
+        {
+          "name": "Chat Stream - Authenticated",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversation_id\": \"{{conversationId}}\",\n  \"message\": \"Xin chào, học phí học kỳ này bao nhiêu?\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/chat/stream",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "chat", "stream"]
+            },
+            "description": "Inherits the collection's Bearer {{accessToken}} - run 'Auth > Login' first. The conversation must be owned by this same user (or claimed) or backend-java rejects the USER message with 403/404 and unisage-agent never runs the graph."
           }
         }
       ]
