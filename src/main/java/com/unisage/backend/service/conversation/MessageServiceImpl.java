@@ -46,6 +46,17 @@ public class MessageServiceImpl implements MessageService {
 
         validateOwnership(conversation, callerId, ipAddress);
 
+        MsgStatus status = request.status() != null ? request.status() : MsgStatus.COMPLETED;
+        if (status == MsgStatus.STREAMING && request.role() != MsgRole.ASSISTANT) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR);
+        }
+        if (status != MsgStatus.COMPLETED && status != MsgStatus.STREAMING) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR);
+        }
+        if (status == MsgStatus.COMPLETED && (request.content() == null || request.content().isBlank())) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR);
+        }
+
         ChatModel chatModel = null;
         if (request.chatModelId() != null) {
             chatModel = chatModelRepository.findById(request.chatModelId())
@@ -60,8 +71,8 @@ public class MessageServiceImpl implements MessageService {
         Message message = Message.builder()
                 .conversation(conversation)
                 .role(request.role())
-                .content(request.content())
-                .status(MsgStatus.COMPLETED)
+                .content(request.content() != null ? request.content() : "")
+                .status(status)
                 .chatModel(chatModel)
                 .citations(request.citations())
                 .retrievalScore(request.retrievalScore())
