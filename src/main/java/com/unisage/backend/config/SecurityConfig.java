@@ -1,6 +1,7 @@
 package com.unisage.backend.config;
 
 import com.unisage.backend.security.GatewayHeaderFilter;
+import com.unisage.backend.security.InternalSecretFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,6 +21,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final GatewayHeaderFilter gatewayHeaderFilter;
+    private final InternalSecretFilter internalSecretFilter;
     private final DynamicAuthorizationManager dynamicAuthorizationManager;
 
     @Bean
@@ -36,7 +38,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .anyRequest().access(dynamicAuthorizationManager)
             )
-            .addFilterBefore(gatewayHeaderFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(gatewayHeaderFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(internalSecretFilter, GatewayHeaderFilter.class);
 
         return http.build();
     }

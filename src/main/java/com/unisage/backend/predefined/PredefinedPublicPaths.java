@@ -26,8 +26,10 @@ public final class PredefinedPublicPaths {
             new PublicPath("POST", "/messages"),
             new PublicPath("GET", "/messages/conversation/**"),
             // unisage-agent (Python) streams the answer and calls back here to persist/finalize
-            // the assistant Message row. No end-user JWT context on that call — gated upstream
-            // by the shared X-Internal-Secret at the gateway, not by user ownership.
+            // the assistant Message row. No end-user JWT context on that call — it's public from
+            // Spring Security's point of view, but InternalSecretFilter (see security package)
+            // rejects it outright unless it carries a valid X-Internal-Secret header, so this is
+            // gated by that shared secret rather than by user ownership.
             new PublicPath("PATCH", "/messages/*")
     );
 }

@@ -15,6 +15,7 @@ public enum ErrorCode {
     JWT_EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, 1004, "Token đã hết hạn."),
     JWT_SIGNATURE_INVALID(HttpStatus.UNAUTHORIZED, 1005, "Chữ ký token không hợp lệ."),
     AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, 1006, "Email hoặc mật khẩu không chính xác."),
+    INTERNAL_SECRET_INVALID(HttpStatus.FORBIDDEN, 1007, "Thiếu hoặc sai X-Internal-Secret."),
 
     // User account errors (2xxx)
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, 2004, "Người dùng không tồn tại."),
