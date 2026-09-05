@@ -9,10 +9,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.unisage.backend.dto.request.SendMessageRequest;
 import com.unisage.backend.dto.request.UpdateMessageRequest;
 import com.unisage.backend.dto.response.MessageResponse;
 import com.unisage.backend.entity.Conversation;
 import com.unisage.backend.entity.Message;
+import com.unisage.backend.entity.User;
 import com.unisage.backend.entity.enums.MsgRole;
 import com.unisage.backend.entity.enums.MsgStatus;
 import com.unisage.backend.exception.AppException;
@@ -302,10 +304,127 @@ class MessageServiceImplTest {
         assertThat(result).hasSize(3);
     }
 
+    // ── send() ownership ─────────────────────────────────────────────────
+
+    @Test
+    void send_ownedConversation_callerIsOwner_succeeds() {
+        UUID conversationId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        User owner = User.builder().id(ownerId).build();
+        Conversation conversation = conversation(conversationId, owner, null);
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+
+        SendMessageRequest request = SendMessageRequest.builder()
+                .conversationId(conversationId)
+                .role(MsgRole.USER)
+                .content("hi")
+                .build();
+
+        MessageResponse response = messageService.send(request, ownerId, "1.2.3.4");
+
+        assertThat(response.content()).isEqualTo("hi");
+    }
+
+    @Test
+    void send_ownedConversation_callerIsDifferentUser_throwsUnauthorized() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        Conversation conversation = conversation(conversationId, owner, null);
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+
+        SendMessageRequest request = SendMessageRequest.builder()
+                .conversationId(conversationId)
+                .role(MsgRole.USER)
+                .content("hi")
+                .build();
+
+        UUID intruderId = UUID.randomUUID();
+        assertThatThrownBy(() -> messageService.send(request, intruderId, "1.2.3.4"))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_UNAUTHORIZED);
+    }
+
+    @Test
+    void send_ownedConversation_guestCaller_throwsUnauthorized() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        Conversation conversation = conversation(conversationId, owner, null);
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+
+        SendMessageRequest request = SendMessageRequest.builder()
+                .conversationId(conversationId)
+                .role(MsgRole.USER)
+                .content("hi")
+                .build();
+
+        assertThatThrownBy(() -> messageService.send(request, null, "1.2.3.4"))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_UNAUTHORIZED);
+    }
+
+    @Test
+    void send_guestConversation_sameIp_succeeds() {
+        UUID conversationId = UUID.randomUUID();
+        Conversation conversation = conversation(conversationId, null, "9.9.9.9");
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+
+        SendMessageRequest request = SendMessageRequest.builder()
+                .conversationId(conversationId)
+                .role(MsgRole.USER)
+                .content("hi")
+                .build();
+
+        MessageResponse response = messageService.send(request, null, "9.9.9.9");
+
+        assertThat(response.content()).isEqualTo("hi");
+    }
+
+    @Test
+    void send_guestConversation_differentIp_throwsUnauthorized() {
+        UUID conversationId = UUID.randomUUID();
+        Conversation conversation = conversation(conversationId, null, "9.9.9.9");
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+
+        SendMessageRequest request = SendMessageRequest.builder()
+                .conversationId(conversationId)
+                .role(MsgRole.USER)
+                .content("hi")
+                .build();
+
+        assertThatThrownBy(() -> messageService.send(request, null, "1.1.1.1"))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_UNAUTHORIZED);
+    }
+
+    @Test
+    void send_guestConversation_loggedInCallerNotYetClaimed_throwsUnauthorized() {
+        UUID conversationId = UUID.randomUUID();
+        Conversation conversation = conversation(conversationId, null, "9.9.9.9");
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+
+        SendMessageRequest request = SendMessageRequest.builder()
+                .conversationId(conversationId)
+                .role(MsgRole.USER)
+                .content("hi")
+                .build();
+
+        assertThatThrownBy(() -> messageService.send(request, UUID.randomUUID(), "9.9.9.9"))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_UNAUTHORIZED);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private Conversation conversation(UUID id) {
         return Conversation.builder().id(id).build();
+    }
+
+    private Conversation conversation(UUID id, User owner, String ipAddress) {
+        return Conversation.builder().id(id).user(owner).ipAddress(ipAddress).build();
     }
 
     private Message assistantMessage(UUID id, Conversation conversation, MsgStatus status, String content) {

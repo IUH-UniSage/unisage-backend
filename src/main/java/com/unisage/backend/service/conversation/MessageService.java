@@ -9,7 +9,7 @@ import com.unisage.backend.dto.response.MessageResponse;
 
 public interface MessageService {
 
-    MessageResponse send(SendMessageRequest request);
+    MessageResponse send(SendMessageRequest request, UUID callerId, String ipAddress);
 
     MessageResponse update(UUID id, UpdateMessageRequest request);
 

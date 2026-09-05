@@ -40,9 +40,11 @@ public class MessageServiceImpl implements MessageService {
 
     @Override
     @Transactional
-    public MessageResponse send(SendMessageRequest request) {
+    public MessageResponse send(SendMessageRequest request, UUID callerId, String ipAddress) {
         Conversation conversation = conversationRepository.findById(request.conversationId())
                 .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
+
+        validateOwnership(conversation, callerId, ipAddress);
 
         ChatModel chatModel = null;
         if (request.chatModelId() != null) {
@@ -135,6 +137,26 @@ public class MessageServiceImpl implements MessageService {
         Message message = messageRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.MESSAGE_NOT_FOUND));
         return toResponse(message);
+    }
+
+    /**
+     * A caller may post into an owned conversation only as its owner, and into a guest
+     * conversation (no owner yet) only from the same IP that created it — mirrors the
+     * "valid guest" notion used by {@code ConversationServiceImpl#claim}.
+     */
+    private void validateOwnership(Conversation conversation, UUID callerId, String ipAddress) {
+        if (conversation.getUser() != null) {
+            if (callerId == null || !conversation.getUser().getId().equals(callerId)) {
+                throw new AppException(ErrorCode.AUTH_UNAUTHORIZED);
+            }
+        } else {
+            if (callerId != null) {
+                throw new AppException(ErrorCode.AUTH_UNAUTHORIZED);
+            }
+            if (ipAddress == null || !ipAddress.equals(conversation.getIpAddress())) {
+                throw new AppException(ErrorCode.AUTH_UNAUTHORIZED);
+            }
+        }
     }
 
     private MessageResponse toResponse(Message message) {
