@@ -37,8 +37,10 @@ public class MessageController {
     }
 
     @GetMapping("/conversation/{conversationId}")
-    public ResponseEntity<ApiResponse<List<MessageResponse>>> getByConversation(@PathVariable UUID conversationId) {
-        return ResponseEntity.ok(ApiResponse.success(messageService.getByConversation(conversationId)));
+    public ResponseEntity<ApiResponse<List<MessageResponse>>> getByConversation(
+            @PathVariable UUID conversationId,
+            @RequestParam(required = false) Integer limit) {
+        return ResponseEntity.ok(ApiResponse.success(messageService.getByConversation(conversationId, limit)));
     }
 
     @GetMapping("/{id}")

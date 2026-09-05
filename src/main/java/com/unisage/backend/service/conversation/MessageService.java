@@ -13,7 +13,7 @@ public interface MessageService {
 
     MessageResponse update(UUID id, UpdateMessageRequest request);
 
-    List<MessageResponse> getByConversation(UUID conversationId);
+    List<MessageResponse> getByConversation(UUID conversationId, Integer limit);
 
     MessageResponse getById(UUID id);
 }

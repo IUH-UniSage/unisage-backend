@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.unisage.backend.dto.request.SendMessageRequest;
@@ -33,6 +34,9 @@ public class MessageServiceImpl implements MessageService {
     private final ConversationRepository conversationRepository;
     private final ChatModelRepository chatModelRepository;
     private final UsageLimitService usageLimitService;
+
+    @Value("${app.message.max-history:20}")
+    private int maxMessageHistory;
 
     @Override
     @Transactional
@@ -113,8 +117,15 @@ public class MessageServiceImpl implements MessageService {
     }
 
     @Override
-    public List<MessageResponse> getByConversation(UUID conversationId) {
-        return messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId).stream()
+    public List<MessageResponse> getByConversation(UUID conversationId, Integer limit) {
+        List<Message> messages = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
+
+        int effectiveLimit = (limit != null && limit > 0) ? Math.min(limit, maxMessageHistory) : maxMessageHistory;
+        if (messages.size() > effectiveLimit) {
+            messages = messages.subList(messages.size() - effectiveLimit, messages.size());
+        }
+
+        return messages.stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }

@@ -1,10 +1,13 @@
 package com.unisage.backend.service.conversation;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.unisage.backend.dto.request.UpdateMessageRequest;
 import com.unisage.backend.dto.response.MessageResponse;
@@ -42,6 +45,7 @@ class MessageServiceImplTest {
 
         messageService = new MessageServiceImpl(
                 messageRepository, conversationRepository, chatModelRepository, usageLimitService);
+        ReflectionTestUtils.setField(messageService, "maxMessageHistory", 20);
 
         when(messageRepository.save(any(Message.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
@@ -249,6 +253,55 @@ class MessageServiceImplTest {
                 .isEqualTo(ErrorCode.MESSAGE_NOT_FOUND);
     }
 
+    // ── getByConversation() limit ceiling ───────────────────────────────
+
+    @Test
+    void getByConversation_noLimit_capsAtMaxHistory() {
+        UUID conversationId = UUID.randomUUID();
+        List<Message> messages = buildMessages(conversationId, 25);
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
+
+        List<MessageResponse> result = messageService.getByConversation(conversationId, null);
+
+        assertThat(result).hasSize(20);
+        // keeps the most recent ones (tail of the ascending list)
+        assertThat(result.get(result.size() - 1).content()).isEqualTo("msg-24");
+    }
+
+    @Test
+    void getByConversation_limitBelowCeiling_isRespected() {
+        UUID conversationId = UUID.randomUUID();
+        List<Message> messages = buildMessages(conversationId, 25);
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
+
+        List<MessageResponse> result = messageService.getByConversation(conversationId, 5);
+
+        assertThat(result).hasSize(5);
+        assertThat(result.get(result.size() - 1).content()).isEqualTo("msg-24");
+    }
+
+    @Test
+    void getByConversation_limitAboveCeiling_isCappedAtMaxHistory() {
+        UUID conversationId = UUID.randomUUID();
+        List<Message> messages = buildMessages(conversationId, 25);
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
+
+        List<MessageResponse> result = messageService.getByConversation(conversationId, 1000);
+
+        assertThat(result).hasSize(20);
+    }
+
+    @Test
+    void getByConversation_fewerMessagesThanLimit_returnsAll() {
+        UUID conversationId = UUID.randomUUID();
+        List<Message> messages = buildMessages(conversationId, 3);
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
+
+        List<MessageResponse> result = messageService.getByConversation(conversationId, 10);
+
+        assertThat(result).hasSize(3);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private Conversation conversation(UUID id) {
@@ -263,5 +316,22 @@ class MessageServiceImplTest {
                 .content(content)
                 .status(status)
                 .build();
+    }
+
+    private List<Message> buildMessages(UUID conversationId, int count) {
+        Conversation conversation = conversation(conversationId);
+        List<Message> messages = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            Message m = Message.builder()
+                    .id(UUID.randomUUID())
+                    .conversation(conversation)
+                    .role(MsgRole.USER)
+                    .content("msg-" + i)
+                    .status(MsgStatus.COMPLETED)
+                    .build();
+            m.setCreatedAt(LocalDateTime.now().plusSeconds(i));
+            messages.add(m);
+        }
+        return messages;
     }
 }
