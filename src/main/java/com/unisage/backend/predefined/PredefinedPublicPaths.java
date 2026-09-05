@@ -24,6 +24,10 @@ public final class PredefinedPublicPaths {
             // Everything else on these resources (list-by-user, delete, claim) stays RBAC-gated.
             new PublicPath("POST", "/conversations"),
             new PublicPath("POST", "/messages"),
-            new PublicPath("GET", "/messages/conversation/**")
+            new PublicPath("GET", "/messages/conversation/**"),
+            // unisage-agent (Python) streams the answer and calls back here to persist/finalize
+            // the assistant Message row. No end-user JWT context on that call — gated upstream
+            // by the shared X-Internal-Secret at the gateway, not by user ownership.
+            new PublicPath("PATCH", "/messages/*")
     );
 }

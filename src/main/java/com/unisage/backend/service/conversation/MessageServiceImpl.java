@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.unisage.backend.dto.request.SendMessageRequest;
+import com.unisage.backend.dto.request.UpdateMessageRequest;
 import com.unisage.backend.dto.response.MessageResponse;
 import com.unisage.backend.entity.ChatModel;
 import com.unisage.backend.entity.Conversation;
@@ -64,6 +65,50 @@ public class MessageServiceImpl implements MessageService {
 
         usageLimitService.increment(usageLimit);
 
+        return toResponse(message);
+    }
+
+    @Override
+    @Transactional
+    public MessageResponse update(UUID id, UpdateMessageRequest request) {
+        Message message = messageRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.MESSAGE_NOT_FOUND));
+
+        if (!message.getConversation().getId().equals(request.conversationId())) {
+            throw new AppException(ErrorCode.MESSAGE_NOT_FOUND);
+        }
+
+        if (message.getRole() != MsgRole.ASSISTANT) {
+            throw new AppException(ErrorCode.MESSAGE_ROLE_NOT_ASSISTANT);
+        }
+
+        if (message.getStatus() == MsgStatus.COMPLETED || message.getStatus() == MsgStatus.ERROR) {
+            boolean sameContent = message.getContent().equals(request.content());
+            boolean sameStatus = message.getStatus() == request.status();
+            if (sameContent && sameStatus) {
+                return toResponse(message);
+            }
+            throw new AppException(ErrorCode.MESSAGE_CONTENT_CONFLICT);
+        }
+
+        if (message.getStatus() != MsgStatus.STREAMING
+                || (request.status() != MsgStatus.COMPLETED && request.status() != MsgStatus.ERROR)) {
+            throw new AppException(ErrorCode.MESSAGE_INVALID_STATUS_TRANSITION);
+        }
+
+        message.setContent(request.content());
+        message.setStatus(request.status());
+        if (request.citations() != null) {
+            message.setCitations(request.citations());
+        }
+        if (request.retrievalScore() != null) {
+            message.setRetrievalScore(request.retrievalScore());
+        }
+        if (request.metadata() != null) {
+            message.setMetadata(request.metadata());
+        }
+
+        message = messageRepository.save(message);
         return toResponse(message);
     }
 

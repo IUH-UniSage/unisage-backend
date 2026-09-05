@@ -296,6 +296,9 @@ public class DataInitializer implements CommandLineRunner {
             def(PredefinedPermissions.MESSAGE_SEND,
                 "/messages", PermissionMethod.POST, ResourceType.MESSAGE,
                 "Gửi tin nhắn"),
+            def(PredefinedPermissions.MESSAGE_UPDATE,
+                "/messages/*", PermissionMethod.PATCH, ResourceType.MESSAGE,
+                "Cập nhật tin nhắn (hoàn tất câu trả lời streaming)"),
 
             // ── AuditLog ─────────────────────────────────────────────────
             def(PredefinedPermissions.AUDIT_LOG_ALL,
@@ -369,6 +372,7 @@ public class DataInitializer implements CommandLineRunner {
             permKey(PredefinedPermissions.CONVERSATION_ALL),
             permKey(PredefinedPermissions.MESSAGE_READ),
             permKey(PredefinedPermissions.MESSAGE_SEND),
+            permKey(PredefinedPermissions.MESSAGE_UPDATE),
             permKey(PredefinedPermissions.DOCUMENT_READ),
             permKey(PredefinedPermissions.DEPARTMENT_READ),
             permKey(PredefinedPermissions.CATEGORY_READ),

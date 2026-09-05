@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.unisage.backend.dto.request.SendMessageRequest;
+import com.unisage.backend.dto.request.UpdateMessageRequest;
 import com.unisage.backend.dto.response.ApiResponse;
 import com.unisage.backend.dto.response.MessageResponse;
 import com.unisage.backend.service.conversation.MessageService;
@@ -26,6 +27,13 @@ public class MessageController {
     public ResponseEntity<ApiResponse<MessageResponse>> send(@Valid @RequestBody SendMessageRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(messageService.send(request)));
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<ApiResponse<MessageResponse>> update(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateMessageRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(messageService.update(id, request)));
     }
 
     @GetMapping("/conversation/{conversationId}")

@@ -80,9 +80,10 @@ public final class PredefinedPermissions {
     public static final String CONVERSATION_DELETE = "CONVERSATION_DELETE";
 
     // ─── Message ──────────────────────────────────────────────────────────
-    public static final String MESSAGE_ALL  = "MESSAGE_ALL";
-    public static final String MESSAGE_READ = "MESSAGE_READ";
-    public static final String MESSAGE_SEND = "MESSAGE_SEND";
+    public static final String MESSAGE_ALL    = "MESSAGE_ALL";
+    public static final String MESSAGE_READ   = "MESSAGE_READ";
+    public static final String MESSAGE_SEND   = "MESSAGE_SEND";
+    public static final String MESSAGE_UPDATE = "MESSAGE_UPDATE";
 
     // ─── AuditLog ─────────────────────────────────────────────────────────
     public static final String AUDIT_LOG_ALL  = "AUDIT_LOG_ALL";
