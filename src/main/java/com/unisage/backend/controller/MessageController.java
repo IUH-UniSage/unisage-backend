@@ -11,6 +11,7 @@ import com.unisage.backend.dto.request.SendMessageRequest;
 import com.unisage.backend.dto.request.UpdateMessageRequest;
 import com.unisage.backend.dto.response.ApiResponse;
 import com.unisage.backend.dto.response.MessageResponse;
+import com.unisage.backend.security.InternalSecretFilter;
 import com.unisage.backend.service.conversation.MessageService;
 import com.unisage.backend.utils.SecurityUtil;
 
@@ -55,11 +56,24 @@ public class MessageController {
         return ResponseEntity.ok(ApiResponse.success(messageService.getById(id)));
     }
 
-    /** Traffic arrives via the API Gateway, so prefer the forwarded client IP over the socket's. */
+    /**
+     * Most callers of this endpoint reach it straight from the socket (end-user browsers via the
+     * gateway, whose own address isn't relevant here). {@code unisage-agent} is the one exception:
+     * it calls this backend directly, off-box, on behalf of an end-user whose IP it forwards via
+     * {@code X-Forwarded-For} — but that header is only trustworthy when {@link InternalSecretFilter}
+     * has already verified the caller carried a valid {@code X-Internal-Secret}. An untrusted
+     * caller could otherwise spoof {@code X-Forwarded-For} to impersonate another guest's IP and
+     * hijack their conversation, so it's ignored unless the request is marked trusted.
+     */
     private String extractClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
+        boolean trustedInternalCaller = Boolean.TRUE.equals(
+                request.getAttribute(InternalSecretFilter.TRUSTED_INTERNAL_CALLER_ATTRIBUTE));
+
+        if (trustedInternalCaller) {
+            String forwarded = request.getHeader("X-Forwarded-For");
+            if (forwarded != null && !forwarded.isBlank()) {
+                return forwarded.split(",")[0].trim();
+            }
         }
         return request.getRemoteAddr();
     }
