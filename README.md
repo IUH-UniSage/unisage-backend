@@ -13,16 +13,19 @@ cp .env.example .ENV
 ## Chạy bằng IDE (chỉ chạy Database bằng Docker)
 
 1. Trong `.ENV`, để trống profile Docker:
+
 ```ini
 COMPOSE_PROFILES=
 ```
 
 2. Khởi chạy Database:
+
 ```bash
 docker compose up -d
 ```
 
 3. Chạy ứng dụng bằng IDE hoặc chạy lệnh:
+
 ```bash
 ./mvnw spring-boot:run
 ```
@@ -30,16 +33,19 @@ docker compose up -d
 ## Chạy hoàn toàn bằng Docker
 
 1. Trong `.ENV`, bật profile `app`:
+
 ```ini
 COMPOSE_PROFILES=app
 ```
 
 2. Build ứng dụng:
+
 ```bash
 ./mvnw clean package -DskipTests
 ```
 
 3. Khởi chạy Docker:
+
 ```bash
 docker compose up -d --build
 ```

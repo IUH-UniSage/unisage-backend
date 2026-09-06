@@ -4,9 +4,11 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.unisage.backend.dto.request.SendMessageRequest;
+import com.unisage.backend.dto.request.UpdateMessageRequest;
 import com.unisage.backend.dto.response.MessageResponse;
 import com.unisage.backend.entity.ChatModel;
 import com.unisage.backend.entity.Conversation;
@@ -33,11 +35,27 @@ public class MessageServiceImpl implements MessageService {
     private final ChatModelRepository chatModelRepository;
     private final UsageLimitService usageLimitService;
 
+    @Value("${app.message.max-history:20}")
+    private int maxMessageHistory;
+
     @Override
     @Transactional
-    public MessageResponse send(SendMessageRequest request) {
+    public MessageResponse send(SendMessageRequest request, UUID callerId, String ipAddress) {
         Conversation conversation = conversationRepository.findById(request.conversationId())
                 .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
+
+        validateOwnership(conversation, callerId, ipAddress);
+
+        MsgStatus status = request.status() != null ? request.status() : MsgStatus.COMPLETED;
+        if (status == MsgStatus.STREAMING && request.role() != MsgRole.ASSISTANT) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR);
+        }
+        if (status != MsgStatus.COMPLETED && status != MsgStatus.STREAMING) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR);
+        }
+        if (status == MsgStatus.COMPLETED && (request.content() == null || request.content().isBlank())) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR);
+        }
 
         ChatModel chatModel = null;
         if (request.chatModelId() != null) {
@@ -53,8 +71,8 @@ public class MessageServiceImpl implements MessageService {
         Message message = Message.builder()
                 .conversation(conversation)
                 .role(request.role())
-                .content(request.content())
-                .status(MsgStatus.COMPLETED)
+                .content(request.content() != null ? request.content() : "")
+                .status(status)
                 .chatModel(chatModel)
                 .citations(request.citations())
                 .retrievalScore(request.retrievalScore())
@@ -68,8 +86,63 @@ public class MessageServiceImpl implements MessageService {
     }
 
     @Override
-    public List<MessageResponse> getByConversation(UUID conversationId) {
-        return messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId).stream()
+    @Transactional
+    public MessageResponse update(UUID id, UpdateMessageRequest request) {
+        Message message = messageRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.MESSAGE_NOT_FOUND));
+
+        if (!message.getConversation().getId().equals(request.conversationId())) {
+            throw new AppException(ErrorCode.MESSAGE_NOT_FOUND);
+        }
+
+        if (message.getRole() != MsgRole.ASSISTANT) {
+            throw new AppException(ErrorCode.MESSAGE_ROLE_NOT_ASSISTANT);
+        }
+
+        if (message.getStatus() == MsgStatus.COMPLETED || message.getStatus() == MsgStatus.ERROR) {
+            boolean sameContent = message.getContent().equals(request.content());
+            boolean sameStatus = message.getStatus() == request.status();
+            if (sameContent && sameStatus) {
+                return toResponse(message);
+            }
+            throw new AppException(ErrorCode.MESSAGE_CONTENT_CONFLICT);
+        }
+
+        if (message.getStatus() != MsgStatus.STREAMING
+                || (request.status() != MsgStatus.COMPLETED && request.status() != MsgStatus.ERROR)) {
+            throw new AppException(ErrorCode.MESSAGE_INVALID_STATUS_TRANSITION);
+        }
+        if (request.status() == MsgStatus.COMPLETED
+                && (request.content() == null || request.content().isBlank())) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR);
+        }
+
+        message.setContent(request.content() != null ? request.content() : "");
+        message.setStatus(request.status());
+        if (request.citations() != null) {
+            message.setCitations(request.citations());
+        }
+        if (request.retrievalScore() != null) {
+            message.setRetrievalScore(request.retrievalScore());
+        }
+        if (request.metadata() != null) {
+            message.setMetadata(request.metadata());
+        }
+
+        message = messageRepository.save(message);
+        return toResponse(message);
+    }
+
+    @Override
+    public List<MessageResponse> getByConversation(UUID conversationId, Integer limit) {
+        List<Message> messages = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
+
+        int effectiveLimit = (limit != null && limit > 0) ? Math.min(limit, maxMessageHistory) : maxMessageHistory;
+        if (messages.size() > effectiveLimit) {
+            messages = messages.subList(messages.size() - effectiveLimit, messages.size());
+        }
+
+        return messages.stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
@@ -79,6 +152,26 @@ public class MessageServiceImpl implements MessageService {
         Message message = messageRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.MESSAGE_NOT_FOUND));
         return toResponse(message);
+    }
+
+    /**
+     * A caller may post into an owned conversation only as its owner, and into a guest
+     * conversation (no owner yet) only from the same IP that created it — mirrors the
+     * "valid guest" notion used by {@code ConversationServiceImpl#claim}.
+     */
+    private void validateOwnership(Conversation conversation, UUID callerId, String ipAddress) {
+        if (conversation.getUser() != null) {
+            if (callerId == null || !conversation.getUser().getId().equals(callerId)) {
+                throw new AppException(ErrorCode.AUTH_UNAUTHORIZED);
+            }
+        } else {
+            if (callerId != null) {
+                throw new AppException(ErrorCode.AUTH_UNAUTHORIZED);
+            }
+            if (ipAddress == null || !ipAddress.equals(conversation.getIpAddress())) {
+                throw new AppException(ErrorCode.AUTH_UNAUTHORIZED);
+            }
+        }
     }
 
     private MessageResponse toResponse(Message message) {

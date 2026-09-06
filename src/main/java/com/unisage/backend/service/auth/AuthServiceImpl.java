@@ -7,6 +7,7 @@ import com.unisage.backend.entity.Permission;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
+import com.unisage.backend.repository.UserDepartmentAccessRepository;
 import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -24,6 +27,7 @@ import java.util.stream.Collectors;
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
+    private final UserDepartmentAccessRepository userDepartmentAccessRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
@@ -79,7 +83,13 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private AuthResponse buildSession(User user) {
-        String accessToken = jwtUtil.generateAccessToken(user);
+        List<Map<String, Object>> departmentAccessClaim = buildDepartmentAccessClaim(user);
+        List<String> permissionNames = mapToPermissionInfo(user).stream()
+                .map(PermissionInfo::name)
+                .distinct()
+                .collect(Collectors.toList());
+
+        String accessToken = jwtUtil.generateAccessToken(user, departmentAccessClaim, permissionNames);
         String refreshToken = jwtUtil.generateRefreshToken(user);
 
         return AuthResponse.builder()
@@ -96,6 +106,18 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
+    private List<Map<String, Object>> buildDepartmentAccessClaim(User user) {
+        return userDepartmentAccessRepository.findByUserId(user.getId()).stream()
+                .filter(access -> access.getAccessLevel() != null)
+                .map(access -> {
+                    Map<String, Object> entry = new HashMap<>();
+                    entry.put("department_id", access.getDepartment().getId().toString());
+                    entry.put("access_level", access.getAccessLevel().getLevel());
+                    return entry;
+                })
+                .collect(Collectors.toList());
+    }
+
     private List<PermissionInfo> mapToPermissionInfo(User user) {
         return user.getRole().getRolePermissions().stream()
                 .map(rp -> {
@@ -103,7 +125,6 @@ public class AuthServiceImpl implements AuthService {
                     return PermissionInfo.builder()
                             .id(p.getId())
                             .name(p.getName())
-                            .accessLevel(p.getAccessLevel())
                             .build();
                 })
                 .collect(Collectors.toList());

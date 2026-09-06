@@ -42,7 +42,7 @@ public class ChatModel extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Builder.Default
-    @Column(name = "source_type", columnDefinition = "varchar(20) default 'CLOUD_API'")
+    @Column(name = "source_type", columnDefinition = "varchar(20)")
     private ChatModelSourceType sourceType = ChatModelSourceType.CLOUD_API;
 
     /** Bắt buộc khi {@code sourceType == CLOUD_API} (vd "openai", "anthropic", "google"); không dùng cho {@code SELF_HOSTED}. */

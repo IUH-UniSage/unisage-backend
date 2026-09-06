@@ -19,7 +19,6 @@ public enum ResourceType {
     // AI / Chatbot
     CHAT_MODEL("Mô hình chat"),
     LLM_TRACE_LOG("Nhật ký LLM"),
-    INGEST("Nạp liệu"),
 
     // Conversation
     CONVERSATION("Hội thoại"),

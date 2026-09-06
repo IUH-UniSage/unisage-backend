@@ -1,12 +1,11 @@
 package com.unisage.backend.dto.request;
 
-import java.util.UUID;
+import com.unisage.backend.entity.enums.DocStatus;
 
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
 
 @Builder
-public record DepartmentAccessItem(
-    @NotNull UUID departmentId,
-    @NotNull UUID accessLevelId
+public record UpdateDocumentStatusRequest(
+    @NotNull DocStatus status
 ) {}

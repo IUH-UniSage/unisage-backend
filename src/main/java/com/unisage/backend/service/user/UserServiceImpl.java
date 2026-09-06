@@ -102,7 +102,8 @@ public class UserServiceImpl implements UserService {
                 .map(item -> UserDepartmentAccess.builder()
                         .user(user)
                         .department(departments.get(item.departmentId()))
-                        .accessLevel(item.accessLevel())
+                        .accessLevel(accessLevelRepository.findById(item.accessLevelId())
+                                .orElseThrow(() -> new AppException(ErrorCode.ACCESS_LEVEL_NOT_FOUND)))
                         .build())
                 .toList();
         userDepartmentAccessRepository.saveAll(accesses);
@@ -254,23 +255,18 @@ public class UserServiceImpl implements UserService {
                 .map(access -> DepartmentAccessResponse.builder()
                         .departmentId(access.getDepartment().getId())
                         .departmentName(access.getDepartment().getName())
-                        .accessLevel(access.getAccessLevel())
+                        .accessLevelId(access.getAccessLevel() != null ? access.getAccessLevel().getId() : null)
+                        .accessLevel(access.getAccessLevel() != null ? access.getAccessLevel().getLevel() : null)
                         .build())
                 .toList();
     }
 
     private UserDetailResponse toDetailResponse(User user) {
-        Map<String, Integer> permissionsMap = new HashMap<>();
+        Set<String> permissionNames = new HashSet<>();
         if (user.getRole() != null && user.getRole().getRolePermissions() != null) {
             user.getRole().getRolePermissions().forEach(rp -> {
                 Permission p = rp.getPermission();
-                Integer level = p.getAccessLevel();
-                if (level == null) {
-                    permissionsMap.putIfAbsent(p.getName(), null);
-                } else {
-                    permissionsMap.merge(p.getName(), level, (oldVal, newVal) ->
-                            oldVal == null ? newVal : Math.max(oldVal, newVal));
-                }
+                permissionNames.add(p.getName());
             });
         }
 
@@ -299,7 +295,7 @@ public class UserServiceImpl implements UserService {
                 //TODO: Imeplement after completing message service
                 .totalQueries(0)
                 .topTopics(new ArrayList<>())
-                .permissions(permissionsMap)
+                .permissions(permissionNames)
                 .departmentAccesses(mapDepartmentAccesses(user.getId()))
                 .build();
     }

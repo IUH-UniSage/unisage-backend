@@ -12,6 +12,7 @@ class AllowedFileTypeTest {
         assertThat(AllowedFileType.fromExtension("notes.txt")).contains(AllowedFileType.TXT);
         assertThat(AllowedFileType.fromExtension("policy.docx")).contains(AllowedFileType.DOCX);
         assertThat(AllowedFileType.fromExtension("policy.doc")).contains(AllowedFileType.DOC);
+        assertThat(AllowedFileType.fromExtension("page.html")).contains(AllowedFileType.HTML);
     }
 
     @Test

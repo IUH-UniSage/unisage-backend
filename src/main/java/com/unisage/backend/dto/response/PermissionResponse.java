@@ -8,7 +8,6 @@ import java.util.UUID;
 public record PermissionResponse(
     UUID id,
     String name,
-    Integer accessLevel,
     LocalDateTime createdAt,
     String createdBy,
     String createdByName,

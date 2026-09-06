@@ -36,7 +36,15 @@
     { "key": "documentId", "value": "" },
     { "key": "conversationId", "value": "" },
     { "key": "messageId", "value": "" },
-    { "key": "accessLevelId", "value": "" }
+    { "key": "assistantMessageId", "value": "" },
+    { "key": "accessLevelId", "value": "" },
+    { "key": "ingestAdminDaoTaoToken", "value": "" },
+    { "key": "regularUserToken", "value": "" },
+    {
+      "key": "internalSecret",
+      "value": "unisage-internal-secret-key-2026",
+      "description": "Must match INTERNAL_SECRET_KEY on both backend-java and unisage-agent. Only needed for requests backend-java treats as Python-only (e.g. PATCH /messages/{id}) - the gateway auto-adds this header for /api/v1/ai/** but NOT for /api/v1/master/**, so it must be set manually here."
+    }
   ],
   "item": [
     {
@@ -1394,6 +1402,7 @@
     },
     {
       "name": "Messages",
+      "description": "send() defaults `status` to COMPLETED when omitted and requires non-blank `content` in that case. `status: \"STREAMING\"` is only valid together with `role: \"ASSISTANT\"` and allows blank content - it's how unisage-agent creates the placeholder it later finalizes via PATCH (see 'Update Message' below), not a normal client flow.",
       "item": [
         {
           "name": "Send Message",
@@ -1424,11 +1433,81 @@
           }
         },
         {
+          "name": "Send Message - Assistant Placeholder (STREAMING)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('assistantMessageId', json.data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversationId\": \"{{conversationId}}\",\n  \"role\": \"ASSISTANT\",\n  \"content\": \"\",\n  \"status\": \"STREAMING\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/messages",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "messages"]
+            },
+            "description": "Creates the empty STREAMING assistant message unisage-agent finalizes with 'Update Message (PATCH)' once the answer has fully streamed. Saves the new id to {{assistantMessageId}}."
+          }
+        },
+        {
+          "name": "Update Message (PATCH) - Complete",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "X-Internal-Secret",
+                "value": "{{internalSecret}}",
+                "description": "Required - InternalSecretFilter rejects PATCH /messages/{id} without it. The gateway only injects this automatically on /api/v1/ai/**, not /api/v1/master/**, so it's set manually here."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversationId\": \"{{conversationId}}\",\n  \"content\": \"Đây là câu trả lời đã hoàn tất.\",\n  \"status\": \"COMPLETED\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/messages/{{assistantMessageId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "messages", "{{assistantMessageId}}"]
+            },
+            "description": "Only role=ASSISTANT, only STREAMING -> COMPLETED|ERROR. Retrying with identical content/status on an already-terminal message returns 200 unchanged; a different payload returns 409. Run 'Send Message - Assistant Placeholder (STREAMING)' first."
+          }
+        },
+        {
+          "name": "Update Message (PATCH) - Invalid (Missing X-Internal-Secret)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversationId\": \"{{conversationId}}\",\n  \"content\": \"Trying to finalize without the internal secret.\",\n  \"status\": \"COMPLETED\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/messages/{{assistantMessageId}}",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "messages", "{{assistantMessageId}}"]
+            },
+            "description": "Expected: 403, InternalSecretFilter rejects before the request reaches MessageService."
+          }
+        },
+        {
           "name": "Get Messages By Conversation",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{gateway_url}}/api/v1/master/messages/conversation/{{conversationId}}",
+              "raw": "{{gateway_url}}/api/v1/master/messages/conversation/{{conversationId}}?limit=20",
               "host": ["{{gateway_url}}"],
               "path": [
                 "api",
@@ -1437,6 +1516,13 @@
                 "messages",
                 "conversation",
                 "{{conversationId}}"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Optional. Always capped server-side by MAX_MESSAGE_HISTORY regardless of what's requested here."
+                }
               ]
             }
           }
@@ -1450,6 +1536,245 @@
               "host": ["{{gateway_url}}"],
               "path": ["api", "v1", "master", "messages", "{{messageId}}"]
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI - Chat (Streaming)",
+      "description": "Đi qua Gateway {{gateway_url}}/api/v1/ai/chat/stream -> rewritten tới unisage-agent POST /api/v1/chat/stream (X-Internal-Secret tự động được gateway thêm cho mọi request /api/v1/ai/**). Response là text/event-stream (SSE) - Postman hiển thị raw body, không render như một chat UI.\n\nRun 'Conversations > Create Conversation' trước để có {{conversationId}}. `/chat/stream` dùng optional-auth: có Bearer token hợp lệ -> chạy như user đã đăng nhập; không có header Authorization nào -> chạy như khách (role=KHACH); token sai/hết hạn -> 401 (gateway chặn trước khi tới unisage-agent).\n\nMỗi lượt gọi khiến unisage-agent tạo 1 message USER + 1 message ASSISTANT (STREAMING -> COMPLETED/ERROR) bên backend-java - xem lại bằng 'Messages > Get Messages By Conversation'.",
+      "item": [
+        {
+          "name": "Chat Stream - Guest (No Auth)",
+          "auth": { "type": "noauth" },
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversation_id\": \"{{conversationId}}\",\n  \"message\": \"Xin chào, học phí học kỳ này bao nhiêu?\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/chat/stream",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "chat", "stream"]
+            },
+            "description": "No Authorization header at all -> unisage-agent treats this as an anonymous guest (role=KHACH, department_access=[]), not a 401."
+          }
+        },
+        {
+          "name": "Chat Stream - Authenticated",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversation_id\": \"{{conversationId}}\",\n  \"message\": \"Xin chào, học phí học kỳ này bao nhiêu?\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/chat/stream",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "chat", "stream"]
+            },
+            "description": "Inherits the collection's Bearer {{accessToken}} - run 'Auth > Login' first. The conversation must be owned by this same user (or claimed) or backend-java rejects the USER message with 403/404 and unisage-agent never runs the graph."
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI - Ingestion",
+      "description": "Đi qua Gateway {{gateway_url}}/api/v1/ai/ingestion/** -> rewritten tới unisage-agent /api/v1/ingestion/**. Các case ở đây tập trung vào permission gate (DOCUMENT_ALL/DOCUMENT_CREATE) và department/access_level scoping vừa thêm (module python-trusted-context) - không phải happy-path đầy đủ (object_key dùng giá trị giả vì các case vi phạm quyền đều bị chặn trước khi handler chạm tới MinIO).\n\nChạy 2 request Login trong folder này trước (IngestAdmin - Phong Dao Tao Only và Regular User) - chúng tự lưu token vào {{ingestAdminDaoTaoToken}}/{{regularUserToken}}, các request vi phạm quyền bên dưới override auth để dùng đúng token cần thiết.\n\nDataInitializer seed sẵn: IA-002 (role INGEST_ADMIN, chỉ có UserDepartmentAccess ở PHONG_DAO_TAO, access_level 3 - không có ở department nào khác) và US-001 (role USER, có DOCUMENT_READ nhưng không có DOCUMENT_ALL/DOCUMENT_CREATE nên bị chặn ở permission gate).",
+      "item": [
+        {
+          "name": "Login - IngestAdmin (Phong Dao Tao Only)",
+          "auth": { "type": "noauth" },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.accessToken) {",
+                  "    pm.collectionVariables.set('ingestAdminDaoTaoToken', json.data.accessToken);",
+                  "    pm.test('ingestAdminDaoTaoToken saved', function () { pm.expect(json.data.accessToken).to.be.a('string'); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"IA-002\",\n  \"password\": \"123123\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/auth/login",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "auth", "login"]
+            },
+            "description": "Tài khoản mock IngestAdmin thứ 2 do DataInitializer seed - chỉ có department_access ở PHONG_DAO_TAO, access_level 3 (không có ở department nào khác, không phải toàn quyền như IA-001). Dùng để test department/access_level scoping mà không bị lẫn với IA-001 (chỉ chưa được gán department_access nào trong seed hiện tại) hay SUPER_ADMIN (được gán tất cả department ở level 5, sẽ không bao giờ trigger được các case 403 bên dưới)."
+          }
+        },
+        {
+          "name": "Login - Regular User (No Document Write Permission)",
+          "auth": { "type": "noauth" },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.accessToken) {",
+                  "    pm.collectionVariables.set('regularUserToken', json.data.accessToken);",
+                  "    pm.test('regularUserToken saved', function () { pm.expect(json.data.accessToken).to.be.a('string'); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"US-001\",\n  \"password\": \"123123\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/auth/login",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "master", "auth", "login"]
+            },
+            "description": "Role USER được seed với DOCUMENT_READ nhưng không có DOCUMENT_ALL/DOCUMENT_CREATE (xem DataInitializer.assignUser) - đúng loại tài khoản để trigger case thiếu quyền ở require_document_permission."
+          }
+        },
+        {
+          "name": "Preview - Invalid (Missing Document Permission)",
+          "auth": {
+            "type": "bearer",
+            "bearer": [{ "key": "token", "value": "{{regularUserToken}}", "type": "string" }]
+          },
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"department_id\": \"PHONG_DAO_TAO\",\n  \"object_key\": \"docs/handbook.pdf\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/preview",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "preview"]
+            },
+            "description": "Invalid: gọi bằng US-001 (role USER), không có DOCUMENT_ALL/DOCUMENT_CREATE trong claim permissions. Kỳ vọng: 403 Forbidden, errorCode UNISAGE_4007_FORBIDDEN_DOCUMENT_PERMISSION - chặn ở require_document_permission, trước khi đọc object_key từ MinIO."
+          }
+        },
+        {
+          "name": "Preview - Invalid (Department Not Granted)",
+          "auth": {
+            "type": "bearer",
+            "bearer": [{ "key": "token", "value": "{{ingestAdminDaoTaoToken}}", "type": "string" }]
+          },
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"department_id\": \"KHOA_CNTT\",\n  \"object_key\": \"docs/handbook.pdf\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/preview",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "preview"]
+            },
+            "description": "Invalid: IA-002 chỉ được cấp department_access ở PHONG_DAO_TAO, request lại gửi department_id = KHOA_CNTT (không thuộc quyền). Kỳ vọng: 403 Forbidden, errorCode UNISAGE_4008_FORBIDDEN_DEPARTMENT_ACCESS - chặn ở require_department_membership."
+          }
+        },
+        {
+          "name": "Chunking - Invalid (Department Not Granted)",
+          "auth": {
+            "type": "bearer",
+            "bearer": [{ "key": "token", "value": "{{ingestAdminDaoTaoToken}}", "type": "string" }]
+          },
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"doc-postman-1\",\n  \"department_id\": \"KHOA_CNTT\",\n  \"object_key\": \"docs/handbook.pdf\",\n  \"strategy\": \"recursive\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/chunking",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "chunking"]
+            },
+            "description": "Invalid: cùng lý do case preview ở trên, áp cho endpoint chunking. Kỳ vọng: 403 Forbidden, errorCode UNISAGE_4008_FORBIDDEN_DEPARTMENT_ACCESS."
+          }
+        },
+        {
+          "name": "Embedding - Invalid (Department Not Granted)",
+          "auth": {
+            "type": "bearer",
+            "bearer": [{ "key": "token", "value": "{{ingestAdminDaoTaoToken}}", "type": "string" }]
+          },
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"doc-postman-1\",\n  \"department_id\": \"KHOA_CNTT\",\n  \"access_level\": 1,\n  \"object_key\": \"docs/handbook.pdf\",\n  \"chunks\": [\n    { \"chunk_index\": 0, \"content\": \"noi dung test\", \"region_type\": \"text\" }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/embedding",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "embedding"]
+            },
+            "description": "Invalid: department_id (KHOA_CNTT) không nằm trong department_access của IA-002 (chỉ có PHONG_DAO_TAO). Kỳ vọng: 403 Forbidden, errorCode UNISAGE_4008_FORBIDDEN_DEPARTMENT_ACCESS - không dispatch Celery task."
+          }
+        },
+        {
+          "name": "Embedding - Invalid (Access Level Exceeds Grant)",
+          "auth": {
+            "type": "bearer",
+            "bearer": [{ "key": "token", "value": "{{ingestAdminDaoTaoToken}}", "type": "string" }]
+          },
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"doc-postman-1\",\n  \"department_id\": \"PHONG_DAO_TAO\",\n  \"access_level\": 5,\n  \"object_key\": \"docs/handbook.pdf\",\n  \"chunks\": [\n    { \"chunk_index\": 0, \"content\": \"noi dung test\", \"region_type\": \"text\" }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/embedding",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "embedding"]
+            },
+            "description": "Invalid: department_id đúng (PHONG_DAO_TAO, được cấp) nhưng access_level yêu cầu (5) vượt quá mức được cấp cho department đó (3, xem DataInitializer.assignDepartmentToUser). Kỳ vọng: 403 Forbidden, errorCode UNISAGE_4008_FORBIDDEN_DEPARTMENT_ACCESS - không dispatch Celery task."
+          }
+        },
+        {
+          "name": "Embedding - Valid (Within Granted Department And Access Level)",
+          "auth": {
+            "type": "bearer",
+            "bearer": [{ "key": "token", "value": "{{ingestAdminDaoTaoToken}}", "type": "string" }]
+          },
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_id\": \"doc-postman-1\",\n  \"department_id\": \"PHONG_DAO_TAO\",\n  \"access_level\": 3,\n  \"object_key\": \"docs/handbook.pdf\",\n  \"chunks\": [\n    { \"chunk_index\": 0, \"content\": \"noi dung test\", \"region_type\": \"text\" }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/ai/ingestion/embedding",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "v1", "ai", "ingestion", "embedding"]
+            },
+            "description": "Valid: department_id = PHONG_DAO_TAO (được cấp) và access_level = 3 (đúng bằng mức được cấp, không vượt trần). Kỳ vọng: 202 Accepted kèm task_id - đi qua cả permission gate lẫn department/access_level check. object_key giả nên task nền enrich/embedding thật sự sẽ fail phía sau (không ảnh hưởng tới việc xác nhận request được chấp nhận)."
           }
         }
       ]

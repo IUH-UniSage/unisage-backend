@@ -4,8 +4,8 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.unisage.backend.entity.enums.MsgRole;
+import com.unisage.backend.entity.enums.MsgStatus;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
 
@@ -17,8 +17,15 @@ public record SendMessageRequest(
     @NotNull(message = "role không được để trống")
     MsgRole role,
 
-    @NotBlank(message = "content không được để trống")
+    // Blank is allowed only for an ASSISTANT STREAMING placeholder (see
+    // MessageServiceImpl#send) - validated there, not here, since the rule
+    // depends on `status`.
     String content,
+
+    // Optional; defaults to COMPLETED. The only other value a caller may
+    // request is STREAMING, for an ASSISTANT placeholder that a later
+    // PATCH /messages/{id} finalizes to COMPLETED/ERROR.
+    MsgStatus status,
 
     UUID chatModelId,
     Object citations,
