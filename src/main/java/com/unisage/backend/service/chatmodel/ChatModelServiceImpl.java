@@ -123,9 +123,11 @@ public class ChatModelServiceImpl implements ChatModelService {
                 .lastErrorAt(chatModel.getLastErrorAt())
                 .isActive(chatModel.getIsActive())
                 .createdAt(chatModel.getCreatedAt())
-                .createdBy(chatModel.getCreatedBy())
+                .createdBy(chatModel.getCreatedBy() != null ? chatModel.getCreatedBy().getId().toString() : null)
+                .createdByName(chatModel.getCreatedBy() != null ? chatModel.getCreatedBy().getFullName() : null)
                 .updatedAt(chatModel.getUpdatedAt())
-                .updatedBy(chatModel.getUpdatedBy())
+                .updatedBy(chatModel.getUpdatedBy() != null ? chatModel.getUpdatedBy().getId().toString() : null)
+                .updatedByName(chatModel.getUpdatedBy() != null ? chatModel.getUpdatedBy().getFullName() : null)
                 .build();
     }
 }

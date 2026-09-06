@@ -86,9 +86,11 @@ public class AccessLevelServiceImpl implements AccessLevelService {
                 .description(accessLevel.getDescription())
                 .isActive(accessLevel.getIsActive())
                 .createdAt(accessLevel.getCreatedAt())
-                .createdBy(accessLevel.getCreatedBy())
+                .createdBy(accessLevel.getCreatedBy() != null ? accessLevel.getCreatedBy().getId().toString() : null)
+                .createdByName(accessLevel.getCreatedBy() != null ? accessLevel.getCreatedBy().getFullName() : null)
                 .updatedAt(accessLevel.getUpdatedAt())
-                .updatedBy(accessLevel.getUpdatedBy())
+                .updatedBy(accessLevel.getUpdatedBy() != null ? accessLevel.getUpdatedBy().getId().toString() : null)
+                .updatedByName(accessLevel.getUpdatedBy() != null ? accessLevel.getUpdatedBy().getFullName() : null)
                 .build();
     }
 }

@@ -87,9 +87,11 @@ public class CategoryServiceImpl implements CategoryService {
                 .description(category.getDescription())
                 .isActive(category.getIsActive())
                 .createdAt(category.getCreatedAt())
-                .createdBy(category.getCreatedBy())
+                .createdBy(category.getCreatedBy() != null ? category.getCreatedBy().getId().toString() : null)
+                .createdByName(category.getCreatedBy() != null ? category.getCreatedBy().getFullName() : null)
                 .updatedAt(category.getUpdatedAt())
-                .updatedBy(category.getUpdatedBy())
+                .updatedBy(category.getUpdatedBy() != null ? category.getUpdatedBy().getId().toString() : null)
+                .updatedByName(category.getUpdatedBy() != null ? category.getUpdatedBy().getFullName() : null)
                 .build();
     }
 }

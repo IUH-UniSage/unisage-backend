@@ -10,7 +10,9 @@ public record PermissionResponse(
     String name,
     LocalDateTime createdAt,
     String createdBy,
+    String createdByName,
     LocalDateTime updatedAt,
     String updatedBy,
+    String updatedByName,
     Boolean isActive
 ) {}

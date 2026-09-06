@@ -235,9 +235,11 @@ public class DocumentServiceImpl implements DocumentService {
                 .isActive(document.getIsActive())
                 .deletedAt(document.getDeletedAt())
                 .createdAt(document.getCreatedAt())
-                .createdBy(document.getCreatedBy())
+                .createdBy(document.getCreatedBy() != null ? document.getCreatedBy().getId().toString() : null)
+                .createdByName(document.getCreatedBy() != null ? document.getCreatedBy().getFullName() : null)
                 .updatedAt(document.getUpdatedAt())
-                .updatedBy(document.getUpdatedBy())
+                .updatedBy(document.getUpdatedBy() != null ? document.getUpdatedBy().getId().toString() : null)
+                .updatedByName(document.getUpdatedBy() != null ? document.getUpdatedBy().getFullName() : null)
                 .build();
     }
 }
