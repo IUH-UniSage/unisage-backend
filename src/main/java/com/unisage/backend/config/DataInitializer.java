@@ -357,7 +357,12 @@ public class DataInitializer implements CommandLineRunner {
             permKey(PredefinedPermissions.DOCUMENT_ALL),
             permKey(PredefinedPermissions.CATEGORY_ALL),
             permKey(PredefinedPermissions.CHAT_MODEL_READ),
-            permKey(PredefinedPermissions.LLM_TRACE_LOG_READ)
+            permKey(PredefinedPermissions.LLM_TRACE_LOG_READ),
+            // Without this, the document create/edit form's "Cấp độ truy cập tối thiểu"
+            // dropdown can't load its options (GET /access-levels -> 403), and the
+            // ingestion wizard then refuses to process any document left with no access
+            // level assigned as a result.
+            permKey(PredefinedPermissions.ACCESS_LEVEL_READ)
         );
         assign(role, perms, keys);
         log.info("  {} permissions assigned to role '{}'.", keys.size(), role.getName());
