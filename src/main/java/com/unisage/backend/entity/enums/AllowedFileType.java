@@ -15,7 +15,8 @@ public enum AllowedFileType {
     TXT(".txt"),
     PDF(".pdf"),
     DOCX(".docx"),
-    DOC(".doc");
+    DOC(".doc"),
+    HTML(".html");
 
     private final String extension;
 
