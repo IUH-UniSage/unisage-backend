@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import com.unisage.backend.dto.request.CreateDocumentRequest;
 import com.unisage.backend.dto.request.UpdateDocumentRequest;
+import com.unisage.backend.dto.request.UpdateDocumentStatusRequest;
 import com.unisage.backend.dto.response.DocumentResponse;
 import com.unisage.backend.dto.response.PageResponse;
 import com.unisage.backend.entity.AccessLevel;
@@ -132,6 +133,18 @@ public class DocumentServiceImpl implements DocumentService {
             document.setIsPublic(request.isPublic());
         }
 
+        document = documentRepository.save(document);
+        return mapToResponse(document);
+    }
+
+    @Override
+    @Transactional
+    public DocumentResponse updateStatus(UUID id, UpdateDocumentStatusRequest request) {
+        Document document = documentRepository.findById(id)
+                .filter(d -> d.getDeletedAt() == null)
+                .orElseThrow(() -> new AppException(ErrorCode.DOCUMENT_NOT_FOUND));
+
+        document.setStatus(request.status());
         document = documentRepository.save(document);
         return mapToResponse(document);
     }

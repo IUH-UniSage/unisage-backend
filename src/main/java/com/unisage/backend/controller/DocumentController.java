@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import com.unisage.backend.dto.request.CreateDocumentRequest;
 import com.unisage.backend.dto.request.UpdateDocumentRequest;
+import com.unisage.backend.dto.request.UpdateDocumentStatusRequest;
 import com.unisage.backend.dto.response.ApiResponse;
 import com.unisage.backend.dto.response.DocumentResponse;
 import com.unisage.backend.dto.response.PageResponse;
@@ -17,6 +18,7 @@ import com.unisage.backend.service.document.DocumentService;
 import com.unisage.backend.utils.MultipartRequestValidator;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -43,6 +45,12 @@ public class DocumentController {
             HttpServletRequest servletRequest) {
         multipartRequestValidator.validateSingleFile(servletRequest, FILE_FIELD_NAME);
         return ResponseEntity.ok(ApiResponse.success(documentService.updateDocument(id, request)));
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<ApiResponse<DocumentResponse>> updateDocumentStatus(
+            @PathVariable UUID id, @Valid @RequestBody UpdateDocumentStatusRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(documentService.updateStatus(id, request)));
     }
 
     @GetMapping("/{id}")
