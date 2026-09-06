@@ -70,13 +70,20 @@ public class DataInitializer implements CommandLineRunner {
 
         // 4. Seed one default user per role
         User superAdminUser = seedUser("admin@unisage.com",    "SA-001", "System",   "Administrator", "0999999999", superAdmin,  defaultSuperAdminPassword, accessLevels.get(5));
-        seedUser("ingest@unisage.com",   "IA-001", "Ingest",   "Admin",         "0888888888", ingestAdmin, defaultIngestAdminPassword, accessLevels.get(5));
+        User ingestAdminUser = seedUser("ingest@unisage.com",   "IA-001", "Ingest",   "Admin",         "0888888888", ingestAdmin, defaultIngestAdminPassword, accessLevels.get(5));
         User ingestAdminDaoTaoUser = seedUser("ingest.daotao@unisage.com", "IA-002", "Ingest", "Admin (Phong Dao Tao)", "0888888887", ingestAdmin, defaultIngestAdminPassword, null);
         seedUser("user@unisage.com",     "US-001", "Default",  "User",          "0777777777", userRole,    defaultUserPassword, accessLevels.get(0));
 
         // 5. SUPER_ADMIN quan tri moi phong ban - user_department_access khong cascade nen can 1 row
         //    rieng cho tung department (ke ca node cha lan con), o access_level toi da.
         assignAllDepartmentsToUser(superAdminUser, accessLevels.get(5));
+
+        // IA-001 is the general-purpose ingest admin (as opposed to IA-002 below, a narrow
+        // department-scoped fixture for permission-gate tests) - without this it has zero
+        // user_department_access rows and the ingestion wizard rejects every document
+        // ("Bạn không có quyền truy cập phòng ban ...") regardless of ACCESS_LEVEL_READ/document
+        // fields being set correctly.
+        assignAllDepartmentsToUser(ingestAdminUser, accessLevels.get(5));
 
         // 6. Mock ingestAdmin thu 2 - chi co quyen department_access o PHONG_DAO_TAO, level 3 - dung de
         //    test permission gate/department scoping ma khong bi lan voi ingestAdmin toan quyen o buoc 4.
