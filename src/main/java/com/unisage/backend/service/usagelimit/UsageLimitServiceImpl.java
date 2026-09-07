@@ -9,6 +9,7 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.unisage.backend.entity.GuestSession;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.entity.UsageLimit;
 import com.unisage.backend.entity.enums.UsageLimitScope;
@@ -43,12 +44,12 @@ public class UsageLimitServiceImpl implements UsageLimitService {
 
     @Override
     @Transactional
-    public UsageLimit checkAndGetOrCreate(User user, String ipAddress) {
+    public UsageLimit checkAndGetOrCreate(User user, GuestSession guestSession) {
         if (!enabled) {
             return null;
         }
-        if ((user == null) == (ipAddress == null)) {
-            throw new IllegalStateException("Exactly one of user or ipAddress must be provided");
+        if ((user == null) == (guestSession == null)) {
+            throw new IllegalStateException("Exactly one of user or guestSession must be provided");
         }
 
         LocalDate scopeDate = resolveScopeDate(scope);
@@ -59,8 +60,8 @@ public class UsageLimitServiceImpl implements UsageLimitService {
                         .findByUserIdAndLimitTypeAndScopeAndScopeDate(user.getId(), limitType, scope, scopeDate)
                         .orElseGet(() -> create(user, null, scopeDate))
                 : usageLimitRepository
-                        .findByIpAddressAndLimitTypeAndScopeAndScopeDate(ipAddress, limitType, scope, scopeDate)
-                        .orElseGet(() -> create(null, ipAddress, scopeDate));
+                        .findByGuestSessionIdAndLimitTypeAndScopeAndScopeDate(guestSession.getId(), limitType, scope, scopeDate)
+                        .orElseGet(() -> create(null, guestSession, scopeDate));
 
         if (usageLimit.getUsedCount() >= maxCount) {
             throw new AppException(ErrorCode.USAGE_LIMIT_EXCEEDED, toErrors(usageLimit, maxCount));
@@ -80,10 +81,10 @@ public class UsageLimitServiceImpl implements UsageLimitService {
         usageLimitRepository.save(usageLimit);
     }
 
-    private UsageLimit create(User user, String ipAddress, LocalDate scopeDate) {
+    private UsageLimit create(User user, GuestSession guestSession, LocalDate scopeDate) {
         return usageLimitRepository.save(UsageLimit.builder()
                 .user(user)
-                .ipAddress(ipAddress)
+                .guestSession(guestSession)
                 .limitType(limitType)
                 .scope(scope)
                 .scopeDate(scopeDate)

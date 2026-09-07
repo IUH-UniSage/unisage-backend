@@ -13,6 +13,7 @@ import com.unisage.backend.dto.response.ApiResponse;
 import com.unisage.backend.dto.response.MessageResponse;
 import com.unisage.backend.security.InternalSecretFilter;
 import com.unisage.backend.service.conversation.MessageService;
+import com.unisage.backend.utils.CookieUtil;
 import com.unisage.backend.utils.SecurityUtil;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,17 +25,26 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class MessageController {
 
+    /**
+     * Mirrors the trust model {@code X-Forwarded-For} used to have here: only honored when
+     * {@link InternalSecretFilter} has verified a valid {@code X-Internal-Secret}, i.e. only
+     * {@code unisage-agent} calling this backend directly on behalf of a guest browser it
+     * received the request from (it has no cookie of its own to forward otherwise).
+     */
+    private static final String GUEST_SESSION_TOKEN_HEADER = "X-Guest-Session-Token";
+
     private final MessageService messageService;
     private final SecurityUtil securityUtil;
+    private final CookieUtil cookieUtil;
 
     @PostMapping
     public ResponseEntity<ApiResponse<MessageResponse>> send(
             @Valid @RequestBody SendMessageRequest request,
             HttpServletRequest httpRequest) {
         UUID callerId = securityUtil.getCurrentUserIdOrNull();
-        String ipAddress = extractClientIp(httpRequest);
+        String guestSessionToken = extractGuestSessionToken(httpRequest);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(messageService.send(request, callerId, ipAddress)));
+                .body(ApiResponse.success(messageService.send(request, callerId, guestSessionToken)));
     }
 
     @PatchMapping("/{id}")
@@ -57,24 +67,25 @@ public class MessageController {
     }
 
     /**
-     * Most callers of this endpoint reach it straight from the socket (end-user browsers via the
-     * gateway, whose own address isn't relevant here). {@code unisage-agent} is the one exception:
-     * it calls this backend directly, off-box, on behalf of an end-user whose IP it forwards via
-     * {@code X-Forwarded-For} — but that header is only trustworthy when {@link InternalSecretFilter}
-     * has already verified the caller carried a valid {@code X-Internal-Secret}. An untrusted
-     * caller could otherwise spoof {@code X-Forwarded-For} to impersonate another guest's IP and
-     * hijack their conversation, so it's ignored unless the request is marked trusted.
+     * Most callers reach this endpoint straight from the browser via the gateway, which forwards
+     * the {@code guest_session_id} cookie transparently — read directly. {@code unisage-agent} is
+     * the one exception: it calls this backend directly, off-box, on behalf of a guest browser
+     * whose session token it forwards via {@code X-Guest-Session-Token} instead (it has no cookie
+     * jar of its own). That header is honored only when {@link InternalSecretFilter} has already
+     * verified a valid {@code X-Internal-Secret} — an untrusted caller could otherwise supply an
+     * arbitrary header value, though {@code GuestSessionService} would still reject anything that
+     * doesn't hash to a real session, so this is defense-in-depth, not the sole safeguard.
      */
-    private String extractClientIp(HttpServletRequest request) {
+    private String extractGuestSessionToken(HttpServletRequest request) {
         boolean trustedInternalCaller = Boolean.TRUE.equals(
                 request.getAttribute(InternalSecretFilter.TRUSTED_INTERNAL_CALLER_ATTRIBUTE));
 
         if (trustedInternalCaller) {
-            String forwarded = request.getHeader("X-Forwarded-For");
+            String forwarded = request.getHeader(GUEST_SESSION_TOKEN_HEADER);
             if (forwarded != null && !forwarded.isBlank()) {
-                return forwarded.split(",")[0].trim();
+                return forwarded;
             }
         }
-        return request.getRemoteAddr();
+        return cookieUtil.extractGuestSessionTokenFromCookie(request);
     }
 }

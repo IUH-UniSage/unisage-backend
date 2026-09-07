@@ -3,17 +3,25 @@ package com.unisage.backend.controller;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.unisage.backend.dto.request.CreateConversationRequest;
 import com.unisage.backend.dto.response.ApiResponse;
 import com.unisage.backend.dto.response.ConversationResponse;
+import com.unisage.backend.entity.GuestSession;
 import com.unisage.backend.service.conversation.ConversationService;
+import com.unisage.backend.service.guestsession.GuestSessionService;
+import com.unisage.backend.service.guestsession.GuestSessionService.GuestSessionResolution;
+import com.unisage.backend.utils.CookieUtil;
 import com.unisage.backend.utils.SecurityUtil;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -24,20 +32,46 @@ public class ConversationController {
 
     private final ConversationService conversationService;
     private final SecurityUtil securityUtil;
+    private final GuestSessionService guestSessionService;
+    private final CookieUtil cookieUtil;
+
+    @Value("${app.guest-session.ttl-days:30}")
+    private int guestSessionTtlDays;
 
     @PostMapping
     public ResponseEntity<ApiResponse<ConversationResponse>> create(
             @Valid @RequestBody CreateConversationRequest request,
-            HttpServletRequest httpRequest) {
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
         UUID ownerId = securityUtil.getCurrentUserIdOrNull();
-        String ipAddress = extractClientIp(httpRequest);
+
+        GuestSession guestSession = null;
+        if (ownerId == null) {
+            String cookieToken = cookieUtil.extractGuestSessionTokenFromCookie(httpRequest);
+            GuestSessionResolution resolution = guestSessionService.resolveOrCreate(cookieToken);
+            guestSession = resolution.session();
+            writeGuestSessionCookie(httpResponse, resolution.rawToken());
+        }
+
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(conversationService.create(request, ownerId, ipAddress)));
+                .body(ApiResponse.success(conversationService.create(request, ownerId, guestSession)));
     }
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<ConversationResponse>>> getByUser(@RequestParam UUID userId) {
         return ResponseEntity.ok(ApiResponse.success(conversationService.getByUser(userId)));
+    }
+
+    /**
+     * Guest-only equivalent of {@link #getByUser}. Identity comes exclusively from the
+     * {@code guest_session_id} cookie — never from a client-supplied id — and never mints a new
+     * session: a missing/invalid/expired cookie simply yields an empty list.
+     */
+    @GetMapping("/guest")
+    public ResponseEntity<ApiResponse<List<ConversationResponse>>> getByGuestSession(HttpServletRequest httpRequest) {
+        String cookieToken = cookieUtil.extractGuestSessionTokenFromCookie(httpRequest);
+        GuestSession guestSession = guestSessionService.resolveReadOnly(cookieToken).orElse(null);
+        return ResponseEntity.ok(ApiResponse.success(conversationService.getByGuestSession(guestSession)));
     }
 
     @DeleteMapping("/{id}")
@@ -52,12 +86,9 @@ public class ConversationController {
         return ResponseEntity.ok(ApiResponse.success(conversationService.claim(id, userId)));
     }
 
-    /** Traffic arrives via the API Gateway, so prefer the forwarded client IP over the socket's. */
-    private String extractClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
+    private void writeGuestSessionCookie(HttpServletResponse httpResponse, String rawToken) {
+        long maxAgeMs = guestSessionTtlDays * 24L * 60 * 60 * 1000;
+        ResponseCookie cookie = cookieUtil.createGuestSessionCookie(rawToken, maxAgeMs);
+        httpResponse.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 }

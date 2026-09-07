@@ -5,6 +5,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.unisage.backend.security.InternalSecretFilter;
 import com.unisage.backend.service.conversation.MessageService;
+import com.unisage.backend.utils.CookieUtil;
 import com.unisage.backend.utils.SecurityUtil;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,43 +16,44 @@ import static org.mockito.Mockito.when;
 
 class MessageControllerTest {
 
+    private final CookieUtil cookieUtil = mock(CookieUtil.class);
     private final MessageController controller =
-            new MessageController(mock(MessageService.class), mock(SecurityUtil.class));
+            new MessageController(mock(MessageService.class), mock(SecurityUtil.class), cookieUtil);
 
-    private String extractClientIp(HttpServletRequest request) {
-        return ReflectionTestUtils.invokeMethod(controller, "extractClientIp", request);
+    private String extractGuestSessionToken(HttpServletRequest request) {
+        return ReflectionTestUtils.invokeMethod(controller, "extractGuestSessionToken", request);
     }
 
     @Test
-    void trustedInternalCaller_withForwardedFor_prefersForwardedIp() {
+    void trustedInternalCaller_withHeader_prefersForwardedToken() {
         HttpServletRequest request = mock(HttpServletRequest.class);
         when(request.getAttribute(InternalSecretFilter.TRUSTED_INTERNAL_CALLER_ATTRIBUTE))
                 .thenReturn(Boolean.TRUE);
-        when(request.getHeader("X-Forwarded-For")).thenReturn("9.9.9.9, 10.0.0.1");
-        when(request.getRemoteAddr()).thenReturn("127.0.0.1"); // Python's own address
+        when(request.getHeader("X-Guest-Session-Token")).thenReturn("forwarded-token");
+        when(cookieUtil.extractGuestSessionTokenFromCookie(request)).thenReturn(null); // agent has no cookie jar
 
-        assertThat(extractClientIp(request)).isEqualTo("9.9.9.9");
+        assertThat(extractGuestSessionToken(request)).isEqualTo("forwarded-token");
     }
 
     @Test
-    void trustedInternalCaller_withoutForwardedFor_fallsBackToRemoteAddr() {
+    void trustedInternalCaller_withoutHeader_fallsBackToCookie() {
         HttpServletRequest request = mock(HttpServletRequest.class);
         when(request.getAttribute(InternalSecretFilter.TRUSTED_INTERNAL_CALLER_ATTRIBUTE))
                 .thenReturn(Boolean.TRUE);
-        when(request.getHeader("X-Forwarded-For")).thenReturn(null);
-        when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(request.getHeader("X-Guest-Session-Token")).thenReturn(null);
+        when(cookieUtil.extractGuestSessionTokenFromCookie(request)).thenReturn("cookie-token");
 
-        assertThat(extractClientIp(request)).isEqualTo("127.0.0.1");
+        assertThat(extractGuestSessionToken(request)).isEqualTo("cookie-token");
     }
 
     @Test
-    void untrustedCaller_forwardedForHeaderIsIgnored_toPreventIpSpoofing() {
+    void untrustedCaller_headerIsIgnored_cookieIsUsedInstead() {
         HttpServletRequest request = mock(HttpServletRequest.class);
         when(request.getAttribute(InternalSecretFilter.TRUSTED_INTERNAL_CALLER_ATTRIBUTE))
                 .thenReturn(null); // no valid X-Internal-Secret on this request
-        when(request.getHeader("X-Forwarded-For")).thenReturn("9.9.9.9"); // spoofed by attacker
-        when(request.getRemoteAddr()).thenReturn("203.0.113.5"); // attacker's real socket address
+        when(request.getHeader("X-Guest-Session-Token")).thenReturn("spoofed-token");
+        when(cookieUtil.extractGuestSessionTokenFromCookie(request)).thenReturn("real-cookie-token");
 
-        assertThat(extractClientIp(request)).isEqualTo("203.0.113.5");
+        assertThat(extractGuestSessionToken(request)).isEqualTo("real-cookie-token");
     }
 }

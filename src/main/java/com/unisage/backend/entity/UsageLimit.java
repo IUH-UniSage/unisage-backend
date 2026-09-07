@@ -28,7 +28,7 @@ import lombok.experimental.SuperBuilder;
 @Entity
 @Table(name = "usage_limits", uniqueConstraints = {
     @UniqueConstraint(columnNames = {"user_id", "limit_type", "scope", "scope_date"}),
-    @UniqueConstraint(columnNames = {"ip_address", "limit_type", "scope", "scope_date"})
+    @UniqueConstraint(columnNames = {"guest_session_id", "limit_type", "scope", "scope_date"})
 })
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder
 public class UsageLimit extends BaseEntity {
@@ -42,8 +42,9 @@ public class UsageLimit extends BaseEntity {
     @JoinColumn(name = "user_id")
     private User user;
 
-    @Column(name = "ip_address")
-    private String ipAddress;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "guest_session_id")
+    private GuestSession guestSession;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "limit_type")

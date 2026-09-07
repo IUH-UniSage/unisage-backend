@@ -12,6 +12,7 @@ import com.unisage.backend.dto.request.UpdateMessageRequest;
 import com.unisage.backend.dto.response.MessageResponse;
 import com.unisage.backend.entity.ChatModel;
 import com.unisage.backend.entity.Conversation;
+import com.unisage.backend.entity.GuestSession;
 import com.unisage.backend.entity.Message;
 import com.unisage.backend.entity.UsageLimit;
 import com.unisage.backend.entity.enums.MsgRole;
@@ -21,6 +22,7 @@ import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
 import com.unisage.backend.repository.ConversationRepository;
 import com.unisage.backend.repository.MessageRepository;
+import com.unisage.backend.service.guestsession.GuestSessionService;
 import com.unisage.backend.service.usagelimit.UsageLimitService;
 
 import jakarta.transaction.Transactional;
@@ -34,17 +36,18 @@ public class MessageServiceImpl implements MessageService {
     private final ConversationRepository conversationRepository;
     private final ChatModelRepository chatModelRepository;
     private final UsageLimitService usageLimitService;
+    private final GuestSessionService guestSessionService;
 
     @Value("${app.message.max-history:20}")
     private int maxMessageHistory;
 
     @Override
     @Transactional
-    public MessageResponse send(SendMessageRequest request, UUID callerId, String ipAddress) {
+    public MessageResponse send(SendMessageRequest request, UUID callerId, String guestSessionToken) {
         Conversation conversation = conversationRepository.findById(request.conversationId())
                 .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
 
-        validateOwnership(conversation, callerId, ipAddress);
+        validateOwnership(conversation, callerId, guestSessionToken);
 
         MsgStatus status = request.status() != null ? request.status() : MsgStatus.COMPLETED;
         if (status == MsgStatus.STREAMING && request.role() != MsgRole.ASSISTANT) {
@@ -65,7 +68,7 @@ public class MessageServiceImpl implements MessageService {
 
         UsageLimit usageLimit = null;
         if (request.role() == MsgRole.USER) {
-            usageLimit = usageLimitService.checkAndGetOrCreate(conversation.getUser(), conversation.getIpAddress());
+            usageLimit = usageLimitService.checkAndGetOrCreate(conversation.getUser(), conversation.getGuestSession());
         }
 
         Message message = Message.builder()
@@ -156,10 +159,12 @@ public class MessageServiceImpl implements MessageService {
 
     /**
      * A caller may post into an owned conversation only as its owner, and into a guest
-     * conversation (no owner yet) only from the same IP that created it — mirrors the
-     * "valid guest" notion used by {@code ConversationServiceImpl#claim}.
+     * conversation (no owner yet) only by presenting the same guest session that created it —
+     * mirrors the "valid guest" notion used by {@code ConversationServiceImpl#claim}. Resolving
+     * the token here also slides its TTL forward (real chat activity), matching the refresh
+     * policy documented on {@code GuestSessionService}.
      */
-    private void validateOwnership(Conversation conversation, UUID callerId, String ipAddress) {
+    private void validateOwnership(Conversation conversation, UUID callerId, String guestSessionToken) {
         if (conversation.getUser() != null) {
             if (callerId == null || !conversation.getUser().getId().equals(callerId)) {
                 throw new AppException(ErrorCode.AUTH_UNAUTHORIZED);
@@ -168,7 +173,11 @@ public class MessageServiceImpl implements MessageService {
             if (callerId != null) {
                 throw new AppException(ErrorCode.AUTH_UNAUTHORIZED);
             }
-            if (ipAddress == null || !ipAddress.equals(conversation.getIpAddress())) {
+            GuestSession resolved = guestSessionService.resolveAndTouch(guestSessionToken)
+                    .map(GuestSessionService.GuestSessionResolution::session)
+                    .orElse(null);
+            if (resolved == null || conversation.getGuestSession() == null
+                    || !resolved.getId().equals(conversation.getGuestSession().getId())) {
                 throw new AppException(ErrorCode.AUTH_UNAUTHORIZED);
             }
         }

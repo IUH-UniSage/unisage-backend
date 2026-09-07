@@ -15,6 +15,6 @@ public interface UsageLimitRepository extends JpaRepository<UsageLimit, UUID> {
     Optional<UsageLimit> findByUserIdAndLimitTypeAndScopeAndScopeDate(
             UUID userId, UsageLimitType limitType, UsageLimitScope scope, LocalDate scopeDate);
 
-    Optional<UsageLimit> findByIpAddressAndLimitTypeAndScopeAndScopeDate(
-            String ipAddress, UsageLimitType limitType, UsageLimitScope scope, LocalDate scopeDate);
+    Optional<UsageLimit> findByGuestSessionIdAndLimitTypeAndScopeAndScopeDate(
+            UUID guestSessionId, UsageLimitType limitType, UsageLimitScope scope, LocalDate scopeDate);
 }

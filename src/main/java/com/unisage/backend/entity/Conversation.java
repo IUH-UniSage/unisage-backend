@@ -35,12 +35,13 @@ public class Conversation extends BaseEntity {
     private User user;
 
     /**
-     * Captured at creation time for every conversation (guest and logged-in alike).
-     * For guest chat (user == null) this is the only trace of who made the request —
-     * no TTL/cleanup job by design, see the conversation-ownership ADR.
+     * Set only for guest (unauthenticated) conversations; mutually exclusive with {@code user}
+     * (enforced by a DB CHECK constraint) and nulled out by {@code claim()} once a user takes
+     * ownership. See docs/adr for the guest-session TTL/cleanup policy.
      */
-    @Column(name = "ip_address")
-    private String ipAddress;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "guest_session_id")
+    private GuestSession guestSession;
 
     private String title;
 

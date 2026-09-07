@@ -23,6 +23,7 @@ public final class PredefinedPublicPaths {
             // Guest chat — anonymous conversation/message creation & history read.
             // Everything else on these resources (list-by-user, delete, claim) stays RBAC-gated.
             new PublicPath("POST", "/conversations"),
+            new PublicPath("GET", "/conversations/guest"),
             new PublicPath("POST", "/messages"),
             new PublicPath("GET", "/messages/conversation/**"),
             // unisage-agent (Python) streams the answer and calls back here to persist/finalize
