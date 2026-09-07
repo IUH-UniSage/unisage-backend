@@ -37,7 +37,7 @@ public class Conversation extends BaseEntity {
     /**
      * Set only for guest (unauthenticated) conversations; mutually exclusive with {@code user}
      * (enforced by a DB CHECK constraint) and nulled out by {@code claim()} once a user takes
-     * ownership. See docs/adr for the guest-session TTL/cleanup policy.
+     * ownership. See docs/adr/0004-guest-session-ttl-and-cleanup.md for the TTL/cleanup policy.
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "guest_session_id")

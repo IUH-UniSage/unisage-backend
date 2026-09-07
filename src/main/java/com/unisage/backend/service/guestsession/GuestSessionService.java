@@ -26,6 +26,14 @@ public interface GuestSessionService {
      */
     Optional<GuestSession> resolveReadOnly(String cookieTokenOrNull);
 
+    /**
+     * Deletes up to {@code batchSize} expired guest sessions and their still-unclaimed data
+     * (messages, usage limits, conversations), in FK-safe order, in one transaction. Returns how
+     * many sessions were purged — the caller ({@code GuestSessionCleanupJob}) loops until this
+     * returns fewer than {@code batchSize}.
+     */
+    int purgeExpiredBatch(int batchSize);
+
     record GuestSessionResolution(GuestSession session, String rawToken) {
     }
 }

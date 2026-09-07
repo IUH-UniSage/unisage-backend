@@ -1,36 +1,51 @@
 package com.unisage.backend.service.guestsession;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.unisage.backend.entity.GuestSession;
+import com.unisage.backend.repository.ConversationRepository;
 import com.unisage.backend.repository.GuestSessionRepository;
+import com.unisage.backend.repository.MessageRepository;
+import com.unisage.backend.repository.UsageLimitRepository;
 import com.unisage.backend.service.guestsession.GuestSessionService.GuestSessionResolution;
 import com.unisage.backend.utils.TokenHashUtil;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class GuestSessionServiceImplTest {
 
     private GuestSessionRepository guestSessionRepository;
+    private ConversationRepository conversationRepository;
+    private MessageRepository messageRepository;
+    private UsageLimitRepository usageLimitRepository;
     private TokenHashUtil tokenHashUtil;
     private GuestSessionServiceImpl guestSessionService;
 
     @BeforeEach
     void setUp() {
         guestSessionRepository = mock(GuestSessionRepository.class);
+        conversationRepository = mock(ConversationRepository.class);
+        messageRepository = mock(MessageRepository.class);
+        usageLimitRepository = mock(UsageLimitRepository.class);
         tokenHashUtil = mock(TokenHashUtil.class);
-        guestSessionService = new GuestSessionServiceImpl(guestSessionRepository, tokenHashUtil);
+        guestSessionService = new GuestSessionServiceImpl(
+                guestSessionRepository, conversationRepository, messageRepository, usageLimitRepository,
+                tokenHashUtil);
         ReflectionTestUtils.setField(guestSessionService, "ttlDays", 30);
 
         when(guestSessionRepository.save(any(GuestSession.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -130,5 +145,32 @@ class GuestSessionServiceImplTest {
         assertThat(guestSessionService.resolveReadOnly(null)).isEmpty();
         assertThat(guestSessionService.resolveReadOnly("")).isEmpty();
         verify(guestSessionRepository, never()).save(any());
+    }
+
+    @Test
+    void purgeExpiredBatch_noExpiredSessions_deletesNothing() {
+        when(guestSessionRepository.findExpiredIds(any(), any())).thenReturn(List.of());
+
+        int purged = guestSessionService.purgeExpiredBatch(500);
+
+        assertThat(purged).isZero();
+        verify(messageRepository, never()).deleteByConversationGuestSessionIdIn(anyCollection());
+        verify(usageLimitRepository, never()).deleteByGuestSessionIdIn(anyCollection());
+        verify(conversationRepository, never()).deleteByGuestSessionIdIn(anyCollection());
+        verify(guestSessionRepository, never()).deleteAllByIdInBatch(anyCollection());
+    }
+
+    @Test
+    void purgeExpiredBatch_expiredSessions_deletesInFkSafeOrder() {
+        List<UUID> expiredIds = List.of(UUID.randomUUID(), UUID.randomUUID());
+        when(guestSessionRepository.findExpiredIds(any(), any())).thenReturn(expiredIds);
+
+        int purged = guestSessionService.purgeExpiredBatch(500);
+
+        assertThat(purged).isEqualTo(2);
+        verify(messageRepository, times(1)).deleteByConversationGuestSessionIdIn(expiredIds);
+        verify(usageLimitRepository, times(1)).deleteByGuestSessionIdIn(expiredIds);
+        verify(conversationRepository, times(1)).deleteByGuestSessionIdIn(expiredIds);
+        verify(guestSessionRepository, times(1)).deleteAllByIdInBatch(expiredIds);
     }
 }
