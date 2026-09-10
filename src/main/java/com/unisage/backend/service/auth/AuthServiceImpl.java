@@ -7,6 +7,7 @@ import com.unisage.backend.entity.Permission;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
+import com.unisage.backend.predefined.PredefinedRoles;
 import com.unisage.backend.repository.UserDepartmentAccessRepository;
 import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.security.JwtUtil;
@@ -30,6 +31,9 @@ public class AuthServiceImpl implements AuthService {
     private final UserDepartmentAccessRepository userDepartmentAccessRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+
+    private static final String WILDCARD_DEPARTMENT_ID = "*";
+    private static final int WILDCARD_ACCESS_LEVEL = 100;
 
     @Override
     @Transactional
@@ -107,6 +111,12 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private List<Map<String, Object>> buildDepartmentAccessClaim(User user) {
+        if (PredefinedRoles.SUPER_ADMIN.equals(user.getRole().getName())) {
+            Map<String, Object> wildcard = new HashMap<>();
+            wildcard.put("department_id", WILDCARD_DEPARTMENT_ID);
+            wildcard.put("access_level", WILDCARD_ACCESS_LEVEL);
+            return List.of(wildcard);
+        }
         return userDepartmentAccessRepository.findByUserId(user.getId()).stream()
                 .filter(access -> access.getAccessLevel() != null)
                 .map(access -> {
