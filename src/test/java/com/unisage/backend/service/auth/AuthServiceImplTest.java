@@ -100,6 +100,29 @@ class AuthServiceImplTest {
     }
 
     @Test
+    void login_superAdmin_emitsWildcardDepartmentAccessClaim() {
+        Role superAdmin = Role.builder().id(UUID.randomUUID()).name("SUPER_ADMIN").isActive(true).build();
+        superAdmin.setRolePermissions(List.of(
+                RolePermission.builder().role(superAdmin).permission(documentAll).build()
+        ));
+        user.setRole(superAdmin);
+
+        authService.login(LoginRequest.builder().code("IA-001").password("pw").build());
+
+        @SuppressWarnings("unchecked")
+        var departmentAccessCaptor = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(jwtUtil).generateAccessToken(eq(user), departmentAccessCaptor.capture(), any());
+
+        List<Map<String, Object>> departmentAccessClaim = departmentAccessCaptor.getValue();
+        assertThat(departmentAccessClaim).hasSize(1);
+        assertThat(departmentAccessClaim.get(0))
+                .containsEntry("department_id", "*")
+                .containsEntry("access_level", 100);
+        // SUPER_ADMIN's grant rows are never queried — the wildcard short-circuits.
+        verify(userDepartmentAccessRepository, never()).findByUserId(any());
+    }
+
+    @Test
     void login_departmentAccessWithNullLevel_isExcludedFromClaim() {
         Department department = Department.builder().id(UUID.randomUUID()).name("KHOA_KINH_TE").build();
         UserDepartmentAccess accessWithoutLevel = UserDepartmentAccess.builder()

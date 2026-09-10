@@ -13,6 +13,7 @@ public class CookieUtil {
 
     public static final String ACCESS_TOKEN_COOKIE_NAME = "accessToken";
     public static final String REFRESH_TOKEN_COOKIE_NAME = "refreshToken";
+    public static final String GUEST_SESSION_COOKIE_NAME = "guest_session_id";
 
     @Value("${app.cookie.secure:false}") // Default to false for development
     private boolean secure;
@@ -61,6 +62,20 @@ public class CookieUtil {
                 .maxAge(0)
                 .sameSite(sameSite)
                 .build();
+    }
+
+    public ResponseCookie createGuestSessionCookie(String rawToken, long maxAgeMs) {
+        return ResponseCookie.from(GUEST_SESSION_COOKIE_NAME, rawToken)
+                .httpOnly(true)
+                .secure(secure)
+                .path(path)
+                .maxAge(maxAgeMs / 1000)
+                .sameSite(sameSite)
+                .build();
+    }
+
+    public String extractGuestSessionTokenFromCookie(HttpServletRequest request) {
+        return extractCookie(request, GUEST_SESSION_COOKIE_NAME);
     }
 
     public String extractAccessTokenFromCookie(HttpServletRequest request) {

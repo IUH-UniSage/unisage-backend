@@ -9,7 +9,8 @@ import com.unisage.backend.dto.response.MessageResponse;
 
 public interface MessageService {
 
-    MessageResponse send(SendMessageRequest request, UUID callerId, String ipAddress);
+    /** {@code guestSessionToken} is the raw cookie/header value; null for authenticated callers. */
+    MessageResponse send(SendMessageRequest request, UUID callerId, String guestSessionToken);
 
     MessageResponse update(UUID id, UpdateMessageRequest request);
 

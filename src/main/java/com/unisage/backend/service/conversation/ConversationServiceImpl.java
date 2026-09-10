@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import com.unisage.backend.dto.request.CreateConversationRequest;
 import com.unisage.backend.dto.response.ConversationResponse;
 import com.unisage.backend.entity.Conversation;
+import com.unisage.backend.entity.GuestSession;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
@@ -28,7 +29,7 @@ public class ConversationServiceImpl implements ConversationService {
 
     @Override
     @Transactional
-    public ConversationResponse create(CreateConversationRequest request, UUID userId, String ipAddress) {
+    public ConversationResponse create(CreateConversationRequest request, UUID userId, GuestSession guestSession) {
         User user = null;
         if (userId != null) {
             user = userRepository.findById(userId)
@@ -37,7 +38,7 @@ public class ConversationServiceImpl implements ConversationService {
 
         Conversation conversation = Conversation.builder()
                 .user(user)
-                .ipAddress(ipAddress)
+                .guestSession(user == null ? guestSession : null)
                 .title(request.title())
                 .build();
 
@@ -48,6 +49,16 @@ public class ConversationServiceImpl implements ConversationService {
     @Override
     public List<ConversationResponse> getByUser(UUID userId) {
         return conversationRepository.findActiveByUserId(userId).stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ConversationResponse> getByGuestSession(GuestSession guestSession) {
+        if (guestSession == null) {
+            return List.of();
+        }
+        return conversationRepository.findActiveUnclaimedByGuestSessionId(guestSession.getId()).stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
@@ -75,6 +86,7 @@ public class ConversationServiceImpl implements ConversationService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
         conversation.setUser(user);
+        conversation.setGuestSession(null);
         conversation = conversationRepository.save(conversation);
         return toResponse(conversation);
     }

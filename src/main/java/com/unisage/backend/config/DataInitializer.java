@@ -535,6 +535,55 @@ public class DataInitializer implements CommandLineRunner {
 
         seedDepartment("KHOA_LY_LUAN_CHINH_TRI", khoa, "Khoa Lý Luận Chính Trị");
 
+        // ── Bo sung theo cau truc storage/private/academic_data ──────────────
+        // Khoa (con cua node "Khoa" o tren)
+        seedDepartment("KHOA_CN_CO_KHI",          khoa, "Khoa Công nghệ Cơ khí");
+        seedDepartment("KHOA_CN_DIEN",            khoa, "Khoa Công nghệ Điện");
+        seedDepartment("KHOA_CN_DIEN_TU",         khoa, "Khoa Công nghệ Điện tử");
+        seedDepartment("KHOA_CN_DONG_LUC",        khoa, "Khoa Công nghệ Động lực");
+        seedDepartment("KHOA_CN_HOA_HOC",         khoa, "Khoa Công nghệ Hóa học");
+        seedDepartment("KHOA_CN_MAY_THOI_TRANG",  khoa, "Khoa Công nghệ May - Thời trang");
+        seedDepartment("KHOA_CN_NHIET_LANH",      khoa, "Khoa Công nghệ Nhiệt - Lạnh");
+        seedDepartment("KHOA_KHOA_HOC_CO_BAN",    khoa, "Khoa Khoa học Cơ bản");
+        seedDepartment("KHOA_KHOA_HOC_SUC_KHOE",  khoa, "Khoa Khoa học Sức khỏe");
+        seedDepartment("KHOA_KY_THUAT_XAY_DUNG",  khoa, "Khoa Kỹ thuật Xây dựng");
+        seedDepartment("KHOA_LUAT_KHCT",          khoa, "Khoa Luật - Khoa học Chính trị");
+        seedDepartment("KHOA_NGOAI_NGU",          khoa, "Khoa Ngoại ngữ");
+        seedDepartment("KHOA_QTKD",               khoa, "Khoa Quản trị Kinh doanh");
+        seedDepartment("KHOA_THUONG_MAI_DU_LICH", khoa, "Khoa Thương mại - Du lịch");
+
+        // Phong ban / don vi truc thuoc
+        seedDepartment("BAN_QUAN_LY_KTX",         null, "Ban Quản lý Ký túc xá");
+        seedDepartment("PHONG_KHAO_THI_DBCL",     null, "Phòng Khảo thí - Đảm bảo Chất lượng");
+        seedDepartment("PHONG_QLKH_HTQT",         null, "Phòng Quản lý Khoa học - Hợp tác Quốc tế");
+        seedDepartment("PHONG_TO_CHUC_HANH_CHINH", null, "Phòng Tổ chức - Hành chính");
+        seedDepartment("TAP_CHI_KHCN",            null, "Tạp chí Khoa học và Công nghệ");
+        seedDepartment("VAN_PHONG_DANG_UY",       null, "Văn phòng Đảng ủy");
+
+        // Doan the
+        Department doanThe = seedDepartment("DoanThe", null, null);
+        seedDepartment("CONG_DOAN",               doanThe, "Công đoàn Trường");
+        seedDepartment("DOAN_HOI_SV",             doanThe, "Đoàn Thanh niên - Hội Sinh viên");
+
+        // Phan hieu / co so
+        Department phanHieu = seedDepartment("PhanHieu", null, null);
+        seedDepartment("CO_SO_THANH_HOA",         phanHieu, "Cơ sở Thanh Hóa");
+        seedDepartment("PHAN_HIEU_QUANG_NGAI",    phanHieu, "Phân hiệu Quảng Ngãi");
+
+        // Trung tam
+        Department trungTam = seedDepartment("TrungTam", null, null);
+        seedDepartment("TT_GDQP_THE_CHAT",        trungTam, "Trung tâm Giáo dục Quốc phòng - Thể chất");
+        seedDepartment("TT_NC_MAY_CONG_NGHIEP",   trungTam, "Trung tâm Nghiên cứu Máy Công nghiệp");
+        seedDepartment("TT_NGOAI_NGU",            trungTam, "Trung tâm Ngoại ngữ");
+        seedDepartment("TT_QUAN_TRI_HE_THONG",    trungTam, "Trung tâm Quản trị Hệ thống");
+        seedDepartment("TT_TIN_HOC",              trungTam, "Trung tâm Tin học");
+
+        // Vien
+        Department vien = seedDepartment("Vien", null, null);
+        seedDepartment("VIEN_CNSH_THUC_PHAM",     vien, "Viện Công nghệ Sinh học - Thực phẩm");
+        seedDepartment("VIEN_DTQT_SAU_DAI_HOC",   vien, "Viện Đào tạo Quốc tế và Sau Đại học");
+        seedDepartment("VIEN_TAI_CHINH_KE_TOAN",  vien, "Viện Tài chính - Kế toán");
+
         log.info("  Departments ready.");
     }
 

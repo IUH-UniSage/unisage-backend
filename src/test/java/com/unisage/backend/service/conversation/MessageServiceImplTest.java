@@ -13,6 +13,7 @@ import com.unisage.backend.dto.request.SendMessageRequest;
 import com.unisage.backend.dto.request.UpdateMessageRequest;
 import com.unisage.backend.dto.response.MessageResponse;
 import com.unisage.backend.entity.Conversation;
+import com.unisage.backend.entity.GuestSession;
 import com.unisage.backend.entity.Message;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.entity.enums.MsgRole;
@@ -22,6 +23,8 @@ import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
 import com.unisage.backend.repository.ConversationRepository;
 import com.unisage.backend.repository.MessageRepository;
+import com.unisage.backend.service.guestsession.GuestSessionService;
+import com.unisage.backend.service.guestsession.GuestSessionService.GuestSessionResolution;
 import com.unisage.backend.service.usagelimit.UsageLimitService;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +39,7 @@ class MessageServiceImplTest {
     private ConversationRepository conversationRepository;
     private ChatModelRepository chatModelRepository;
     private UsageLimitService usageLimitService;
+    private GuestSessionService guestSessionService;
     private MessageServiceImpl messageService;
 
     @BeforeEach
@@ -44,12 +48,15 @@ class MessageServiceImplTest {
         conversationRepository = mock(ConversationRepository.class);
         chatModelRepository = mock(ChatModelRepository.class);
         usageLimitService = mock(UsageLimitService.class);
+        guestSessionService = mock(GuestSessionService.class);
 
         messageService = new MessageServiceImpl(
-                messageRepository, conversationRepository, chatModelRepository, usageLimitService);
+                messageRepository, conversationRepository, chatModelRepository, usageLimitService,
+                guestSessionService);
         ReflectionTestUtils.setField(messageService, "maxMessageHistory", 20);
 
         when(messageRepository.save(any(Message.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(guestSessionService.resolveAndTouch(any())).thenReturn(Optional.empty());
     }
 
     // ── update() ─────────────────────────────────────────────────────────
@@ -360,7 +367,7 @@ class MessageServiceImplTest {
                 .content("hi")
                 .build();
 
-        MessageResponse response = messageService.send(request, ownerId, "1.2.3.4");
+        MessageResponse response = messageService.send(request, ownerId, null);
 
         assertThat(response.content()).isEqualTo("hi");
     }
@@ -379,7 +386,7 @@ class MessageServiceImplTest {
                 .build();
 
         UUID intruderId = UUID.randomUUID();
-        assertThatThrownBy(() -> messageService.send(request, intruderId, "1.2.3.4"))
+        assertThatThrownBy(() -> messageService.send(request, intruderId, null))
                 .isInstanceOf(AppException.class)
                 .extracting(e -> ((AppException) e).getErrorCode())
                 .isEqualTo(ErrorCode.AUTH_UNAUTHORIZED);
@@ -398,17 +405,20 @@ class MessageServiceImplTest {
                 .content("hi")
                 .build();
 
-        assertThatThrownBy(() -> messageService.send(request, null, "1.2.3.4"))
+        assertThatThrownBy(() -> messageService.send(request, null, "some-token"))
                 .isInstanceOf(AppException.class)
                 .extracting(e -> ((AppException) e).getErrorCode())
                 .isEqualTo(ErrorCode.AUTH_UNAUTHORIZED);
     }
 
     @Test
-    void send_guestConversation_sameIp_succeeds() {
+    void send_guestConversation_sameSession_succeeds() {
         UUID conversationId = UUID.randomUUID();
-        Conversation conversation = conversation(conversationId, null, "9.9.9.9");
+        GuestSession session = guestSession(UUID.randomUUID());
+        Conversation conversation = conversation(conversationId, null, session);
         when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+        when(guestSessionService.resolveAndTouch("token-a"))
+                .thenReturn(Optional.of(new GuestSessionResolution(session, "token-a")));
 
         SendMessageRequest request = SendMessageRequest.builder()
                 .conversationId(conversationId)
@@ -416,16 +426,20 @@ class MessageServiceImplTest {
                 .content("hi")
                 .build();
 
-        MessageResponse response = messageService.send(request, null, "9.9.9.9");
+        MessageResponse response = messageService.send(request, null, "token-a");
 
         assertThat(response.content()).isEqualTo("hi");
     }
 
     @Test
-    void send_guestConversation_differentIp_throwsUnauthorized() {
+    void send_guestConversation_differentSession_throwsUnauthorized() {
         UUID conversationId = UUID.randomUUID();
-        Conversation conversation = conversation(conversationId, null, "9.9.9.9");
+        GuestSession ownerSession = guestSession(UUID.randomUUID());
+        GuestSession callerSession = guestSession(UUID.randomUUID());
+        Conversation conversation = conversation(conversationId, null, ownerSession);
         when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+        when(guestSessionService.resolveAndTouch("token-b"))
+                .thenReturn(Optional.of(new GuestSessionResolution(callerSession, "token-b")));
 
         SendMessageRequest request = SendMessageRequest.builder()
                 .conversationId(conversationId)
@@ -433,7 +447,27 @@ class MessageServiceImplTest {
                 .content("hi")
                 .build();
 
-        assertThatThrownBy(() -> messageService.send(request, null, "1.1.1.1"))
+        assertThatThrownBy(() -> messageService.send(request, null, "token-b"))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_UNAUTHORIZED);
+    }
+
+    @Test
+    void send_guestConversation_missingOrInvalidCookie_throwsUnauthorized() {
+        UUID conversationId = UUID.randomUUID();
+        GuestSession ownerSession = guestSession(UUID.randomUUID());
+        Conversation conversation = conversation(conversationId, null, ownerSession);
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+        // no stubbing for resolveAndTouch(null) -> falls back to the default Optional.empty() stub
+
+        SendMessageRequest request = SendMessageRequest.builder()
+                .conversationId(conversationId)
+                .role(MsgRole.USER)
+                .content("hi")
+                .build();
+
+        assertThatThrownBy(() -> messageService.send(request, null, null))
                 .isInstanceOf(AppException.class)
                 .extracting(e -> ((AppException) e).getErrorCode())
                 .isEqualTo(ErrorCode.AUTH_UNAUTHORIZED);
@@ -442,8 +476,11 @@ class MessageServiceImplTest {
     @Test
     void send_guestConversation_loggedInCallerNotYetClaimed_throwsUnauthorized() {
         UUID conversationId = UUID.randomUUID();
-        Conversation conversation = conversation(conversationId, null, "9.9.9.9");
+        GuestSession session = guestSession(UUID.randomUUID());
+        Conversation conversation = conversation(conversationId, null, session);
         when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+        when(guestSessionService.resolveAndTouch("token-a"))
+                .thenReturn(Optional.of(new GuestSessionResolution(session, "token-a")));
 
         SendMessageRequest request = SendMessageRequest.builder()
                 .conversationId(conversationId)
@@ -451,7 +488,7 @@ class MessageServiceImplTest {
                 .content("hi")
                 .build();
 
-        assertThatThrownBy(() -> messageService.send(request, UUID.randomUUID(), "9.9.9.9"))
+        assertThatThrownBy(() -> messageService.send(request, UUID.randomUUID(), "token-a"))
                 .isInstanceOf(AppException.class)
                 .extracting(e -> ((AppException) e).getErrorCode())
                 .isEqualTo(ErrorCode.AUTH_UNAUTHORIZED);
@@ -463,8 +500,12 @@ class MessageServiceImplTest {
         return Conversation.builder().id(id).build();
     }
 
-    private Conversation conversation(UUID id, User owner, String ipAddress) {
-        return Conversation.builder().id(id).user(owner).ipAddress(ipAddress).build();
+    private Conversation conversation(UUID id, User owner, GuestSession guestSession) {
+        return Conversation.builder().id(id).user(owner).guestSession(guestSession).build();
+    }
+
+    private GuestSession guestSession(UUID id) {
+        return GuestSession.builder().id(id).build();
     }
 
     private Message assistantMessage(UUID id, Conversation conversation, MsgStatus status, String content) {
