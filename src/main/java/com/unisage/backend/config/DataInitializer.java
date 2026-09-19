@@ -59,9 +59,11 @@ public class DataInitializer implements CommandLineRunner {
         Map<String, Permission> perms = seedPermissions();
 
         // 2. Seed roles
-        Role superAdmin  = seedRole(PredefinedRoles.SUPER_ADMIN,  "Quyền quản trị tối cao của hệ thống");
-        Role ingestAdmin = seedRole(PredefinedRoles.INGEST_ADMIN, "Quản trị nạp liệu và tài liệu");
-        Role userRole    = seedRole(PredefinedRoles.USER,          "Người dùng cuối");
+        Role superAdmin  = seedRole(PredefinedRoles.SUPER_ADMIN,  "Quyền quản trị tối cao của hệ thống", true);
+        Role ingestAdmin = seedRole(PredefinedRoles.INGEST_ADMIN, "Quản trị nạp liệu và tài liệu", true);
+        // The end-user role is not a system role: the frontend uses this flag to decide who sees the
+        // admin-workspace link, and a plain USER must not.
+        Role userRole    = seedRole(PredefinedRoles.USER,          "Người dùng cuối", false);
 
         // 3. Assign permissions per role
         assignSuperAdmin(superAdmin, perms);     // SUPER_ADMIN gets all _ALL permissions
@@ -345,12 +347,12 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     // ─── Role helpers ────────────────────────────────────────────────────
-    private Role seedRole(String name, String description) {
+    private Role seedRole(String name, String description, boolean isSystemRole) {
         return roleRepository.findByName(name).orElseGet(() -> {
             Role r = Role.builder()
                     .name(name)
                     .description(description)
-                    .isSystemRole(true)
+                    .isSystemRole(isSystemRole)
                     .isActive(true)
                     .build();
             roleRepository.save(r);
