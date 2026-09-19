@@ -40,6 +40,7 @@ public enum ErrorCode {
     USAGE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, 2130,
             "Bạn đã dùng hết số tin nhắn miễn phí hôm nay. Quay lại sau 00:00 hoặc đăng nhập để tiếp tục."),
     ACCESS_LEVEL_NOT_FOUND(HttpStatus.NOT_FOUND, 2131, "Access Level không tồn tại."),
+    TICKET_NOT_FOUND(HttpStatus.NOT_FOUND, 2139, "Yêu cầu hỗ trợ không tồn tại."),
 
     // Business rule errors
     EMAIL_EXISTED(HttpStatus.BAD_REQUEST, 2115, "Email này đã được sử dụng!"),
@@ -55,6 +56,10 @@ public enum ErrorCode {
     MESSAGE_INVALID_STATUS_TRANSITION(HttpStatus.BAD_REQUEST, 2136, "Chuyển trạng thái tin nhắn không hợp lệ."),
     MESSAGE_CONTENT_CONFLICT(HttpStatus.CONFLICT, 2137, "Tin nhắn đã được hoàn tất trước đó với nội dung khác."),
     CURRENT_PASSWORD_INCORRECT(HttpStatus.BAD_REQUEST, 2138, "Mật khẩu hiện tại không chính xác."),
+    TICKET_ALREADY_EXISTS(HttpStatus.BAD_REQUEST, 2140, "Tin nhắn này đã có yêu cầu hỗ trợ."),
+    TICKET_MESSAGE_INVALID(HttpStatus.BAD_REQUEST, 2141, "Chỉ có thể báo cáo câu trả lời của trợ lý trong hội thoại của bạn."),
+    TICKET_INVALID_STATUS_TRANSITION(HttpStatus.BAD_REQUEST, 2142, "Yêu cầu hỗ trợ đã đóng, không thể thay đổi nữa."),
+    TICKET_RESOLUTION_REQUIRED(HttpStatus.BAD_REQUEST, 2143, "Cần nhập nội dung phản hồi khi đánh dấu đã giải quyết."),
 
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),

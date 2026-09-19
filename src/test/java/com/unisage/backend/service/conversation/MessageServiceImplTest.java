@@ -15,6 +15,7 @@ import com.unisage.backend.dto.response.MessageResponse;
 import com.unisage.backend.entity.Conversation;
 import com.unisage.backend.entity.GuestSession;
 import com.unisage.backend.entity.Message;
+import com.unisage.backend.entity.Ticket;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.entity.enums.MsgRole;
 import com.unisage.backend.entity.enums.MsgStatus;
@@ -25,6 +26,7 @@ import com.unisage.backend.repository.ConversationRepository;
 import com.unisage.backend.repository.MessageRepository;
 import com.unisage.backend.service.guestsession.GuestSessionService;
 import com.unisage.backend.service.guestsession.GuestSessionService.GuestSessionResolution;
+import com.unisage.backend.repository.TicketRepository;
 import com.unisage.backend.service.usagelimit.UsageLimitService;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,6 +42,7 @@ class MessageServiceImplTest {
     private ChatModelRepository chatModelRepository;
     private UsageLimitService usageLimitService;
     private GuestSessionService guestSessionService;
+    private TicketRepository ticketRepository;
     private MessageServiceImpl messageService;
 
     @BeforeEach
@@ -49,10 +52,11 @@ class MessageServiceImplTest {
         chatModelRepository = mock(ChatModelRepository.class);
         usageLimitService = mock(UsageLimitService.class);
         guestSessionService = mock(GuestSessionService.class);
+        ticketRepository = mock(TicketRepository.class);
 
         messageService = new MessageServiceImpl(
                 messageRepository, conversationRepository, chatModelRepository, usageLimitService,
-                guestSessionService);
+                guestSessionService, ticketRepository);
         ReflectionTestUtils.setField(messageService, "maxMessageHistory", 20);
 
         when(messageRepository.save(any(Message.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -349,6 +353,46 @@ class MessageServiceImplTest {
         List<MessageResponse> result = messageService.getByConversation(conversationId, 10);
 
         assertThat(result).hasSize(3);
+    }
+
+    @Test
+    void getByConversation_marksOnlyReportedMessagesWithTheirTicketId() {
+        UUID conversationId = UUID.randomUUID();
+        List<Message> messages = buildMessages(conversationId, 3);
+        UUID reportedMessageId = messages.get(1).getId();
+        UUID ticketId = UUID.randomUUID();
+        Ticket ticket = Ticket.builder().id(ticketId).message(messages.get(1)).build();
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
+        when(ticketRepository.findByMessageIdIn(any())).thenReturn(List.of(ticket));
+
+        List<MessageResponse> result = messageService.getByConversation(conversationId, 10);
+
+        assertThat(result).extracting(MessageResponse::ticketId).containsExactly(null, ticketId, null);
+        assertThat(result.get(1).id()).isEqualTo(reportedMessageId);
+    }
+
+    @Test
+    void getById_includesTicketIdWhenTheMessageWasReported() {
+        UUID messageId = UUID.randomUUID();
+        UUID ticketId = UUID.randomUUID();
+        Conversation conversation = Conversation.builder().id(UUID.randomUUID()).build();
+        Message message = assistantMessage(messageId, conversation, MsgStatus.COMPLETED, "answer");
+        when(messageRepository.findById(messageId)).thenReturn(Optional.of(message));
+        when(ticketRepository.findByMessageId(messageId))
+                .thenReturn(Optional.of(Ticket.builder().id(ticketId).build()));
+
+        assertThat(messageService.getById(messageId).ticketId()).isEqualTo(ticketId);
+    }
+
+    @Test
+    void getById_ticketIdIsNullWhenNotReported() {
+        UUID messageId = UUID.randomUUID();
+        Conversation conversation = Conversation.builder().id(UUID.randomUUID()).build();
+        Message message = assistantMessage(messageId, conversation, MsgStatus.COMPLETED, "answer");
+        when(messageRepository.findById(messageId)).thenReturn(Optional.of(message));
+        when(ticketRepository.findByMessageId(messageId)).thenReturn(Optional.empty());
+
+        assertThat(messageService.getById(messageId).ticketId()).isNull();
     }
 
     // ── send() ownership ─────────────────────────────────────────────────

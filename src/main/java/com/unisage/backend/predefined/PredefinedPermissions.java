@@ -51,6 +51,13 @@ public final class PredefinedPermissions {
     public static final String ACCESS_LEVEL_UPDATE = "ACCESS_LEVEL_UPDATE";
     public static final String ACCESS_LEVEL_DELETE = "ACCESS_LEVEL_DELETE";
 
+    // ─── Ticket ───────────────────────────────────────────────────────────
+    public static final String TICKET_ALL    = "TICKET_ALL";
+    public static final String TICKET_READ   = "TICKET_READ";
+    public static final String TICKET_CREATE = "TICKET_CREATE";
+    public static final String TICKET_UPDATE = "TICKET_UPDATE";
+    public static final String TICKET_DELETE = "TICKET_DELETE";
+
     // ─── Department (Knowledge-Base node) ──────────────────────────────────
     public static final String DEPARTMENT_ALL    = "DEPARTMENT_ALL";
     public static final String DEPARTMENT_READ   = "DEPARTMENT_READ";

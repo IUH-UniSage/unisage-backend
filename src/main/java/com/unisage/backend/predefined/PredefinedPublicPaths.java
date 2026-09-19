@@ -15,7 +15,12 @@ public final class PredefinedPublicPaths {
      */
     public static final List<PublicPath> AUTHENTICATED_ONLY_PATHS = List.of(
             new PublicPath("GET", "/users/me"),
-            new PublicPath("PATCH", "/users/me/password")
+            new PublicPath("PATCH", "/users/me/password"),
+            // Support tickets: a user files and reads only their own (id from the JWT). Admin
+            // list/detail/update stay on TICKET_* Permission rows.
+            new PublicPath("POST", "/tickets"),
+            new PublicPath("GET", "/tickets/my"),
+            new PublicPath("GET", "/tickets/my/*")
     );
 
     public static final List<PublicPath> PUBLIC_PATHS = List.of(

@@ -24,6 +24,9 @@ public enum ResourceType {
     CONVERSATION("Hội thoại"),
     MESSAGE("Tin nhắn"),
 
+    // Support
+    TICKET("Yêu cầu hỗ trợ"),
+
     // Logs
     AUDIT_LOG("Nhật ký hệ thống"),
 

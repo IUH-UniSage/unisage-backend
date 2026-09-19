@@ -38,6 +38,7 @@
     { "key": "messageId", "value": "" },
     { "key": "assistantMessageId", "value": "" },
     { "key": "accessLevelId", "value": "" },
+    { "key": "ticketId", "value": "" },
     { "key": "ingestAdminDaoTaoToken", "value": "" },
     { "key": "regularUserToken", "value": "" },
     {
@@ -1535,6 +1536,537 @@
               "raw": "{{gateway_url}}/api/v1/master/messages/{{messageId}}",
               "host": ["{{gateway_url}}"],
               "path": ["api", "v1", "master", "messages", "{{messageId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tickets",
+      "description": "UNISAGE-82 - yêu cầu hỗ trợ (báo cáo câu trả lời của trợ lý). Chạy folder Messages trước để có {{assistantMessageId}} (tin nhắn ASSISTANT thuộc hội thoại của US-001), rồi chạy lần lượt các request bên dưới.\n\n- Phía user (US-001, token {{regularUserToken}}): POST /tickets, GET /tickets/my, GET /tickets/my/{id} - chỉ cần đăng nhập, không cần Permission.\n- Phía admin (SA-001, token {{accessToken}} mặc định của collection): GET /tickets, GET /tickets/{id}, PATCH /tickets/{id} - cần quyền TICKET_* (SUPER_ADMIN có sẵn qua SUPER_ADMIN_ALL).\n- Không có API xóa ticket.",
+      "item": [
+        {
+          "name": "Login - Regular User",
+          "auth": {
+            "type": "noauth"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.accessToken) { pm.collectionVariables.set('regularUserToken', json.data.accessToken); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"US-001\",\n  \"password\": \"123123\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/auth/login",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Đăng nhập user thường (US-001) và lưu token vào {{regularUserToken}}."
+          }
+        },
+        {
+          "name": "Create Ticket - Valid",
+          "auth": {
+            "type": "bearer",
+            "bearer": [
+              {
+                "key": "token",
+                "value": "{{regularUserToken}}",
+                "type": "string"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.id) { pm.collectionVariables.set('ticketId', json.data.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/tickets",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "tickets"
+              ]
+            },
+            "description": "Valid: {{assistantMessageId}} là tin ASSISTANT trong hội thoại của US-001, chưa có ticket. Kỳ vọng: 201 Created, status OPEN.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageId\": \"{{assistantMessageId}}\",\n  \"type\": \"AI_UNANSWERED\",\n  \"title\": \"Cau tra loi sai hoc phi\",\n  \"description\": \"AI tra loi sai muc hoc phi nganh CNTT\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Ticket - Invalid (Duplicate Message)",
+          "auth": {
+            "type": "bearer",
+            "bearer": [
+              {
+                "key": "token",
+                "value": "{{regularUserToken}}",
+                "type": "string"
+              }
+            ]
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/tickets",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "tickets"
+              ]
+            },
+            "description": "Invalid: message đã có ticket. Kỳ vọng: 400 Bad Request, errorCode TICKET_ALREADY_EXISTS (2140).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageId\": \"{{assistantMessageId}}\",\n  \"type\": \"OTHER\",\n  \"title\": \"Trung\",\n  \"description\": \"Bao cao lan hai\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Ticket - Invalid (Blank Title)",
+          "auth": {
+            "type": "bearer",
+            "bearer": [
+              {
+                "key": "token",
+                "value": "{{regularUserToken}}",
+                "type": "string"
+              }
+            ]
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/tickets",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "tickets"
+              ]
+            },
+            "description": "Invalid: title rỗng. Kỳ vọng: 400 Bad Request, errorCode VALIDATION_ERROR (2300), errors.title.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageId\": \"{{assistantMessageId}}\",\n  \"type\": \"OTHER\",\n  \"title\": \"\",\n  \"description\": \"Thieu tieu de\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Ticket - Invalid (Not An Assistant Message)",
+          "auth": {
+            "type": "bearer",
+            "bearer": [
+              {
+                "key": "token",
+                "value": "{{regularUserToken}}",
+                "type": "string"
+              }
+            ]
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/tickets",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "tickets"
+              ]
+            },
+            "description": "Invalid: {{messageId}} là tin USER (folder Messages). Kỳ vọng: 400 Bad Request, errorCode TICKET_MESSAGE_INVALID (2141).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageId\": \"{{messageId}}\",\n  \"type\": \"OTHER\",\n  \"title\": \"Sai loai tin\",\n  \"description\": \"Bao cao tin cua user\"\n}"
+            }
+          }
+        },
+        {
+          "name": "My Tickets - List",
+          "auth": {
+            "type": "bearer",
+            "bearer": [
+              {
+                "key": "token",
+                "value": "{{regularUserToken}}",
+                "type": "string"
+              }
+            ]
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/tickets/my?page=0&size=10",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "tickets",
+                "my"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "User xem ticket của chính mình, phân trang (page bắt đầu từ 0). Kỳ vọng: 200 OK."
+          }
+        },
+        {
+          "name": "My Tickets - Detail",
+          "auth": {
+            "type": "bearer",
+            "bearer": [
+              {
+                "key": "token",
+                "value": "{{regularUserToken}}",
+                "type": "string"
+              }
+            ]
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/tickets/my/{{ticketId}}",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "tickets",
+                "my",
+                "{{ticketId}}"
+              ]
+            },
+            "description": "Chi tiết ticket của mình, kèm questionContent (câu hỏi) và messageContent (câu trả lời bị báo cáo). Kỳ vọng: 200 OK."
+          }
+        },
+        {
+          "name": "User - Admin List (Forbidden)",
+          "auth": {
+            "type": "bearer",
+            "bearer": [
+              {
+                "key": "token",
+                "value": "{{regularUserToken}}",
+                "type": "string"
+              }
+            ]
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/tickets",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "tickets"
+              ]
+            },
+            "description": "User thường không có TICKET_READ. Kỳ vọng: 403 Forbidden."
+          }
+        },
+        {
+          "name": "Admin - List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/tickets?q=hoc&status=OPEN&page=0&size=10",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "tickets"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "hoc"
+                },
+                {
+                  "key": "status",
+                  "value": "OPEN"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Admin xem mọi ticket, lọc theo q (tiêu đề), status, type. Kỳ vọng: 200 OK."
+          }
+        },
+        {
+          "name": "Admin - Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/tickets/{{ticketId}}",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "tickets",
+                "{{ticketId}}"
+              ]
+            },
+            "description": "Kỳ vọng: 200 OK."
+          }
+        },
+        {
+          "name": "Admin - Update (Invalid - Resolved Without Resolution)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/tickets/{{ticketId}}",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "tickets",
+                "{{ticketId}}"
+              ]
+            },
+            "description": "RESOLVED cần resolution. Kỳ vọng: 400 Bad Request, errorCode TICKET_RESOLUTION_REQUIRED (2143).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"RESOLVED\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Admin - Update (Processing)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/tickets/{{ticketId}}",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "tickets",
+                "{{ticketId}}"
+              ]
+            },
+            "description": "Kỳ vọng: 200 OK.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"PROCESSING\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Admin - Update (Resolved With Resolution)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/tickets/{{ticketId}}",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "tickets",
+                "{{ticketId}}"
+              ]
+            },
+            "description": "Kỳ vọng: 200 OK.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"RESOLVED\",\n  \"resolution\": \"Da cap nhat lai muc hoc phi\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Admin - Update (Closed)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/tickets/{{ticketId}}",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "tickets",
+                "{{ticketId}}"
+              ]
+            },
+            "description": "CLOSED là trạng thái cuối. Kỳ vọng: 200 OK.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CLOSED\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Admin - Update (Invalid - Reopen Closed)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/tickets/{{ticketId}}",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "tickets",
+                "{{ticketId}}"
+              ]
+            },
+            "description": "Ticket đã CLOSED không đổi được nữa. Kỳ vọng: 400 Bad Request, errorCode TICKET_INVALID_STATUS_TRANSITION (2142).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"OPEN\"\n}"
             }
           }
         }

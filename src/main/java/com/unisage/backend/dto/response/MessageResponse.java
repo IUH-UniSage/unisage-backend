@@ -20,5 +20,7 @@ public record MessageResponse(
     Object citations,
     Float retrievalScore,
     Map<String, Object> metadata,
-    LocalDateTime createdAt
+    LocalDateTime createdAt,
+    /** The support ticket filed for this message, or null when none. */
+    UUID ticketId
 ) {}
