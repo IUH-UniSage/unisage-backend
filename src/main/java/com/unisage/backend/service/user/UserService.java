@@ -13,6 +13,7 @@ import com.unisage.backend.dto.response.UserDetailResponse;
 public interface UserService {
  UserResponse createUser(CreateUserRequest request);
  UserDetailResponse getUserById(UUID id);
+ UserResponse getMyProfile();
  PageResponse<List<UserResponse>> getAllUsers(Pageable pageable);
  UserDetailResponse updateUser(UUID id, UpdateUserRequest request);
  void deleteUser(UUID id);
@@ -20,4 +21,5 @@ public interface UserService {
  void deleteResources(List<UUID> ids);
  void recoverResources(List<UUID> ids);
  void changePassword(UUID id, String newPassword);
+ void changeMyPassword(String currentPassword, String newPassword);
 }

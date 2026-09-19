@@ -18,9 +18,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.AntPathMatcher;
 
+import com.unisage.backend.predefined.PredefinedPublicPaths.PublicPath;
+
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
 
+import static com.unisage.backend.predefined.PredefinedPublicPaths.AUTHENTICATED_ONLY_PATHS;
 import static com.unisage.backend.predefined.PredefinedPublicPaths.PUBLIC_PATHS;
 
 @Component
@@ -87,6 +91,11 @@ public class DynamicAuthorizationManager implements AuthorizationManager<Request
                 return new AuthorizationDecision(false);
             }
 
+            if (matches(AUTHENTICATED_ONLY_PATHS, normalizedPath, httpMethod)) {
+                log.debug("Authenticated-only path — granted: {}", normalizedPath);
+                return new AuthorizationDecision(true);
+            }
+
             boolean granted = user.getRole().getRolePermissions().stream()
                     .map(rp -> rp.getPermission())
                     .filter(p -> p != null && Boolean.TRUE.equals(p.getIsActive()))
@@ -113,7 +122,11 @@ public class DynamicAuthorizationManager implements AuthorizationManager<Request
     }
 
     private boolean isPublicPath(String path, String method) {
-        return PUBLIC_PATHS.stream().anyMatch(p ->
+        return matches(PUBLIC_PATHS, path, method);
+    }
+
+    private boolean matches(List<PublicPath> paths, String path, String method) {
+        return paths.stream().anyMatch(p ->
                 ("*".equals(p.method()) || p.method().equalsIgnoreCase(method))
                         && pathMatcher.match(p.pattern(), path));
     }
