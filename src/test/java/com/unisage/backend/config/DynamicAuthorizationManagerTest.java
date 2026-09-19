@@ -97,4 +97,24 @@ class DynamicAuthorizationManagerTest {
         assertThat(granted(authenticated(), "GET", "/users/" + UUID.randomUUID())).isFalse();
         assertThat(granted(authenticated(), "PUT", "/users/me")).isFalse();
     }
+
+    @Test
+    void ticketSelfServicePaths_grantedToAnyActiveUser() {
+        when(userRepository.findByIdWithPermissions(userId))
+                .thenReturn(Optional.of(user(UserStatus.ACTIVE, roleWithoutPermissions())));
+
+        assertThat(granted(authenticated(), "POST", "/tickets")).isTrue();
+        assertThat(granted(authenticated(), "GET", "/tickets/my")).isTrue();
+        assertThat(granted(authenticated(), "GET", "/tickets/my/" + UUID.randomUUID())).isTrue();
+    }
+
+    @Test
+    void ticketAdminPaths_stillRequireAPermissionRow() {
+        when(userRepository.findByIdWithPermissions(userId))
+                .thenReturn(Optional.of(user(UserStatus.ACTIVE, roleWithoutPermissions())));
+
+        assertThat(granted(authenticated(), "GET", "/tickets")).isFalse();
+        assertThat(granted(authenticated(), "GET", "/tickets/" + UUID.randomUUID())).isFalse();
+        assertThat(granted(authenticated(), "PATCH", "/tickets/" + UUID.randomUUID())).isFalse();
+    }
 }

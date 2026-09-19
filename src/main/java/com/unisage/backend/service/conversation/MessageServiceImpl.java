@@ -1,6 +1,7 @@
 package com.unisage.backend.service.conversation;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -14,6 +15,7 @@ import com.unisage.backend.entity.ChatModel;
 import com.unisage.backend.entity.Conversation;
 import com.unisage.backend.entity.GuestSession;
 import com.unisage.backend.entity.Message;
+import com.unisage.backend.entity.Ticket;
 import com.unisage.backend.entity.UsageLimit;
 import com.unisage.backend.entity.enums.MsgRole;
 import com.unisage.backend.entity.enums.MsgStatus;
@@ -22,6 +24,7 @@ import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
 import com.unisage.backend.repository.ConversationRepository;
 import com.unisage.backend.repository.MessageRepository;
+import com.unisage.backend.repository.TicketRepository;
 import com.unisage.backend.service.guestsession.GuestSessionService;
 import com.unisage.backend.service.usagelimit.UsageLimitService;
 
@@ -37,6 +40,7 @@ public class MessageServiceImpl implements MessageService {
     private final ChatModelRepository chatModelRepository;
     private final UsageLimitService usageLimitService;
     private final GuestSessionService guestSessionService;
+    private final TicketRepository ticketRepository;
 
     @Value("${app.message.max-history:20}")
     private int maxMessageHistory;
@@ -85,7 +89,7 @@ public class MessageServiceImpl implements MessageService {
 
         usageLimitService.increment(usageLimit);
 
-        return toResponse(message);
+        return toResponse(message, ticketIdOf(message));
     }
 
     @Override
@@ -106,7 +110,7 @@ public class MessageServiceImpl implements MessageService {
             boolean sameContent = message.getContent().equals(request.content());
             boolean sameStatus = message.getStatus() == request.status();
             if (sameContent && sameStatus) {
-                return toResponse(message);
+                return toResponse(message, ticketIdOf(message));
             }
             throw new AppException(ErrorCode.MESSAGE_CONTENT_CONFLICT);
         }
@@ -133,7 +137,7 @@ public class MessageServiceImpl implements MessageService {
         }
 
         message = messageRepository.save(message);
-        return toResponse(message);
+        return toResponse(message, ticketIdOf(message));
     }
 
     @Override
@@ -145,8 +149,13 @@ public class MessageServiceImpl implements MessageService {
             messages = messages.subList(messages.size() - effectiveLimit, messages.size());
         }
 
+        // One query for the whole page instead of one per message.
+        Map<UUID, UUID> ticketIdByMessage = messages.isEmpty() ? Map.of()
+                : ticketRepository.findByMessageIdIn(messages.stream().map(Message::getId).toList()).stream()
+                        .collect(Collectors.toMap(t -> t.getMessage().getId(), Ticket::getId));
+
         return messages.stream()
-                .map(this::toResponse)
+                .map(message -> toResponse(message, ticketIdByMessage.get(message.getId())))
                 .collect(Collectors.toList());
     }
 
@@ -154,7 +163,7 @@ public class MessageServiceImpl implements MessageService {
     public MessageResponse getById(UUID id) {
         Message message = messageRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.MESSAGE_NOT_FOUND));
-        return toResponse(message);
+        return toResponse(message, ticketIdOf(message));
     }
 
     /**
@@ -183,7 +192,11 @@ public class MessageServiceImpl implements MessageService {
         }
     }
 
-    private MessageResponse toResponse(Message message) {
+    private UUID ticketIdOf(Message message) {
+        return ticketRepository.findByMessageId(message.getId()).map(Ticket::getId).orElse(null);
+    }
+
+    private MessageResponse toResponse(Message message, UUID ticketId) {
         return MessageResponse.builder()
                 .id(message.getId())
                 .conversationId(message.getConversation().getId())
@@ -195,6 +208,7 @@ public class MessageServiceImpl implements MessageService {
                 .retrievalScore(message.getRetrievalScore())
                 .metadata(message.getMetadata())
                 .createdAt(message.getCreatedAt())
+                .ticketId(ticketId)
                 .build();
     }
 }

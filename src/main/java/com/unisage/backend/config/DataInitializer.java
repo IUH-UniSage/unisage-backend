@@ -241,6 +241,23 @@ public class DataInitializer implements CommandLineRunner {
                 "/access-levels/**", PermissionMethod.DELETE, ResourceType.ACCESS_LEVEL,
                 "Xóa cấp độ truy cập"),
 
+            // ── Ticket ────────────────────────────────────────────────────
+            def(PredefinedPermissions.TICKET_ALL,
+                "/tickets/**", PermissionMethod.ALL, ResourceType.TICKET,
+                "Toàn quyền yêu cầu hỗ trợ"),
+            def(PredefinedPermissions.TICKET_READ,
+                "/tickets/**", PermissionMethod.GET, ResourceType.TICKET,
+                "Xem yêu cầu hỗ trợ"),
+            def(PredefinedPermissions.TICKET_CREATE,
+                "/tickets", PermissionMethod.POST, ResourceType.TICKET,
+                "Tạo yêu cầu hỗ trợ"),
+            def(PredefinedPermissions.TICKET_UPDATE,
+                "/tickets/**", PermissionMethod.PATCH, ResourceType.TICKET,
+                "Cập nhật yêu cầu hỗ trợ"),
+            def(PredefinedPermissions.TICKET_DELETE,
+                "/tickets/**", PermissionMethod.DELETE, ResourceType.TICKET,
+                "Xóa yêu cầu hỗ trợ"),
+
             // ── Document (CREATE = ingest) ────────────────────────────────
             def(PredefinedPermissions.DOCUMENT_ALL,
                 "/documents/**", PermissionMethod.ALL, ResourceType.DOCUMENT,
