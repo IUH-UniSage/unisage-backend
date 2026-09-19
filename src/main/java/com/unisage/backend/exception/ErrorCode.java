@@ -54,6 +54,7 @@ public enum ErrorCode {
     MESSAGE_ROLE_NOT_ASSISTANT(HttpStatus.FORBIDDEN, 2135, "Chỉ có thể cập nhật tin nhắn của trợ lý (ASSISTANT)."),
     MESSAGE_INVALID_STATUS_TRANSITION(HttpStatus.BAD_REQUEST, 2136, "Chuyển trạng thái tin nhắn không hợp lệ."),
     MESSAGE_CONTENT_CONFLICT(HttpStatus.CONFLICT, 2137, "Tin nhắn đã được hoàn tất trước đó với nội dung khác."),
+    CURRENT_PASSWORD_INCORRECT(HttpStatus.BAD_REQUEST, 2138, "Mật khẩu hiện tại không chính xác."),
 
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),

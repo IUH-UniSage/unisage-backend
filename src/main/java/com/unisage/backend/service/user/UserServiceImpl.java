@@ -27,6 +27,7 @@ import com.unisage.backend.repository.RoleRepository;
 import com.unisage.backend.service.user.UserService;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
+import com.unisage.backend.utils.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -45,6 +46,7 @@ public class UserServiceImpl implements UserService {
     private final DepartmentRepository departmentRepository;
     private final UserDepartmentAccessRepository userDepartmentAccessRepository;
     private final AccessLevelRepository accessLevelRepository;
+    private final SecurityUtil securityUtil;
 
     @Override
     @Transactional
@@ -114,6 +116,14 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         return toDetailResponse(user);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserResponse getMyProfile() {
+        User user = userRepository.findById(securityUtil.getCurrentUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        return toResponse(user);
     }
 
     @Override
@@ -220,6 +230,18 @@ public class UserServiceImpl implements UserService {
     public void changePassword(UUID id, String newPassword) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+    }
+
+    @Override
+    @Transactional
+    public void changeMyPassword(String currentPassword, String newPassword) {
+        User user = userRepository.findById(securityUtil.getCurrentUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new AppException(ErrorCode.CURRENT_PASSWORD_INCORRECT);
+        }
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
     }

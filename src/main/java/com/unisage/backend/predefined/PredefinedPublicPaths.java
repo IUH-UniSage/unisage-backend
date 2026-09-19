@@ -8,6 +8,16 @@ public final class PredefinedPublicPaths {
     /** {@code method} is an HTTP method name, or "*" to match any method. */
     public record PublicPath(String method, String pattern) {}
 
+    /**
+     * Reachable by any authenticated, active user with a role — no {@code Permission} row needed.
+     * For self-service endpoints whose subject is always the caller (id resolved from the JWT,
+     * never from the request), so gating them per role would only lock out custom roles.
+     */
+    public static final List<PublicPath> AUTHENTICATED_ONLY_PATHS = List.of(
+            new PublicPath("GET", "/users/me"),
+            new PublicPath("PATCH", "/users/me/password")
+    );
+
     public static final List<PublicPath> PUBLIC_PATHS = List.of(
             // Auth
             new PublicPath("*", "/auth/**"),
