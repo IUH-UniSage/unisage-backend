@@ -10,6 +10,7 @@ import com.unisage.backend.dto.request.UpdateDocumentRequest;
 import com.unisage.backend.dto.request.UpdateDocumentStatusRequest;
 import com.unisage.backend.dto.response.CitationDocumentResponse;
 import com.unisage.backend.dto.response.DocumentResponse;
+import com.unisage.backend.dto.response.DocumentVersionResponse;
 import com.unisage.backend.dto.response.PageResponse;
 
 public interface DocumentService {
@@ -27,4 +28,6 @@ public interface DocumentService {
     PageResponse<List<DocumentResponse>> getAll(Pageable pageable);
 
     void softDelete(UUID id);
+
+    List<DocumentVersionResponse> getVersionHistory(UUID documentId);
 }
