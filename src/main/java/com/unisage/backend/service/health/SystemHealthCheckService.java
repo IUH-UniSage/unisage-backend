@@ -1,6 +1,12 @@
 package com.unisage.backend.service.health;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
+import org.springframework.data.domain.Pageable;
+
 import com.unisage.backend.dto.response.HealthCheckResponse;
+import com.unisage.backend.dto.response.PageResponse;
 
 public interface SystemHealthCheckService {
 
@@ -10,4 +16,16 @@ public interface SystemHealthCheckService {
      * frequently.
      */
     HealthCheckResponse checkNow();
+
+    /**
+     * Runs the same live check as {@link #checkNow()} and persists one
+     * {@code SystemHealthCheck} row — used by the scheduled history job.
+     */
+    void runAndPersist();
+
+    /**
+     * Pages through past {@code SystemHealthCheck} rows, most recent first, optionally
+     * filtered to a {@code [from, to]} window.
+     */
+    PageResponse<List<HealthCheckResponse>> getHistory(LocalDateTime from, LocalDateTime to, Pageable pageable);
 }
