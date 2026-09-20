@@ -99,4 +99,8 @@ public final class PredefinedPermissions {
     // ─── LlmTraceLog ──────────────────────────────────────────────────────
     public static final String LLM_TRACE_LOG_ALL  = "LLM_TRACE_LOG_ALL";
     public static final String LLM_TRACE_LOG_READ = "LLM_TRACE_LOG_READ";
+
+    // ─── SystemConfig ─────────────────────────────────────────────────────
+    public static final String SYSTEM_CONFIG_READ   = "SYSTEM_CONFIG_READ";
+    public static final String SYSTEM_CONFIG_UPDATE = "SYSTEM_CONFIG_UPDATE";
 }

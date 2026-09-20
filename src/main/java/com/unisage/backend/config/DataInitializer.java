@@ -340,7 +340,15 @@ public class DataInitializer implements CommandLineRunner {
                 "Toàn quyền nhật ký LLM"),
             def(PredefinedPermissions.LLM_TRACE_LOG_READ,
                 "/llm-trace-logs/**", PermissionMethod.GET, ResourceType.LLM_TRACE_LOG,
-                "Xem nhật ký LLM")
+                "Xem nhật ký LLM"),
+
+            // ── SystemConfig ─────────────────────────────────────────────
+            def(PredefinedPermissions.SYSTEM_CONFIG_READ,
+                "/system-configs/**", PermissionMethod.GET, ResourceType.SYSTEM_CONFIG,
+                "Xem cấu hình hệ thống"),
+            def(PredefinedPermissions.SYSTEM_CONFIG_UPDATE,
+                "/system-configs/**", PermissionMethod.PUT, ResourceType.SYSTEM_CONFIG,
+                "Cập nhật cấu hình hệ thống")
         ));
 
         return list;
@@ -361,7 +369,11 @@ public class DataInitializer implements CommandLineRunner {
         });
     }
 
-    /** SUPER_ADMIN gets every _ALL permission. */
+    /**
+     * SUPER_ADMIN gets every _ALL permission, plus SystemConfig's READ/UPDATE — SystemConfig has
+     * no _ALL wildcard (only GET/PUT are ever exposed, no create/delete), so it is granted
+     * explicitly here instead.
+     */
     private void assignSuperAdmin(Role role, Map<String, Permission> perms) {
         int count = 0;
         for (Permission p : perms.values()) {
@@ -370,7 +382,13 @@ public class DataInitializer implements CommandLineRunner {
                 count++;
             }
         }
-        log.info("  {} _ALL permissions assigned to role '{}'.", count, role.getName());
+        List<String> explicit = List.of(
+            permKey(PredefinedPermissions.SYSTEM_CONFIG_READ),
+            permKey(PredefinedPermissions.SYSTEM_CONFIG_UPDATE)
+        );
+        assign(role, perms, explicit);
+        count += explicit.size();
+        log.info("  {} permissions assigned to role '{}'.", count, role.getName());
     }
 
     /**
