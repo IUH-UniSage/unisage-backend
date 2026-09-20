@@ -2,6 +2,7 @@ package com.unisage.backend.service.file;
 
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
+import com.unisage.backend.service.systemconfig.SystemConfigResolver;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,9 +14,11 @@ import org.springframework.web.multipart.MultipartFile;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class FileServiceImplTest {
 
@@ -26,7 +29,12 @@ class FileServiceImplTest {
     void setUp() {
         minioClient = mock(MinioClient.class);
         MinioClient publicMinioClient = mock(MinioClient.class);
-        fileService = new FileServiceImpl(minioClient, publicMinioClient);
+        SystemConfigResolver configResolver = mock(SystemConfigResolver.class);
+        // No system_configs row in these unit tests - fall through to the fallback default,
+        // same as production behavior for a missing/unseeded row.
+        when(configResolver.getStringList(any(), any())).thenAnswer(inv -> inv.getArgument(1));
+        when(configResolver.getInt(any(), anyInt())).thenAnswer(inv -> inv.getArgument(1));
+        fileService = new FileServiceImpl(minioClient, publicMinioClient, configResolver);
         ReflectionTestUtils.setField(fileService, "bucket", "unisage-documents");
     }
 

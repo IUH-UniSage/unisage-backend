@@ -2,10 +2,12 @@ package com.unisage.backend.scheduler;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import com.unisage.backend.service.guestsession.GuestSessionService;
+import com.unisage.backend.service.systemconfig.SystemConfigResolver;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -19,8 +21,9 @@ class GuestSessionCleanupJobTest {
     @BeforeEach
     void setUp() {
         guestSessionService = mock(GuestSessionService.class);
-        job = new GuestSessionCleanupJob(guestSessionService);
-        ReflectionTestUtils.setField(job, "batchSize", 2);
+        SystemConfigResolver configResolver = mock(SystemConfigResolver.class);
+        when(configResolver.getInt(any(), anyInt())).thenReturn(2);
+        job = new GuestSessionCleanupJob(guestSessionService, configResolver);
     }
 
     @Test

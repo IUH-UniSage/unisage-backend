@@ -1,10 +1,10 @@
 package com.unisage.backend.scheduler;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import com.unisage.backend.service.guestsession.GuestSessionService;
+import com.unisage.backend.service.systemconfig.SystemConfigResolver;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,12 +27,13 @@ import lombok.extern.slf4j.Slf4j;
 public class GuestSessionCleanupJob {
 
     private final GuestSessionService guestSessionService;
-
-    @Value("${app.guest-session.cleanup.batch-size:500}")
-    private int batchSize;
+    private final SystemConfigResolver configResolver;
 
     @Scheduled(cron = "${app.guest-session.cleanup.cron:0 0 3 * * *}")
     public void purgeExpiredSessions() {
+        // Read live on every run (this job only runs once/day) rather than caching in a field,
+        // so an admin-edited batch size takes effect on the next run, no redeploy needed.
+        int batchSize = configResolver.getInt("maintenance.guest_session.cleanup_batch_size", 500);
         int totalPurged = 0;
         int purgedThisBatch;
         do {

@@ -1,6 +1,8 @@
 package com.unisage.backend.service.file;
 
 import java.io.InputStream;
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -11,6 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.unisage.backend.entity.enums.AllowedFileType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
+import com.unisage.backend.service.systemconfig.SystemConfigResolver;
 
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
@@ -34,6 +37,7 @@ public class FileServiceImpl implements FileService {
      * falls back to matching the parameter name against the bean name to disambiguate.
      */
     private final MinioClient publicMinioClient;
+    private final SystemConfigResolver configResolver;
 
     @Value("${minio.bucket}")
     private String bucket;
@@ -41,11 +45,19 @@ public class FileServiceImpl implements FileService {
     @Value("${minio.presigned-url-expiry-seconds}")
     private int expirySeconds;
 
+    // Fallback whitelist when the config row is missing/corrupted - AllowedFileType is no longer
+    // the source of truth at runtime (ingest.allowed_file_extensions in System Settings is), but
+    // its values still document/seed the intended default set.
+    private static final List<String> DEFAULT_ALLOWED_EXTENSIONS = Arrays.stream(AllowedFileType.values())
+            .map(AllowedFileType::getExtension)
+            .toList();
+
     @Override
     public String upload(MultipartFile file) {
         String originalFilename = file.getOriginalFilename() != null
                 ? file.getOriginalFilename() : "file";
         validateFileType(originalFilename);
+        validateFileSize(file);
         String objectKey = UUID.randomUUID() + "_" + originalFilename;
 
         try (InputStream inputStream = file.getInputStream()) {
@@ -63,9 +75,30 @@ public class FileServiceImpl implements FileService {
     }
 
     private void validateFileType(String originalFilename) {
-        if (AllowedFileType.fromExtension(originalFilename).isEmpty()) {
+        List<String> allowedExtensions = configResolver.getStringList(
+                "ingest.allowed_file_extensions", DEFAULT_ALLOWED_EXTENSIONS);
+        String extension = extractExtension(originalFilename);
+        if (extension == null || !allowedExtensions.contains(extension)) {
             log.warn("Rejected upload of '{}': not in the allowed file type whitelist", originalFilename);
             throw new AppException(ErrorCode.FILE_TYPE_NOT_ALLOWED);
+        }
+    }
+
+    private String extractExtension(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return null;
+        }
+        String lower = filename.toLowerCase();
+        int dotIndex = lower.lastIndexOf('.');
+        return (dotIndex < 0 || dotIndex == lower.length() - 1) ? null : lower.substring(dotIndex);
+    }
+
+    private void validateFileSize(MultipartFile file) {
+        int maxSizeMb = configResolver.getInt("ingest.max_file_size_mb", 10);
+        long maxSizeBytes = (long) maxSizeMb * 1024 * 1024;
+        if (file.getSize() > maxSizeBytes) {
+            log.warn("Rejected upload of size {} bytes: exceeds {} MB limit", file.getSize(), maxSizeMb);
+            throw new AppException(ErrorCode.FILE_SIZE_EXCEEDED);
         }
     }
 

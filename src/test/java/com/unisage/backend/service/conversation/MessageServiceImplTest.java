@@ -7,7 +7,6 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import com.unisage.backend.dto.request.SendMessageRequest;
 import com.unisage.backend.dto.request.UpdateMessageRequest;
@@ -27,11 +26,13 @@ import com.unisage.backend.repository.MessageRepository;
 import com.unisage.backend.service.guestsession.GuestSessionService;
 import com.unisage.backend.service.guestsession.GuestSessionService.GuestSessionResolution;
 import com.unisage.backend.repository.TicketRepository;
+import com.unisage.backend.service.systemconfig.SystemConfigResolver;
 import com.unisage.backend.service.usagelimit.UsageLimitService;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -53,11 +54,12 @@ class MessageServiceImplTest {
         usageLimitService = mock(UsageLimitService.class);
         guestSessionService = mock(GuestSessionService.class);
         ticketRepository = mock(TicketRepository.class);
+        SystemConfigResolver configResolver = mock(SystemConfigResolver.class);
+        when(configResolver.getInt(any(), anyInt())).thenAnswer(inv -> inv.getArgument(1));
 
         messageService = new MessageServiceImpl(
                 messageRepository, conversationRepository, chatModelRepository, usageLimitService,
-                guestSessionService, ticketRepository);
-        ReflectionTestUtils.setField(messageService, "maxMessageHistory", 20);
+                guestSessionService, ticketRepository, configResolver);
 
         when(messageRepository.save(any(Message.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(guestSessionService.resolveAndTouch(any())).thenReturn(Optional.empty());
