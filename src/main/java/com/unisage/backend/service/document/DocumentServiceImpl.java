@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import com.unisage.backend.dto.request.CreateDocumentRequest;
 import com.unisage.backend.dto.request.UpdateDocumentRequest;
 import com.unisage.backend.dto.request.UpdateDocumentStatusRequest;
+import com.unisage.backend.dto.response.CitationDocumentResponse;
 import com.unisage.backend.dto.response.DocumentResponse;
 import com.unisage.backend.dto.response.PageResponse;
 import com.unisage.backend.entity.AccessLevel;
@@ -158,6 +159,29 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
+    public CitationDocumentResponse getCitationById(UUID id) {
+        Document document = documentRepository.findById(id)
+                .filter(d -> d.getDeletedAt() == null)
+                .orElseThrow(() -> new AppException(ErrorCode.DOCUMENT_NOT_FOUND));
+        return CitationDocumentResponse.builder()
+                .id(document.getId())
+                .title(document.getTitle())
+                .fileType(document.getFileType())
+                .fileName(toDisplayFileName(document.getSourceUrl()))
+                .fileUrl(resolveFileUrl(document))
+                .build();
+    }
+
+    /** Object keys are stored as {@code <uuid>_<original name>}; show only the original name. */
+    private static String toDisplayFileName(String objectKey) {
+        if (objectKey == null || objectKey.isBlank()) {
+            return null;
+        }
+        String name = objectKey.substring(objectKey.lastIndexOf('/') + 1);
+        return name.replaceFirst("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}_", "");
+    }
+
+    @Override
     public PageResponse<List<DocumentResponse>> getAll(Pageable pageable) {
         Page<Document> page = documentRepository.findAllActive(pageable);
         return PageResponse.fromPage(page, this::mapToResponse);
@@ -199,18 +223,18 @@ public class DocumentServiceImpl implements DocumentService {
             return fileService.getPresignedUrl(document.getSourceUrl());
         }
 
-        UUID userId = securityUtil.getCurrentUserIdOrNull();
-        if (userId == null) {
-            return null;
-        }
+        // UUID userId = securityUtil.getCurrentUserIdOrNull();
+        // if (userId == null) {
+        //     return null;
+        // }
 
-        User requester = userRepository.findById(userId).orElse(null);
-        int effectiveLevel = requester != null && requester.getAccessLevel() != null
-                ? requester.getAccessLevel().getLevel() : 0;
-        int required = document.getMinAccessLevel() != null ? document.getMinAccessLevel().getLevel() : 0;
-        if (effectiveLevel < required) {
-            return null;
-        }
+        // User requester = userRepository.findById(userId).orElse(null);
+        // int effectiveLevel = requester != null && requester.getAccessLevel() != null
+        //         ? requester.getAccessLevel().getLevel() : 0;
+        // int required = document.getMinAccessLevel() != null ? document.getMinAccessLevel().getLevel() : 0;
+        // if (effectiveLevel < required) {
+        //     return null;
+        // }
 
         return fileService.getPresignedUrl(document.getSourceUrl());
     }

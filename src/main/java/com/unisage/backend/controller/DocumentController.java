@@ -12,6 +12,7 @@ import com.unisage.backend.dto.request.CreateDocumentRequest;
 import com.unisage.backend.dto.request.UpdateDocumentRequest;
 import com.unisage.backend.dto.request.UpdateDocumentStatusRequest;
 import com.unisage.backend.dto.response.ApiResponse;
+import com.unisage.backend.dto.response.CitationDocumentResponse;
 import com.unisage.backend.dto.response.DocumentResponse;
 import com.unisage.backend.dto.response.PageResponse;
 import com.unisage.backend.service.document.DocumentService;
@@ -56,6 +57,11 @@ public class DocumentController {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<DocumentResponse>> getDocument(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(documentService.getById(id)));
+    }
+
+    @GetMapping("/{id}/citation")
+    public ResponseEntity<ApiResponse<CitationDocumentResponse>> getCitationDocument(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success(documentService.getCitationById(id)));
     }
 
     @GetMapping

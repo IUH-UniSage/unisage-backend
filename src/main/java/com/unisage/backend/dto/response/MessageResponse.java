@@ -1,6 +1,7 @@
 package com.unisage.backend.dto.response;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -17,7 +18,7 @@ public record MessageResponse(
     String content,
     MsgStatus status,
     UUID chatModelId,
-    Object citations,
+    List<Map<String, Object>> citations,
     Float retrievalScore,
     Map<String, Object> metadata,
     LocalDateTime createdAt,

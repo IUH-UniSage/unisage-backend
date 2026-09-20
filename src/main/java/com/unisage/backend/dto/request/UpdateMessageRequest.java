@@ -1,5 +1,6 @@
 package com.unisage.backend.dto.request;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -21,7 +22,7 @@ public record UpdateMessageRequest(
     @NotNull(message = "status không được để trống")
     MsgStatus status,
 
-    Object citations,
+    List<Map<String, Object>> citations,
     Float retrievalScore,
     Map<String, Object> metadata
 ) {}
