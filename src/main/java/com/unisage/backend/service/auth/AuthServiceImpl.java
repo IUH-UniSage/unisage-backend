@@ -13,11 +13,14 @@ import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.predefined.PredefinedRoles;
 import com.unisage.backend.repository.UserDepartmentAccessRepository;
 import com.unisage.backend.repository.UserRepository;
+import com.unisage.backend.security.GatewayAuthenticationToken;
 import com.unisage.backend.security.JwtUtil;
 import com.unisage.backend.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -64,6 +67,25 @@ public class AuthServiceImpl implements AuthService {
         if (!Boolean.TRUE.equals(user.getRole().getIsActive())) {
             throw new AppException(ErrorCode.USER_BANNED);
         }
+
+        // GatewayHeaderFilter is what normally populates SecurityContextHolder, by reading the
+        // JWT off the request - but this request IS the one issuing that JWT, so at this point
+        // in the pipeline there is no authenticated context yet. Without this, the lastLogin
+        // write just below is attributed to nobody (BaseEntity's @LastModifiedBy AND the audit
+        // listener's actor resolution both read SecurityContextHolder and see anonymous), even
+        // though the actor is unambiguously this exact user. Set it manually so both correctly
+        // record the user logging in as having updated their own lastLogin, instead of surfacing
+        // as a null-actor "Hệ thống" row in the audit trail.
+        List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(
+                "ROLE_" + (user.getRole() != null ? user.getRole().getName() : "USER")));
+        UserPrincipal principal = UserPrincipal.builder()
+                .userId(user.getId())
+                .code(user.getCode())
+                .role(user.getRole() != null ? user.getRole().getName() : null)
+                .authorities(authorities)
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(
+                new GatewayAuthenticationToken(principal, authorities));
 
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);

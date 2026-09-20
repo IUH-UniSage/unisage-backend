@@ -15,6 +15,8 @@ import com.unisage.backend.dto.response.PageResponse;
 import com.unisage.backend.entity.AuditLog;
 import com.unisage.backend.entity.enums.AuditAction;
 import com.unisage.backend.entity.enums.ResourceType;
+import com.unisage.backend.exception.AppException;
+import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.AuditLogRepository;
 
 import jakarta.persistence.criteria.Predicate;
@@ -39,6 +41,13 @@ public class AuditLogServiceImpl implements AuditLogService {
         Page<AuditLog> page = auditLogRepository.findAll(
                 buildSpec(resourceType, action, actorId, fromDate, toDate), pageable);
         return PageResponse.fromPage(page, this::mapToResponse);
+    }
+
+    @Override
+    public AuditLogResponse getById(UUID id) {
+        AuditLog log = auditLogRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.AUDIT_LOG_NOT_FOUND));
+        return mapToResponse(log);
     }
 
     private Specification<AuditLog> buildSpec(

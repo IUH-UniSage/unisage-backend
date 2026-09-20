@@ -20,4 +20,6 @@ public interface AuditLogService {
             LocalDateTime fromDate,
             LocalDateTime toDate,
             Pageable pageable);
+
+    AuditLogResponse getById(UUID id);
 }
