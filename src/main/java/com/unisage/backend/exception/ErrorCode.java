@@ -41,6 +41,7 @@ public enum ErrorCode {
             "Bạn đã dùng hết số tin nhắn miễn phí hôm nay. Quay lại sau 00:00 hoặc đăng nhập để tiếp tục."),
     ACCESS_LEVEL_NOT_FOUND(HttpStatus.NOT_FOUND, 2131, "Access Level không tồn tại."),
     TICKET_NOT_FOUND(HttpStatus.NOT_FOUND, 2139, "Yêu cầu hỗ trợ không tồn tại."),
+    AUDIT_LOG_NOT_FOUND(HttpStatus.NOT_FOUND, 2144, "Nhật ký hệ thống không tồn tại."),
 
     // Business rule errors
     EMAIL_EXISTED(HttpStatus.BAD_REQUEST, 2115, "Email này đã được sử dụng!"),
