@@ -42,7 +42,17 @@ public class AuditEventListener implements PostInsertEventListener, PostUpdateEv
     private static final long serialVersionUID = 1L;
 
     // The audit log itself must never be audited (would recurse forever via AuditLogWriter.save).
-    private static final Set<String> EXCLUDED_ENTITIES = Set.of("AuditLog");
+    // Message/Conversation are excluded too: they're high-volume chat content (every AI reply is
+    // a CREATE-then-UPDATE pair as streaming completes), and Message.content is free-form
+    // user/assistant text - capturing full chat content verbatim into an admin-visible,
+    // immutable audit table is a privacy exposure this trail was never meant to create, not
+    // just noise. See docs/adr/0003-audit-log-persistence.md.
+    private static final Set<String> EXCLUDED_ENTITIES = Set.of("AuditLog", "Message", "Conversation");
+
+    // Fields BaseEntity/AuthServiceImpl.login() touch as pure bookkeeping on every login - see
+    // the skip check in handle() below.
+    private static final Set<String> LOGIN_BOOKKEEPING_FIELDS =
+            Set.of("lastLogin", "updatedAt", "updatedBy");
 
     // Never leak secrets into the audit trail.
     private static final Set<String> SENSITIVE_FIELDS = Set.of("passwordHash", "apiKeyEncrypted");
@@ -101,6 +111,15 @@ public class AuditEventListener implements PostInsertEventListener, PostUpdateEv
         Map<String, Object> details = buildDetails(action, persister.getPropertyNames(), oldState, newState);
         if (action == AuditAction.UPDATE && details.isEmpty()) {
             // No actual field changed (e.g. a version-only touch) — nothing worth recording.
+            return;
+        }
+        if ("User".equals(entityName) && action == AuditAction.UPDATE
+                && LOGIN_BOOKKEEPING_FIELDS.containsAll(details.keySet())) {
+            // AuthServiceImpl.login() already publishes a LOGIN domain event (AuthAuditListener)
+            // for this exact moment - this UPDATE fires from the same request writing
+            // user.lastLogin, and would otherwise show up as a second, redundant row for the same
+            // login. Only skip when lastLogin/updatedAt/updatedBy are the ONLY changed fields, so
+            // a real profile edit made in the same transaction is still captured.
             return;
         }
 

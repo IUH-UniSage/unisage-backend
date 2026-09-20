@@ -36,11 +36,15 @@ public class AuditLogController {
             @RequestParam(required = false) ResourceType resourceType,
             @RequestParam(required = false) AuditAction action,
             @RequestParam(required = false) UUID actorId,
+            // The actorId UUID isn't something an admin can type from memory - the only actor
+            // identifier visible anywhere in the UI (the list's "actorCode" column, e.g. "SA-001")
+            // is this human-readable code, so the search box filters on it instead.
+            @RequestParam(required = false) String actorCode,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
             @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(
-                auditLogService.search(resourceType, action, actorId, fromDate, toDate, pageable)));
+                auditLogService.search(resourceType, action, actorId, actorCode, fromDate, toDate, pageable)));
     }
 
     @GetMapping("/{id}")

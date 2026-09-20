@@ -35,11 +35,12 @@ public class AuditLogServiceImpl implements AuditLogService {
             ResourceType resourceType,
             AuditAction action,
             UUID actorId,
+            String actorCode,
             LocalDateTime fromDate,
             LocalDateTime toDate,
             Pageable pageable) {
         Page<AuditLog> page = auditLogRepository.findAll(
-                buildSpec(resourceType, action, actorId, fromDate, toDate), pageable);
+                buildSpec(resourceType, action, actorId, actorCode, fromDate, toDate), pageable);
         return PageResponse.fromPage(page, this::mapToResponse);
     }
 
@@ -51,7 +52,7 @@ public class AuditLogServiceImpl implements AuditLogService {
     }
 
     private Specification<AuditLog> buildSpec(
-            ResourceType resourceType, AuditAction action, UUID actorId,
+            ResourceType resourceType, AuditAction action, UUID actorId, String actorCode,
             LocalDateTime fromDate, LocalDateTime toDate) {
         return (root, cq, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -63,6 +64,10 @@ public class AuditLogServiceImpl implements AuditLogService {
             }
             if (actorId != null) {
                 predicates.add(cb.equal(root.get("actorId"), actorId));
+            }
+            if (actorCode != null && !actorCode.isBlank()) {
+                predicates.add(cb.like(
+                        cb.lower(root.get("actorCode")), "%" + actorCode.trim().toLowerCase() + "%"));
             }
             if (fromDate != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), fromDate));

@@ -527,3 +527,54 @@ Xác minh thủ công trên DB dev local (Docker `unisage-postgres` + `unisage-m
   nghiệp vụ, và là nơi đầu tiên nêu ra hướng denormalize cho audit-log
 - `src/main/java/com/unisage/backend/predefined/PredefinedPublicPaths.java` — các path guest ghi
   DB không cần xác thực
+
+## Update — sửa 3 vấn đề phát hiện khi dogfood trang list FE (2026-09-20)
+
+Sau khi UNISAGE-61 (trang list/filter FE) dựng xong và người dùng thực tế thử trên UI, phát sinh
+3 vấn đề mà API/mechanism trước đó chưa lường tới:
+
+### 1. `actorId` không lọc được bằng giá trị người dùng gõ được
+
+`GET /audit-logs?actorId=` chỉ nhận UUID. Nhưng danh tính duy nhất người dùng nhìn thấy trên UI là
+`actorCode` (vd `SA-001`, cột "Người thực hiện") — gõ `actorCode` vào ô lọc actorId ném
+`MethodArgumentTypeMismatchException` → 500 "Hệ thống có lỗi chưa xác định". Thêm tham số
+`actorCode` (String, `LIKE %actorCode%` case-insensitive trên cột `AuditLog.actorCode` sẵn có,
+không cần đổi schema) song song với `actorId` (giữ để lọc chính xác bằng UUID khi có sẵn, không
+xoá). `AuditLogController`/`AuditLogService`/`AuditLogServiceImpl` cập nhật tương ứng.
+
+### 2. `lastLogin` UPDATE trùng lặp với dòng `LOGIN`
+
+Mỗi lần đăng nhập thành công tạo **2 dòng**: `LOGIN` (domain event, per hybrid extension ở trên)
+và `UPDATE/USER` (Hibernate listener bắt việc `AuthServiceImpl.login()` ghi `user.lastLogin`) —
+cùng phản ánh một sự kiện, gây nhiễu list. `AuditEventListener.handle()` giờ bỏ qua dòng `UPDATE`
+khi tập field thay đổi là tập con của `{lastLogin, updatedAt, updatedBy}` **và** entity là `User`
+— tức chỉ bỏ khi đây thực sự chỉ là bookkeeping của lần đăng nhập, không bỏ nếu cùng lúc có field
+nghiệp vụ khác đổi (vd sửa hồ sơ ngay trong cùng transaction, giả thuyết hiếm nhưng vẫn giữ đúng).
+`LOGIN_BOOKKEEPING_FIELDS` là hằng số mới trong `AuditEventListener`.
+
+### 3. Nội dung tin nhắn chat bị ghi nguyên văn vào audit log
+
+`Message`/`Conversation` CRUD qua Hibernate listener khiến **nội dung chat của user/assistant**
+(free-form text, có thể chứa thông tin nhạy cảm người dùng tự nhập) xuất hiện nguyên văn trong
+`audit_logs.details`, đọc được bởi bất kỳ ai có quyền `AUDIT_LOG_READ` — đây không chỉ là nhiễu
+(mỗi câu trả lời AI tạo ra 1 dòng CREATE rồi 1 dòng UPDATE khi streaming hoàn tất) mà còn là một lỗ
+hổng lộ dữ liệu người dùng ngoài ý định ban đầu của audit trail (vốn nhằm theo dõi thao tác quản
+trị lên dữ liệu hệ thống, không phải kho lưu trùng nội dung hội thoại). Thêm `Message`,
+`Conversation` vào `EXCLUDED_ENTITIES` của `AuditEventListener`, cùng cơ chế loại trừ đã có sẵn
+cho `AuditLog` tự thân (không đổi schema, không cần migration).
+
+**Test lock**: xác minh thủ công trên DB dev (`docker compose up unisage-db unisage-minio`,
+`./mvnw spring-boot:run`, restart sau khi build code mới):
+
+- `GET /audit-logs?actorCode=SA-001` (qua cả cổng backend trực tiếp `:8401` lẫn qua gateway
+  `:8400/api/v1/master`) trả đúng kết quả lọc, không còn 500.
+- Đăng nhập 2 lần liên tiếp bằng `SA-001` → mỗi lần chỉ sinh đúng 1 dòng `LOGIN`, không còn dòng
+  `UPDATE/USER` kèm theo (dòng `UPDATE/lastLogin` cũ trước khi sửa vẫn còn trong DB — chỉ các lần
+  đăng nhập MỚI sau khi restart mới không còn trùng).
+- `./mvnw test` — 108/108 test hiện có pass không đổi.
+- Chưa verify trực tiếp việc gửi tin nhắn chat mới không còn sinh dòng `MESSAGE`/`CONVERSATION`
+  (không có sẵn luồng chat live lúc kiểm thử) — xác nhận bằng đọc code: `Message`/`Conversation`
+  giờ nằm trong `EXCLUDED_ENTITIES`, dùng đúng nhánh kiểm tra đã được chứng minh đúng với
+  `AuditLog` tự loại trừ chính nó (đã verify ở Test lock gốc phía trên) — coi là rủi ro thấp, nên
+  verify lại thủ công (gửi 1 tin nhắn chat rồi `GET /audit-logs?resourceType=MESSAGE` xem
+  `totalItems` không tăng) trước khi merge lên `main`.

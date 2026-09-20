@@ -17,6 +17,7 @@ public interface AuditLogService {
             ResourceType resourceType,
             AuditAction action,
             UUID actorId,
+            String actorCode,
             LocalDateTime fromDate,
             LocalDateTime toDate,
             Pageable pageable);
