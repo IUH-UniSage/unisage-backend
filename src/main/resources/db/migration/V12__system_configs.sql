@@ -57,9 +57,12 @@ ALTER TABLE ONLY public.system_configs
 
 CREATE INDEX idx_system_configs_category ON public.system_configs (category);
 
--- 3) Seed the 11 known settings, one row per currently-hardcoded @Value-injected property (see
---    UNISAGE-64 ticket notes for the source of each current value). This ticket only makes these
---    values visible/editable via the API above — no consuming service reads from this table yet.
+-- 3) Seed the 19 known settings: 9 rows per currently-hardcoded @Value-injected property (see
+--    UNISAGE-64 ticket notes for the source of each current value, infra-only, no consuming
+--    service reads from this table yet) plus 10 ingestion chunking-strategy defaults (wired to
+--    unisage-web's ingestion wizard, see the comment above those rows). Access/refresh token TTL
+--    were intentionally NOT seeded here — the user did not want JWT lifetimes exposed as an
+--    admin-editable runtime setting.
 INSERT INTO public.system_configs
     (id, created_at, is_active, config_key, value, value_type, category, label, description, is_editable)
 VALUES
@@ -104,19 +107,66 @@ VALUES
      'Danh sách phần mở rộng file được chấp nhận khi nạp tài liệu.', true),
 
     (gen_random_uuid(), now(), true,
-     'security.access_token_ttl_seconds', '86400', 'NUMBER', 'SECURITY',
-     'Thời hạn access token (giây)',
-     'Thời gian hiệu lực của access token trước khi hết hạn.', true),
-
-    (gen_random_uuid(), now(), true,
-     'security.refresh_token_ttl_seconds', '2592000', 'NUMBER', 'SECURITY',
-     'Thời hạn refresh token (giây)',
-     'Thời gian hiệu lực của refresh token trước khi hết hạn.', true),
-
-    (gen_random_uuid(), now(), true,
      'ingest.presigned_url_expiry_seconds', '3600', 'NUMBER', 'INGEST',
      'Thời hạn URL tải file (giây)',
-     'Thời gian hiệu lực của presigned URL dùng để tải file từ MinIO.', true);
+     'Thời gian hiệu lực của presigned URL dùng để tải file từ MinIO.', true),
+
+    -- Chunking strategy defaults, mirroring unisage-web's STRATEGY_DEFAULTS
+    -- (src/features/ingestion/components/steps/chunking/strategy-config.ts), which itself mirrors
+    -- unisage-agent's app/rag/chunking/strategy.py dispatch() defaults. Wired: the ingestion
+    -- wizard fetches these to prefill the chunking-strategy form instead of using its own
+    -- hardcoded constant (UNISAGE-65 follow-up), so editing these has real effect on new ingestion
+    -- jobs that don't override a field. unisage-agent's own internal fallback defaults are
+    -- untouched (out of scope, different service/repo).
+    (gen_random_uuid(), now(), true,
+     'ingest.chunking.recursive.chunk_size', '800', 'NUMBER', 'INGEST',
+     'Kích thước đoạn (Đệ quy)',
+     'Số ký tự tối đa mỗi đoạn khi chia tài liệu theo chiến lược đệ quy.', true),
+
+    (gen_random_uuid(), now(), true,
+     'ingest.chunking.recursive.overlap', '120', 'NUMBER', 'INGEST',
+     'Độ chồng lấn (Đệ quy)',
+     'Số ký tự chồng lấn giữa hai đoạn liên tiếp khi chia theo chiến lược đệ quy.', true),
+
+    (gen_random_uuid(), now(), true,
+     'ingest.chunking.markdown_aware.chunk_size', '800', 'NUMBER', 'INGEST',
+     'Kích thước đoạn (Markdown)',
+     'Số ký tự tối đa mỗi đoạn khi chia tài liệu theo cấu trúc Markdown.', true),
+
+    (gen_random_uuid(), now(), true,
+     'ingest.chunking.markdown_aware.overlap', '120', 'NUMBER', 'INGEST',
+     'Độ chồng lấn (Markdown)',
+     'Số ký tự chồng lấn giữa hai đoạn liên tiếp khi chia theo cấu trúc Markdown.', true),
+
+    (gen_random_uuid(), now(), true,
+     'ingest.chunking.token_based.chunk_size', '400', 'NUMBER', 'INGEST',
+     'Kích thước đoạn (Token)',
+     'Số token tối đa mỗi đoạn khi chia tài liệu theo số token.', true),
+
+    (gen_random_uuid(), now(), true,
+     'ingest.chunking.token_based.overlap', '40', 'NUMBER', 'INGEST',
+     'Độ chồng lấn (Token)',
+     'Số token chồng lấn giữa hai đoạn liên tiếp khi chia theo số token.', true),
+
+    (gen_random_uuid(), now(), true,
+     'ingest.chunking.semantic.target_tokens', '400', 'NUMBER', 'INGEST',
+     'Token mục tiêu (Ngữ nghĩa)',
+     'Số token mục tiêu mỗi đoạn khi chia tài liệu theo ngữ nghĩa.', true),
+
+    (gen_random_uuid(), now(), true,
+     'ingest.chunking.semantic.overlap_ratio', '0.2', 'NUMBER', 'INGEST',
+     'Tỷ lệ chồng lấn (Ngữ nghĩa)',
+     'Tỷ lệ chồng lấn giữa hai đoạn liên tiếp khi chia theo ngữ nghĩa (0-1).', true),
+
+    (gen_random_uuid(), now(), true,
+     'ingest.chunking.semantic.similarity_threshold', '0.5', 'NUMBER', 'INGEST',
+     'Ngưỡng tương đồng (Ngữ nghĩa)',
+     'Ngưỡng tương đồng để gộp các câu vào cùng một đoạn khi chia theo ngữ nghĩa (0-1).', true),
+
+    (gen_random_uuid(), now(), true,
+     'ingest.chunking.excel_row.rows_per_chunk', '1', 'NUMBER', 'INGEST',
+     'Số dòng mỗi đoạn (Excel)',
+     'Số dòng Excel được gộp vào mỗi đoạn khi chia tài liệu Excel theo dòng.', true);
 
 -- 4) DataInitializer only seeds permissions the first time it runs (skipped once SUPER_ADMIN
 --    exists), so an already-initialised dev database would never pick up SYSTEM_CONFIG_READ/
