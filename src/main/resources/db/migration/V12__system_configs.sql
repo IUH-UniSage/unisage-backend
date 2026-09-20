@@ -187,3 +187,13 @@ SELECT r.id, p.id
 FROM public.roles r, public.permissions p
 WHERE r.name = 'SUPER_ADMIN' AND p.name IN ('SYSTEM_CONFIG_READ', 'SYSTEM_CONFIG_UPDATE')
 ON CONFLICT DO NOTHING;
+
+-- INGEST_ADMIN needs read-only access too: the ingestion wizard's chunking-strategy step
+-- prefills its defaults from GET /system-configs instead of a hardcoded FE constant, and
+-- INGEST_ADMIN is the role that actually runs that wizard. Mirrors
+-- DataInitializer.assignIngestAdmin's grant for an already-initialized dev database.
+INSERT INTO public.role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM public.roles r, public.permissions p
+WHERE r.name = 'INGEST_ADMIN' AND p.name = 'SYSTEM_CONFIG_READ'
+ON CONFLICT DO NOTHING;

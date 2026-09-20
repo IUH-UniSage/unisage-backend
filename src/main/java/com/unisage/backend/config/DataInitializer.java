@@ -406,7 +406,11 @@ public class DataInitializer implements CommandLineRunner {
             // dropdown can't load its options (GET /access-levels -> 403), and the
             // ingestion wizard then refuses to process any document left with no access
             // level assigned as a result.
-            permKey(PredefinedPermissions.ACCESS_LEVEL_READ)
+            permKey(PredefinedPermissions.ACCESS_LEVEL_READ),
+            // The chunking-strategy step of the ingestion wizard prefills its defaults from
+            // GET /system-configs (category=INGEST) instead of a hardcoded FE constant -
+            // read-only, no SYSTEM_CONFIG_UPDATE (that stays SUPER_ADMIN-only).
+            permKey(PredefinedPermissions.SYSTEM_CONFIG_READ)
         );
         assign(role, perms, keys);
         log.info("  {} permissions assigned to role '{}'.", keys.size(), role.getName());
