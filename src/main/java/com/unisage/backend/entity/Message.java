@@ -1,5 +1,6 @@
 package com.unisage.backend.entity;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -57,7 +58,7 @@ public class Message extends BaseEntity {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
-    private Object citations;
+    private List<Map<String, Object>> citations;
 
     @Column(name = "retrieval_score")
     private Float retrievalScore;

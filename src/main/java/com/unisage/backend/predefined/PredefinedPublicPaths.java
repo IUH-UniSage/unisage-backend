@@ -20,7 +20,11 @@ public final class PredefinedPublicPaths {
             // list/detail/update stay on TICKET_* Permission rows.
             new PublicPath("POST", "/tickets"),
             new PublicPath("GET", "/tickets/my"),
-            new PublicPath("GET", "/tickets/my/*")
+            new PublicPath("GET", "/tickets/my/*"),
+            // Chat citations: open the file behind a cited source. Returns only a preview/download
+            // URL for one document (no admin fields). Document-level access control is not
+            // implemented yet (see DocumentServiceImpl.resolveFileUrl).
+            new PublicPath("GET", "/documents/*/citation")
     );
 
     public static final List<PublicPath> PUBLIC_PATHS = List.of(

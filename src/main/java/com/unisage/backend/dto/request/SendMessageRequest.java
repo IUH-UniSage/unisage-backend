@@ -1,5 +1,6 @@
 package com.unisage.backend.dto.request;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -28,7 +29,7 @@ public record SendMessageRequest(
     MsgStatus status,
 
     UUID chatModelId,
-    Object citations,
+    List<Map<String, Object>> citations,
     Float retrievalScore,
     Map<String, Object> metadata
 ) {}
