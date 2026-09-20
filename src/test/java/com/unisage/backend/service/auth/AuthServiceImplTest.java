@@ -9,6 +9,7 @@ import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.security.JwtUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
@@ -26,6 +27,7 @@ class AuthServiceImplTest {
     private UserDepartmentAccessRepository userDepartmentAccessRepository;
     private PasswordEncoder passwordEncoder;
     private JwtUtil jwtUtil;
+    private ApplicationEventPublisher eventPublisher;
     private AuthServiceImpl authService;
 
     private User user;
@@ -39,7 +41,8 @@ class AuthServiceImplTest {
         userDepartmentAccessRepository = mock(UserDepartmentAccessRepository.class);
         passwordEncoder = mock(PasswordEncoder.class);
         jwtUtil = mock(JwtUtil.class);
-        authService = new AuthServiceImpl(userRepository, userDepartmentAccessRepository, passwordEncoder, jwtUtil);
+        eventPublisher = mock(ApplicationEventPublisher.class);
+        authService = new AuthServiceImpl(userRepository, userDepartmentAccessRepository, passwordEncoder, jwtUtil, eventPublisher);
 
         documentAll = Permission.builder().id(UUID.randomUUID()).name("DOCUMENT_ALL").build();
         documentCreate = Permission.builder().id(UUID.randomUUID()).name("DOCUMENT_CREATE").build();

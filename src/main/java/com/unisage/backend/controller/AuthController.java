@@ -70,6 +70,8 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> logout(HttpServletResponse httpResponse) {
         log.info("POST /api/auth/logout");
 
+        authService.logout();
+
         ResponseCookie accessCookie = cookieUtil.clearAccessTokenCookie();
         httpResponse.addHeader(HttpHeaders.SET_COOKIE, accessCookie.toString());
 

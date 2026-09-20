@@ -1,6 +1,9 @@
 package com.unisage.backend.service.user;
 
+import com.unisage.backend.audit.Auditable;
 import com.unisage.backend.dto.request.CreateUserRequest;
+import com.unisage.backend.entity.enums.AuditAction;
+import com.unisage.backend.entity.enums.ResourceType;
 import com.unisage.backend.entity.enums.UserStatus;
 import com.unisage.backend.dto.request.UpdateUserRequest;
 import com.unisage.backend.dto.response.PageResponse;
@@ -111,7 +114,11 @@ public class UserServiceImpl implements UserService {
         userDepartmentAccessRepository.saveAll(accesses);
     }
 
+    // Single-user detail view — returns PII (email, phone, etc.) not present in the list
+    // response. Deliberately NOT applied to getAllUsers() (list/pagination), which would fire
+    // once per page load.
     @Override
+    @Auditable(action = AuditAction.VIEW, resourceType = ResourceType.USER)
     public UserDetailResponse getUserById(UUID id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));

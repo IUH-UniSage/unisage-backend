@@ -1,5 +1,8 @@
 package com.unisage.backend.service.auth;
 
+import com.unisage.backend.audit.event.LoginFailedEvent;
+import com.unisage.backend.audit.event.LoginSucceededEvent;
+import com.unisage.backend.audit.event.LogoutEvent;
 import com.unisage.backend.dto.request.LoginRequest;
 import com.unisage.backend.dto.response.AuthResponse;
 import com.unisage.backend.dto.response.PermissionInfo;
@@ -11,7 +14,11 @@ import com.unisage.backend.predefined.PredefinedRoles;
 import com.unisage.backend.repository.UserDepartmentAccessRepository;
 import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.security.JwtUtil;
+import com.unisage.backend.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +38,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserDepartmentAccessRepository userDepartmentAccessRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final ApplicationEventPublisher eventPublisher;
 
     private static final String WILDCARD_DEPARTMENT_ID = "*";
     private static final int WILDCARD_ACCESS_LEVEL = 100;
@@ -38,10 +46,14 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        User user = userRepository.findByCode(request.code())
-                .orElseThrow(() -> new AppException(ErrorCode.AUTH_INVALID_CREDENTIALS));
+        User user = userRepository.findByCode(request.code()).orElse(null);
+        if (user == null) {
+            eventPublisher.publishEvent(new LoginFailedEvent(request.code(), "CODE_NOT_FOUND"));
+            throw new AppException(ErrorCode.AUTH_INVALID_CREDENTIALS);
+        }
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            eventPublisher.publishEvent(new LoginFailedEvent(request.code(), "BAD_PASSWORD"));
             throw new AppException(ErrorCode.AUTH_INVALID_CREDENTIALS);
         }
 
@@ -56,7 +68,18 @@ public class AuthServiceImpl implements AuthService {
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
+        eventPublisher.publishEvent(new LoginSucceededEvent(user.getId(), user.getCode()));
+
         return buildSession(user);
+    }
+
+    @Override
+    public void logout() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated()
+                && authentication.getPrincipal() instanceof UserPrincipal principal) {
+            eventPublisher.publishEvent(new LogoutEvent(principal.getUserId(), principal.getCode()));
+        }
     }
 
     @Override

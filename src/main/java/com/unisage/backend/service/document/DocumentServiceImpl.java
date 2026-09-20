@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import com.unisage.backend.audit.Auditable;
 import com.unisage.backend.dto.request.CreateDocumentRequest;
 import com.unisage.backend.dto.request.UpdateDocumentRequest;
 import com.unisage.backend.dto.request.UpdateDocumentStatusRequest;
@@ -18,7 +19,9 @@ import com.unisage.backend.entity.Category;
 import com.unisage.backend.entity.Department;
 import com.unisage.backend.entity.Document;
 import com.unisage.backend.entity.User;
+import com.unisage.backend.entity.enums.AuditAction;
 import com.unisage.backend.entity.enums.DocStatus;
+import com.unisage.backend.entity.enums.ResourceType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.AccessLevelRepository;
@@ -149,7 +152,14 @@ public class DocumentServiceImpl implements DocumentService {
         return mapToResponse(document);
     }
 
+    // No dedicated download endpoint exists in this codebase — the presigned download URL is
+    // included right in the single-document detail response (resolveFileUrl(), via
+    // mapToResponse()). This detail fetch is therefore treated as the download/view signal.
+    // Deliberately NOT applied to resolveFileUrl()/mapToResponse() themselves — those are also
+    // called from getAll()'s pagination path and would fire once per row per page, which is
+    // noise, not a meaningful audit signal.
     @Override
+    @Auditable(action = AuditAction.DOWNLOAD, resourceType = ResourceType.DOCUMENT)
     public DocumentResponse getById(UUID id) {
         Document document = documentRepository.findById(id)
                 .filter(d -> d.getDeletedAt() == null)

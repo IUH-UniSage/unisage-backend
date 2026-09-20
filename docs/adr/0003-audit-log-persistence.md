@@ -281,6 +281,234 @@ ADR-0002: chưa có hạ tầng Testcontainers/embedded DB. `./mvnw test` — to
   hạn với `@Modifying` JPQL (mục Consequences) chưa được kiểm thử trực tiếp — ghi nhận là nợ xác
   minh, không phải giả định chưa kiểm chứng về mặt cơ chế.
 
+## Update — hybrid extension (login/logout via domain events, sensitive reads via AOP)
+
+- **Date**: 2026-09-20
+- **Status**: Accepted
+- **Context story**: UNISAGE-60 (same ticket) — extend the write-only Hibernate-listener trail with
+  coverage for security/compliance-relevant actions that are **not** DB writes: login/logout, and
+  export/download + view of sensitive data.
+
+### Context
+
+Mục 5 ở trên ("`AuditAction`: chỉ CREATE/UPDATE/DELETE — không thêm LOGIN/LOGOUT") lập luận rằng
+login đã được ghi "miễn phí" qua field `lastLogin` (`UPDATE / USER`). Lập luận đó đúng về mặt kỹ
+thuật nhưng không đủ cho một audit trail bảo mật thực sự:
+
+- Nó chỉ ghi được **login thành công**. Một `LOGIN_FAILED` (sai mật khẩu, hoặc `code` không tồn
+  tại) không đụng DB write nào — không có entity nào được insert/update/delete — nên hoàn toàn
+  không được ghi nhận. Đây chính xác là loại sự kiện một audit trail bảo mật cần nhất (phát hiện
+  brute-force/dò mật khẩu).
+- `logout` không ghi gì xuống DB (đã ghi nhận đúng ở mục 5), nên không có cách nào "ăn theo" một
+  DB write để được audit miễn phí.
+- `UPDATE / USER / {lastLogin: {...}}` không tự thân nói rõ đây là một sự kiện đăng nhập — FE phải
+  suy luận từ tên field thay đổi, không lọc trực tiếp được theo "hành động đăng nhập" qua
+  `action=LOGIN`.
+
+Tương tự, đọc dữ liệu nhạy cảm (xem chi tiết 1 document kèm link tải, xem chi tiết 1 user kèm PII)
+hoàn toàn không phải DB write — không entity nào được insert/update/delete khi gọi
+`GET /documents/{id}` hay `GET /users/{id}` — nên cơ chế Hibernate listener ở mục 1 **không thể**
+và không nên mở rộng để phủ luôn trường hợp này (một `PostSelectEventListener` tổng quát không tồn
+tại theo cách tương tự, và dù có, sẽ bắt được cả những read hoàn toàn không liên quan tới nghiệp
+vụ, như query nội bộ của Hibernate).
+
+Do đó quyết định bổ sung 2 cơ chế mới, cho 2 loại sự kiện khác bản chất nhau, thay vì cố nhét cả 2
+vào cùng 1 cơ chế:
+
+### Quyết định 1: Login/Logout — domain event (`ApplicationEventPublisher`/`@EventListener`), không phải Spring Security's `AuthenticationSuccessEvent`/`AbstractAuthenticationFailureEvent`
+
+Xác nhận trước khi code: app này **không** xác thực qua `AuthenticationManager.authenticate(...)`.
+`AuthServiceImpl.login()` tự fetch `User` bằng `userRepository.findByCode(...)` rồi so mật khẩu
+tay bằng `passwordEncoder.matches(...)` — không đi qua `ProviderManager`/`AuthenticationProvider`
+nào của Spring Security. Hệ quả: `AuthenticationSuccessEvent` và
+`AbstractAuthenticationFailureEvent` (và các sự kiện con của nó) **không bao giờ được publish**
+cho flow này — không có `AuthenticationManager` nào gọi `publishAuthenticationSuccess(...)`/
+`publishAuthenticationFailure(...)`. Wiring một `@EventListener` cho các event có sẵn này sẽ không
+bao giờ chạy — bị loại ngay từ đầu, không phải một phương án khả thi ở đây, khác với một app xác
+thực chuẩn qua Spring Security.
+
+Thay vào đó, dùng domain event tự định nghĩa, publish tường minh tại đúng nơi biết chuyện gì vừa
+xảy ra:
+
+- `audit/event/LoginSucceededEvent.java`, `LoginFailedEvent.java`, `LogoutEvent.java` — record đơn
+  giản (không cần kế thừa `ApplicationEvent`, Spring publish/subscribe bất kỳ POJO nào qua
+  `ApplicationEventPublisher.publishEvent(Object)`).
+- `AuthServiceImpl.login()` publish `LoginFailedEvent(attemptedCode, reason)` ở cả 2 nhánh thất
+  bại xác thực (`code` không tồn tại → `reason="CODE_NOT_FOUND"`; sai mật khẩu →
+  `reason="BAD_PASSWORD"`) **trước khi** ném `AppException`, và publish
+  `LoginSucceededEvent(user.getId(), user.getCode())` sau khi mọi check (mật khẩu, `isActive`,
+  role active) đều pass, ngay trước khi trả `buildSession(user)`. Không bao giờ đưa raw password
+  vào event hay vào `details`.
+- `AuthServiceImpl.logout()` (method mới, gọi từ `AuthController.logout()`) đọc
+  `UserPrincipal` hiện tại từ `SecurityContextHolder` và publish `LogoutEvent(userId, code)` — nếu
+  không có principal hợp lệ (không nên xảy ra sau `SecurityFilterChain`, nhưng xử lý an toàn), đơn
+  giản là không publish gì, không throw.
+- `audit/AuthAuditListener.java` — `@Component` với 3 method `@EventListener`, build `AuditLog`
+  rồi gọi thẳng `AuditLogWriter.persist(...)`. Đây là bean Spring bình thường (không phải Hibernate
+  tự khởi tạo như `AuditEventListener`), nên constructor-inject `AuditLogWriter` trực tiếp — không
+  cần `SpringContextHolder` như listener Hibernate. Chạy đồng bộ, không `@Async`: login/logout tần
+  suất thấp, không đáng thêm phức tạp của một event queue.
+
+**Xử lý `LOGIN_FAILED` không có `User` thật** (case `code` không tồn tại): `actorId`/`resourceId`
+để `null` có chủ đích (không có user nào để trỏ tới), `code` người dùng gõ được ghi vào
+`details.attemptedCode` — đủ để điều tra ai/gì đang dò mật khẩu (theo IP nếu sau này bổ sung
+`ipAddress`, theo `code` bị dò nếu là 1 tài khoản cụ thể) mà không tạo audit row trỏ tới 1
+`resourceId` không tồn tại. `LOGIN`/`LOGOUT` (thành công) luôn có `actorId`/`resourceId` vì tại đó
+`User` chắc chắn tồn tại và đã xác thực.
+
+**Không xóa mục 5 cũ** (login vẫn tiếp tục được ghi "miễn phí" qua `UPDATE / USER / {lastLogin}`
+từ cơ chế Hibernate listener) — 2 dòng audit cho cùng 1 lần login thành công (`UPDATE` từ
+`lastLogin` + `LOGIN` từ domain event) là trùng lặp thật, nhưng chấp nhận được: chúng phục vụ 2 mục
+đích khác nhau (`UPDATE` là audit trail chung "field nào đổi", `LOGIN` là tín hiệu bảo mật lọc được
+trực tiếp qua `action=LOGIN`/`LOGIN_FAILED`/`LOGOUT`), và tách `lastLogin` ra khỏi audit trail
+Hibernate (loại trừ field này khỏi listener) sẽ phức tạp hơn lợi ích mang lại, cũng như làm mất đi
+tiền lệ "mọi field UPDATE đều được ghi" đã document ở mục 4.
+
+### Quyết định 2: Export/Download + View sensitive data — AOP `@Auditable`, tầng service, `@AfterReturning`
+
+`audit/Auditable.java` (`@Target(METHOD)`, `@Retention(RUNTIME)`, thuộc tính `action()`/
+`resourceType()`) + `audit/AuditableAspect.java` (`@Aspect @Component`,
+`@AfterReturning("@annotation(auditable)")`).
+
+**Tầng service, không phải tầng controller**: pointcut nhắm vào method của `*ServiceImpl` (vd.
+`DocumentServiceImpl.getById`, `UserServiceImpl.getUserById`), không phải method của
+`*Controller`. Lý do: tầng service là nơi thực sự xảy ra hành động nghiệp vụ ("lấy chi tiết 1
+document/user") và đã có sẵn entity/id đã resolve (không chỉ path variable thô như ở tầng
+controller) — nhất quán với cách `AuditEventListener` cũng bắt ở tầng gần dữ liệu nhất (persister),
+không phải tầng HTTP.
+
+**`@AfterReturning`, không phải `@Around`**: chọn có chủ đích, ghi rõ ở Javadoc của `@Auditable`.
+Advice chỉ chạy khi method trả về bình thường — một lần gọi ném exception (not-found, permission
+forbidden ở `resolveFileUrl`/`resolveMinAccessLevel`, v.v.) không tạo audit row. Đúng tinh thần
+"ghi lại cái gì **đã thực sự** được xem/tải", không phải "cái gì được thử truy cập" — khác mục
+đích với một audit log truy cập bị từ chối (authorization audit), vốn là một concern riêng, không
+thuộc phạm vi `@Auditable` này.
+
+**Hợp đồng resourceId — tham số đầu tiên của method phải là `UUID` hoặc `String`**:
+`AuditableAspect.extractResourceId(JoinPoint)` lấy `joinPoint.getArgs()[0]`, ép kiểu, dùng thẳng
+làm `resourceId`. Không dùng reflection dò trường `id` trên giá trị trả về — đơn giản hơn và không
+phụ thuộc shape response DTO của từng service (mỗi `*Response` có thể có `id` ở vị trí khác nhau).
+Nếu tham số đầu tiên không phải `UUID`/`String`, aspect log cảnh báo và ghi `resourceId = null`
+thay vì throw — audit không bao giờ được phép làm hỏng lời gọi nó đang quan sát. Method tương lai
+muốn dùng `@Auditable` phải tuân theo đúng hợp đồng này (xem Javadoc trên `Auditable.java`).
+
+**Chạy inline/đồng bộ trong aspect** (không `TransactionSynchronization.afterCommit()` như
+`AuditEventListener`): khác với Hibernate listener (chạy giữa lúc flush của 1 transaction đang
+mutate dữ liệu, cần đợi commit để tránh ghi audit cho 1 thay đổi rồi rollback), aspect này bọc một
+method **đọc** — không có transaction nghiệp vụ nào đang mutate mà có thể rollback để làm audit
+row "nói dối". `AuditLogWriter.persist()` vẫn giữ nguyên `REQUIRES_NEW` (dùng lại y hệt, không tạo
+đường ghi thứ 2) nên bản thân việc ghi audit vẫn tách biệt, chỉ là aspect không cần chờ điểm
+commit nào trước khi gọi nó.
+
+**2 method cụ thể được gắn `@Auditable`** (xem thêm ở mục Consequences về các method cân nhắc
+nhưng KHÔNG gắn):
+
+1. `DocumentServiceImpl.getById(UUID id)` — `@Auditable(action = DOWNLOAD, resourceType =
+   DOCUMENT)`. Repo này không có endpoint download riêng biệt: link tải (presigned MinIO URL) nằm
+   ngay trong response chi tiết 1 document, qua `resolveFileUrl(document)` gọi từ
+   `mapToResponse(document)`. Vì vậy "xem chi tiết 1 document" được coi là tín hiệu download/view —
+   đây là điểm truy cập rõ ràng nhất trong codebase hiện tại cho hành vi này.
+   **Không gắn lên `resolveFileUrl`/`mapToResponse` trực tiếp** — 2 method này còn được gọi từ
+   `getAll()` (list/pagination `mapToResponse` mỗi dòng), gắn ở đó sẽ tạo 1 audit row **mỗi
+   document mỗi lần load 1 trang danh sách** — noise, không phải tín hiệu.
+2. `UserServiceImpl.getUserById(UUID id)` — `@Auditable(action = VIEW, resourceType = USER)`. Trả
+   `UserDetailResponse` chứa PII (email, phone, ...) không có trong response danh sách
+   (`UserResponse`/`getAllUsers`). **Không gắn lên `getAllUsers`** cùng lý do trên.
+
+### Migration: `V11__audit_log_actions_widen.sql`
+
+`audit_logs.action` có `CHECK` constraint liệt kê tường minh `CREATE`/`UPDATE`/`DELETE`
+(`V10__audit_logs.sql`) — bắt buộc phải có migration mới nới rộng constraint này, nếu không mọi
+`INSERT` với `action` mới sẽ bị Postgres từ chối ở tầng DB dù code Java hoàn toàn hợp lệ.
+`resource_type` không đổi (2 method mới đều dùng `DOCUMENT`/`USER`, đã có sẵn trong constraint
+cũ), nên chỉ `action` cần nới.
+
+### Consequences
+
+**Tích cực**:
+
+- Đăng nhập sai (kể cả `code` không tồn tại) giờ có 1 dòng `LOGIN_FAILED` tra cứu được trực tiếp
+  qua `GET /audit-logs?action=LOGIN_FAILED` — trước đây hoàn toàn không có tín hiệu nào.
+- `LOGIN`/`LOGOUT` là tín hiệu tường minh, không phải suy luận từ tên field `lastLogin` thay đổi.
+- Đọc dữ liệu nhạy cảm (document detail kèm link tải, user detail kèm PII) giờ có audit trail,
+  điều mà cơ chế Hibernate listener (chỉ bắt write) không bao giờ làm được dù có mở rộng thêm.
+- 2 cơ chế mới đều tái sử dụng nguyên `AuditLogWriter`/`AuditLog`/`ResourceType` đã có — không có
+  đường ghi audit thứ 2, thứ 3 song song với cơ chế cũ.
+
+**Tiêu cực / rủi ro**:
+
+- Login thành công giờ sinh **2** dòng audit (`UPDATE / USER / {lastLogin}` từ listener +
+  `LOGIN / USER` từ domain event) — trùng lặp có chủ đích, chấp nhận được (xem lập luận ở trên),
+  nhưng FE/người đọc audit log cần biết đây không phải lỗi ghi đúp.
+- `@Auditable` dựa vào quy ước "tham số đầu tiên là `UUID`/`String`" — không được compiler cưỡng
+  chế, chỉ cảnh báo runtime (log warning, `resourceId = null`) nếu vi phạm. Dev thêm `@Auditable`
+  cho 1 method mới sai chữ ký sẽ không thấy lỗi biên dịch, chỉ thấy audit row thiếu `resourceId`
+  nếu không đọc log — rủi ro giống hệt rủi ro "annotation dễ quên/dễ gắn sai" mà mục 1 (Alternative
+  #2) đã cảnh báo cho hướng `@Audited` thủ công, nhưng ở đây phạm vi hẹp hơn nhiều (chỉ 2 method,
+  không phải mọi entity write) nên đánh đổi được.
+- `@AfterReturning` nghĩa là một lần "xem/tải bị từ chối" (not-found, permission forbidden) không
+  để lại dấu vết audit nào — nếu sau này cần audit cả các lần truy cập bị từ chối (khác mục đích:
+  đó là phát hiện dò quét trái phép, không phải "ghi nhận việc đã xem"), sẽ cần một cơ chế khác
+  (`@Around` bắt cả exception, hoặc audit ở tầng authorization filter), không phải mở rộng
+  `@Auditable` hiện tại.
+- **Method cân nhắc nhưng KHÔNG gắn `@Auditable`, và vì sao**:
+  - `DocumentServiceImpl.getAll()`, `UserServiceImpl.getAllUsers()` (list/pagination): loại vì sẽ
+    audit noise theo từng trang, không phải theo từng lần "xem 1 tài nguyên cụ thể".
+  - `DocumentServiceImpl.resolveFileUrl()`, `mapToResponse()` (private helper dùng chung cho cả
+    detail lẫn list): loại vì gắn ở đây sẽ audit cả list path — chính lý do phải chọn `getById`
+    làm điểm audit thay vì helper thực sự tạo ra URL.
+  - `UserServiceImpl.getMyProfile()`: cân nhắc (cũng trả PII) nhưng loại — đây là user tự xem
+    chính mình (`actorId == resourceId` luôn đúng), không phải một actor xem dữ liệu nhạy cảm của
+    **người khác**, nên giá trị bảo mật/compliance của việc audit lại gần như bằng 0 (không phát
+    hiện được gì mà đăng nhập thành công chưa nói lên).
+  - `DocumentServiceImpl.createDocument`/`updateDocument`/`updateStatus`/`softDelete`: đã là DB
+    write, đã được `AuditEventListener` bắt qua CREATE/UPDATE — gắn thêm `@Auditable` sẽ audit
+    trùng 1 hành động qua 2 cơ chế mà không có lý do (khác với login, nơi domain event mang thông
+    tin mà DB write không mang được).
+
+### Test lock (hybrid extension)
+
+Xác minh thủ công trên DB dev local (Docker `unisage-postgres` + `unisage-minio` đã chạy sẵn,
+`./mvnw spring-boot:run`), cùng cách tiếp cận với Test lock gốc ở trên:
+
+- Flyway áp `V11__audit_log_actions_widen.sql` thành công lên DB dev đã ở version 10
+  (`Successfully applied 1 migration ... now at version v11`).
+- `POST /auth/login` sai mật khẩu (`code=SA-001`, password sai) → 401, và 1 dòng
+  `LOGIN_FAILED / USER`, `resourceId=null`, `actorId=null`,
+  `details={"attemptedCode":"SA-001","reason":"BAD_PASSWORD"}`.
+- `POST /auth/login` đúng mật khẩu → 200 kèm token, và 1 dòng `LOGIN / USER`,
+  `resourceId=actorId=<id SUPER_ADMIN>`, `actorCode="SA-001"`, `details={"code":"SA-001"}`.
+- `POST /auth/logout` (kèm Bearer token) → 200, và 1 dòng `LOGOUT / USER`,
+  `resourceId=actorId=<id SUPER_ADMIN>`.
+- `GET /users/{id}` (chi tiết 1 user) → 200, và 1 dòng `VIEW / USER`, `resourceId=<id đó>`.
+- `GET /documents/{id}` (chi tiết 1 document, kèm `fileUrl` presigned) → 200, và 1 dòng
+  `DOWNLOAD / DOCUMENT`, `resourceId=<id đó>`.
+- `GET /users?page=1&limit=5` và `GET /documents?page=1&limit=5` (list/pagination) → 200, và
+  **KHÔNG** sinh thêm dòng `VIEW`/`DOWNLOAD` nào — xác nhận `SELECT COUNT(*) FROM audit_logs WHERE
+  action IN ('DOWNLOAD','VIEW')` giữ nguyên đúng 2 (1 từ mỗi lần gọi detail ở trên), không tăng
+  theo số dòng/số trang list.
+- `GET /audit-logs?action=DOWNLOAD` và `?action=LOGIN_FAILED` filter đúng, trả đúng field —
+  xác nhận `AuditLogController`/`AuditLogServiceImpl` không cần sửa gì để phục vụ các `AuditAction`
+  mới (tái sử dụng nguyên `Specification` hiện có, không hardcode danh sách action cũ nào).
+- `./mvnw test` — toàn bộ 108 test hiện có + `AuthServiceImplTest` (sửa lại constructor call để
+  truyền thêm `ApplicationEventPublisher` mock) pass không đổi; không thêm test tự động mới cho
+  luồng domain-event/AOP mới, cùng lý do ADR-0002/0003 gốc (chưa có hạ tầng Testcontainers/embedded
+  DB) — coi là nợ xác minh tự động, đã bù bằng kiểm thử thủ công ở trên.
+
+## References (bổ sung)
+
+- `src/main/java/com/unisage/backend/audit/event/LoginSucceededEvent.java`
+- `src/main/java/com/unisage/backend/audit/event/LoginFailedEvent.java`
+- `src/main/java/com/unisage/backend/audit/event/LogoutEvent.java`
+- `src/main/java/com/unisage/backend/audit/AuthAuditListener.java`
+- `src/main/java/com/unisage/backend/audit/Auditable.java`
+- `src/main/java/com/unisage/backend/audit/AuditableAspect.java`
+- `src/main/java/com/unisage/backend/service/auth/AuthServiceImpl.java` (`login`, `logout`)
+- `src/main/java/com/unisage/backend/service/document/DocumentServiceImpl.java` (`getById`)
+- `src/main/java/com/unisage/backend/service/user/UserServiceImpl.java` (`getUserById`)
+- `src/main/resources/db/migration/V11__audit_log_actions_widen.sql`
+- `pom.xml` (`spring-boot-starter-aop`)
+
 ## References
 
 - `src/main/java/com/unisage/backend/audit/AuditEventListener.java`
