@@ -57,12 +57,14 @@ ALTER TABLE ONLY public.system_configs
 
 CREATE INDEX idx_system_configs_category ON public.system_configs (category);
 
--- 3) Seed the 19 known settings: 9 rows per currently-hardcoded @Value-injected property (see
+-- 3) Seed the 18 known settings: 8 rows per currently-hardcoded @Value-injected property (see
 --    UNISAGE-64 ticket notes for the source of each current value, infra-only, no consuming
 --    service reads from this table yet) plus 10 ingestion chunking-strategy defaults (wired to
 --    unisage-web's ingestion wizard, see the comment above those rows). Access/refresh token TTL
 --    were intentionally NOT seeded here — the user did not want JWT lifetimes exposed as an
---    admin-editable runtime setting.
+--    admin-editable runtime setting. `ingest.presigned_url_expiry_seconds` was seeded then
+--    dropped again — too internal/technical a knob (a MinIO presigned-URL TTL) for an admin
+--    settings page to expose, per the same "don't need to see this" call as the token TTLs.
 INSERT INTO public.system_configs
     (id, created_at, is_active, config_key, value, value_type, category, label, description, is_editable)
 VALUES
@@ -105,11 +107,6 @@ VALUES
      'ingest.allowed_file_extensions', '[".txt",".pdf",".docx",".doc",".html"]', 'JSON', 'INGEST',
      'Định dạng file được phép',
      'Danh sách phần mở rộng file được chấp nhận khi nạp tài liệu.', true),
-
-    (gen_random_uuid(), now(), true,
-     'ingest.presigned_url_expiry_seconds', '3600', 'NUMBER', 'INGEST',
-     'Thời hạn URL tải file (giây)',
-     'Thời gian hiệu lực của presigned URL dùng để tải file từ MinIO.', true),
 
     -- Chunking strategy defaults, mirroring unisage-web's STRATEGY_DEFAULTS
     -- (src/features/ingestion/components/steps/chunking/strategy-config.ts), which itself mirrors
