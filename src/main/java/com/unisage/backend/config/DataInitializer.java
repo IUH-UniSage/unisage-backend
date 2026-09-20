@@ -348,7 +348,12 @@ public class DataInitializer implements CommandLineRunner {
                 "Xem cấu hình hệ thống"),
             def(PredefinedPermissions.SYSTEM_CONFIG_UPDATE,
                 "/system-configs/**", PermissionMethod.PUT, ResourceType.SYSTEM_CONFIG,
-                "Cập nhật cấu hình hệ thống")
+                "Cập nhật cấu hình hệ thống"),
+
+            // ── SystemHealth ─────────────────────────────────────────────
+            def(PredefinedPermissions.SYSTEM_HEALTH_READ,
+                "/admin/health/**", PermissionMethod.GET, ResourceType.SYSTEM,
+                "Xem tình trạng hệ thống")
         ));
 
         return list;
@@ -370,9 +375,10 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     /**
-     * SUPER_ADMIN gets every _ALL permission, plus SystemConfig's READ/UPDATE — SystemConfig has
-     * no _ALL wildcard (only GET/PUT are ever exposed, no create/delete), so it is granted
-     * explicitly here instead.
+     * SUPER_ADMIN gets every _ALL permission, plus SystemConfig's READ/UPDATE and
+     * SystemHealth's READ — neither has an _ALL wildcard (SystemConfig: only GET/PUT are ever
+     * exposed; SystemHealth: read-only, nothing admin-editable), so both are granted explicitly
+     * here instead.
      */
     private void assignSuperAdmin(Role role, Map<String, Permission> perms) {
         int count = 0;
@@ -384,7 +390,8 @@ public class DataInitializer implements CommandLineRunner {
         }
         List<String> explicit = List.of(
             permKey(PredefinedPermissions.SYSTEM_CONFIG_READ),
-            permKey(PredefinedPermissions.SYSTEM_CONFIG_UPDATE)
+            permKey(PredefinedPermissions.SYSTEM_CONFIG_UPDATE),
+            permKey(PredefinedPermissions.SYSTEM_HEALTH_READ)
         );
         assign(role, perms, explicit);
         count += explicit.size();
