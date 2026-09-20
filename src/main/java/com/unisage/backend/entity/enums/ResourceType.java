@@ -32,6 +32,7 @@ public enum ResourceType {
 
     // System
     SYSTEM("Hệ thống"),
+    SYSTEM_CONFIG("Cấu hình hệ thống"),
     OTHER("Khác");
 
     private final String displayName;

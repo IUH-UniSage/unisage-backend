@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.unisage.backend.dto.request.SendMessageRequest;
@@ -26,6 +25,7 @@ import com.unisage.backend.repository.ConversationRepository;
 import com.unisage.backend.repository.MessageRepository;
 import com.unisage.backend.repository.TicketRepository;
 import com.unisage.backend.service.guestsession.GuestSessionService;
+import com.unisage.backend.service.systemconfig.SystemConfigResolver;
 import com.unisage.backend.service.usagelimit.UsageLimitService;
 
 import jakarta.transaction.Transactional;
@@ -41,9 +41,7 @@ public class MessageServiceImpl implements MessageService {
     private final UsageLimitService usageLimitService;
     private final GuestSessionService guestSessionService;
     private final TicketRepository ticketRepository;
-
-    @Value("${app.message.max-history:20}")
-    private int maxMessageHistory;
+    private final SystemConfigResolver configResolver;
 
     @Override
     @Transactional
@@ -144,6 +142,7 @@ public class MessageServiceImpl implements MessageService {
     public List<MessageResponse> getByConversation(UUID conversationId, Integer limit) {
         List<Message> messages = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
 
+        int maxMessageHistory = configResolver.getInt("chat.max_history_messages", 20);
         int effectiveLimit = (limit != null && limit > 0) ? Math.min(limit, maxMessageHistory) : maxMessageHistory;
         if (messages.size() > effectiveLimit) {
             messages = messages.subList(messages.size() - effectiveLimit, messages.size());

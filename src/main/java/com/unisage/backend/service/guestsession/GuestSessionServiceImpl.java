@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
@@ -14,6 +13,7 @@ import com.unisage.backend.repository.ConversationRepository;
 import com.unisage.backend.repository.GuestSessionRepository;
 import com.unisage.backend.repository.MessageRepository;
 import com.unisage.backend.repository.UsageLimitRepository;
+import com.unisage.backend.service.systemconfig.SystemConfigResolver;
 import com.unisage.backend.utils.TokenHashUtil;
 
 import jakarta.transaction.Transactional;
@@ -28,9 +28,7 @@ public class GuestSessionServiceImpl implements GuestSessionService {
     private final MessageRepository messageRepository;
     private final UsageLimitRepository usageLimitRepository;
     private final TokenHashUtil tokenHashUtil;
-
-    @Value("${app.guest-session.ttl-days:30}")
-    private int ttlDays;
+    private final SystemConfigResolver configResolver;
 
     @Override
     @Transactional
@@ -93,6 +91,7 @@ public class GuestSessionServiceImpl implements GuestSessionService {
     }
 
     private LocalDateTime newExpiry() {
+        int ttlDays = configResolver.getInt("maintenance.guest_session.ttl_days", 30);
         return LocalDateTime.now().plusDays(ttlDays);
     }
 }

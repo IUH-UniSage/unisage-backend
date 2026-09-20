@@ -69,7 +69,8 @@ public class AuditEventListener implements PostInsertEventListener, PostUpdateEv
             Map.entry("ChatModel", ResourceType.CHAT_MODEL),
             Map.entry("Conversation", ResourceType.CONVERSATION),
             Map.entry("Message", ResourceType.MESSAGE),
-            Map.entry("Ticket", ResourceType.TICKET));
+            Map.entry("Ticket", ResourceType.TICKET),
+            Map.entry("SystemConfig", ResourceType.SYSTEM_CONFIG));
 
     @Override
     public void onPostInsert(PostInsertEvent event) {

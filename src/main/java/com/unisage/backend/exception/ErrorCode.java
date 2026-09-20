@@ -42,6 +42,7 @@ public enum ErrorCode {
     ACCESS_LEVEL_NOT_FOUND(HttpStatus.NOT_FOUND, 2131, "Access Level không tồn tại."),
     TICKET_NOT_FOUND(HttpStatus.NOT_FOUND, 2139, "Yêu cầu hỗ trợ không tồn tại."),
     AUDIT_LOG_NOT_FOUND(HttpStatus.NOT_FOUND, 2144, "Nhật ký hệ thống không tồn tại."),
+    SYSTEM_CONFIG_NOT_FOUND(HttpStatus.NOT_FOUND, 2145, "Cấu hình hệ thống không tồn tại."),
 
     // Business rule errors
     EMAIL_EXISTED(HttpStatus.BAD_REQUEST, 2115, "Email này đã được sử dụng!"),
@@ -61,6 +62,8 @@ public enum ErrorCode {
     TICKET_MESSAGE_INVALID(HttpStatus.BAD_REQUEST, 2141, "Chỉ có thể báo cáo câu trả lời của trợ lý trong hội thoại của bạn."),
     TICKET_INVALID_STATUS_TRANSITION(HttpStatus.BAD_REQUEST, 2142, "Yêu cầu hỗ trợ đã đóng, không thể thay đổi nữa."),
     TICKET_RESOLUTION_REQUIRED(HttpStatus.BAD_REQUEST, 2143, "Cần nhập nội dung phản hồi khi đánh dấu đã giải quyết."),
+    SYSTEM_CONFIG_INVALID_VALUE(HttpStatus.BAD_REQUEST, 2146, "Giá trị cấu hình không hợp lệ với kiểu dữ liệu của cấu hình này."),
+    SYSTEM_CONFIG_NOT_EDITABLE(HttpStatus.FORBIDDEN, 2147, "Cấu hình này không thể chỉnh sửa."),
 
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),

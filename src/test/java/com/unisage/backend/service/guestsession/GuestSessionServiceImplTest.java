@@ -7,7 +7,6 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import com.unisage.backend.entity.GuestSession;
 import com.unisage.backend.repository.ConversationRepository;
@@ -15,11 +14,13 @@ import com.unisage.backend.repository.GuestSessionRepository;
 import com.unisage.backend.repository.MessageRepository;
 import com.unisage.backend.repository.UsageLimitRepository;
 import com.unisage.backend.service.guestsession.GuestSessionService.GuestSessionResolution;
+import com.unisage.backend.service.systemconfig.SystemConfigResolver;
 import com.unisage.backend.utils.TokenHashUtil;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -43,10 +44,11 @@ class GuestSessionServiceImplTest {
         messageRepository = mock(MessageRepository.class);
         usageLimitRepository = mock(UsageLimitRepository.class);
         tokenHashUtil = mock(TokenHashUtil.class);
+        SystemConfigResolver configResolver = mock(SystemConfigResolver.class);
+        when(configResolver.getInt(any(), anyInt())).thenAnswer(inv -> inv.getArgument(1));
         guestSessionService = new GuestSessionServiceImpl(
                 guestSessionRepository, conversationRepository, messageRepository, usageLimitRepository,
-                tokenHashUtil);
-        ReflectionTestUtils.setField(guestSessionService, "ttlDays", 30);
+                tokenHashUtil, configResolver);
 
         when(guestSessionRepository.save(any(GuestSession.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }

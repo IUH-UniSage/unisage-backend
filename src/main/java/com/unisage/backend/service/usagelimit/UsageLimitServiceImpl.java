@@ -17,6 +17,7 @@ import com.unisage.backend.entity.enums.UsageLimitType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.UsageLimitRepository;
+import com.unisage.backend.service.systemconfig.SystemConfigResolver;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -26,15 +27,7 @@ import lombok.RequiredArgsConstructor;
 public class UsageLimitServiceImpl implements UsageLimitService {
 
     private final UsageLimitRepository usageLimitRepository;
-
-    @Value("${app.usage-limit.enabled:false}")
-    private boolean enabled;
-
-    @Value("${app.usage-limit.user-daily-limit:30}")
-    private int userDailyLimit;
-
-    @Value("${app.usage-limit.guest-daily-limit:10}")
-    private int guestDailyLimit;
+    private final SystemConfigResolver configResolver;
 
     @Value("${app.usage-limit.limit-type:MESSAGE}")
     private UsageLimitType limitType;
@@ -45,6 +38,9 @@ public class UsageLimitServiceImpl implements UsageLimitService {
     @Override
     @Transactional
     public UsageLimit checkAndGetOrCreate(User user, GuestSession guestSession) {
+        // Read live on every call (not cached in a field) so an admin toggling this in
+        // System Settings takes effect on the very next request, no redeploy/restart needed.
+        boolean enabled = configResolver.getBoolean("chat.usage_limit.enabled", false);
         if (!enabled) {
             return null;
         }
@@ -53,7 +49,9 @@ public class UsageLimitServiceImpl implements UsageLimitService {
         }
 
         LocalDate scopeDate = resolveScopeDate(scope);
-        int maxCount = user != null ? userDailyLimit : guestDailyLimit;
+        int maxCount = user != null
+                ? configResolver.getInt("chat.usage_limit.user_daily_limit", 30)
+                : configResolver.getInt("chat.usage_limit.guest_daily_limit", 10);
 
         UsageLimit usageLimit = user != null
                 ? usageLimitRepository
