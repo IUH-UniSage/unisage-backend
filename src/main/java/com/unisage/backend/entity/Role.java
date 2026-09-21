@@ -28,4 +28,9 @@ public class Role extends BaseEntity {
     private List<RolePermission> rolePermissions;
 
     private String description;
+
+    /** Null means the role uses the default usage limit plan. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usage_limit_plan_id")
+    private UsageLimitPlan usageLimitPlan;
 }

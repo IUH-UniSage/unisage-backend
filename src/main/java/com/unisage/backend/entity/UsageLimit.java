@@ -1,11 +1,9 @@
 package com.unisage.backend.entity;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import com.unisage.backend.entity.enums.UsageLimitScope;
-import com.unisage.backend.entity.enums.UsageLimitType;
+import com.unisage.backend.entity.enums.UsageLimitWindow;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -17,7 +15,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -25,11 +22,12 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
+/**
+ * Running token counter of one identity (exactly one of user / guest session) for one window type.
+ * {@code windowStart} is UTC; null means no window has started yet.
+ */
 @Entity
-@Table(name = "usage_limits", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"user_id", "limit_type", "scope", "scope_date"}),
-    @UniqueConstraint(columnNames = {"guest_session_id", "limit_type", "scope", "scope_date"})
-})
+@Table(name = "usage_limits")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @SuperBuilder
 public class UsageLimit extends BaseEntity {
 
@@ -47,19 +45,13 @@ public class UsageLimit extends BaseEntity {
     private GuestSession guestSession;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "limit_type")
-    private UsageLimitType limitType;
+    @Column(name = "window_type", nullable = false)
+    private UsageLimitWindow windowType;
 
-    @Enumerated(EnumType.STRING)
-    private UsageLimitScope scope;
-
-    @Column(name = "scope_date")
-    private LocalDate scopeDate;
+    @Column(name = "window_start")
+    private LocalDateTime windowStart;
 
     @Builder.Default
-    @Column(name = "used_count")
-    private Integer usedCount = 0;
-
-    @Column(name = "last_used_at")
-    private LocalDateTime lastUsedAt;
+    @Column(name = "used_tokens", nullable = false)
+    private Long usedTokens = 0L;
 }

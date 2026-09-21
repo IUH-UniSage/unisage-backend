@@ -5,6 +5,7 @@ import com.unisage.backend.entity.enums.PermissionMethod;
 import com.unisage.backend.entity.enums.ResourceType;
 import com.unisage.backend.predefined.PredefinedPermissions;
 import com.unisage.backend.predefined.PredefinedRoles;
+import com.unisage.backend.predefined.PredefinedUsageLimitPlans;
 import com.unisage.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,7 @@ public class DataInitializer implements CommandLineRunner {
     private final DepartmentRepository      departmentRepository;
     private final AccessLevelRepository     accessLevelRepository;
     private final UserDepartmentAccessRepository userDepartmentAccessRepository;
+    private final UsageLimitPlanRepository usageLimitPlanRepository;
     private final PasswordEncoder           passwordEncoder;
 
     @Value("${DEFAULT_SUPERADMIN_PASS:Admin@123456}")
@@ -61,6 +63,8 @@ public class DataInitializer implements CommandLineRunner {
         // 2. Seed roles
         Role superAdmin  = seedRole(PredefinedRoles.SUPER_ADMIN,  "Quyền quản trị tối cao của hệ thống", true);
         Role ingestAdmin = seedRole(PredefinedRoles.INGEST_ADMIN, "Quản trị nạp liệu và tài liệu", true);
+        assignUnlimitedUsagePlan(superAdmin);
+        assignUnlimitedUsagePlan(ingestAdmin);
         // The end-user role is not a system role: the frontend uses this flag to decide who sees the
         // admin-workspace link, and a plain USER must not.
         Role userRole    = seedRole(PredefinedRoles.USER,          "Người dùng cuối", false);
@@ -243,6 +247,23 @@ public class DataInitializer implements CommandLineRunner {
                 "/access-levels/**", PermissionMethod.DELETE, ResourceType.ACCESS_LEVEL,
                 "Xóa cấp độ truy cập"),
 
+            // ── UsageLimitPlan ────────────────────────────────────────────
+            def(PredefinedPermissions.USAGE_LIMIT_PLAN_ALL,
+                "/usage-limit-plans/**", PermissionMethod.ALL, ResourceType.USAGE_LIMIT_PLAN,
+                "Toàn quyền gói hạn mức"),
+            def(PredefinedPermissions.USAGE_LIMIT_PLAN_READ,
+                "/usage-limit-plans/**", PermissionMethod.GET, ResourceType.USAGE_LIMIT_PLAN,
+                "Xem gói hạn mức"),
+            def(PredefinedPermissions.USAGE_LIMIT_PLAN_CREATE,
+                "/usage-limit-plans", PermissionMethod.POST, ResourceType.USAGE_LIMIT_PLAN,
+                "Tạo gói hạn mức"),
+            def(PredefinedPermissions.USAGE_LIMIT_PLAN_UPDATE,
+                "/usage-limit-plans/**", PermissionMethod.PUT, ResourceType.USAGE_LIMIT_PLAN,
+                "Cập nhật gói hạn mức"),
+            def(PredefinedPermissions.USAGE_LIMIT_PLAN_DELETE,
+                "/usage-limit-plans/**", PermissionMethod.DELETE, ResourceType.USAGE_LIMIT_PLAN,
+                "Xóa gói hạn mức"),
+
             // ── Ticket ────────────────────────────────────────────────────
             def(PredefinedPermissions.TICKET_ALL,
                 "/tickets/**", PermissionMethod.ALL, ResourceType.TICKET,
@@ -360,6 +381,20 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     // ─── Role helpers ────────────────────────────────────────────────────
+    /**
+     * Admin roles are exempt from the default quota. Migration V15 does the same for databases whose
+     * roles already existed; this covers a fresh database, where the roles are created after Flyway ran.
+     */
+    private void assignUnlimitedUsagePlan(Role role) {
+        if (role.getUsageLimitPlan() != null) {
+            return;
+        }
+        usageLimitPlanRepository.findByName(PredefinedUsageLimitPlans.UNLIMITED).ifPresent(plan -> {
+            role.setUsageLimitPlan(plan);
+            roleRepository.save(role);
+        });
+    }
+
     private Role seedRole(String name, String description, boolean isSystemRole) {
         return roleRepository.findByName(name).orElseGet(() -> {
             Role r = Role.builder()

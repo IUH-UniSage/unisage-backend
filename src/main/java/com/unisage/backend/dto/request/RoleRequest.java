@@ -10,5 +10,7 @@ public record RoleRequest(
     Boolean isSystemRole,
     String description,
     Boolean isActive,
-    List<UUID> permissionIds
+    List<UUID> permissionIds,
+    /** Null = the role uses the default usage limit plan. */
+    UUID usageLimitPlanId
 ) {}

@@ -15,7 +15,6 @@ import com.unisage.backend.entity.Conversation;
 import com.unisage.backend.entity.GuestSession;
 import com.unisage.backend.entity.Message;
 import com.unisage.backend.entity.Ticket;
-import com.unisage.backend.entity.UsageLimit;
 import com.unisage.backend.entity.enums.MsgRole;
 import com.unisage.backend.entity.enums.MsgStatus;
 import com.unisage.backend.exception.AppException;
@@ -68,9 +67,9 @@ public class MessageServiceImpl implements MessageService {
                     .orElseThrow(() -> new AppException(ErrorCode.CHAT_MODEL_NOT_FOUND));
         }
 
-        UsageLimit usageLimit = null;
         if (request.role() == MsgRole.USER) {
-            usageLimit = usageLimitService.checkAndGetOrCreate(conversation.getUser(), conversation.getGuestSession());
+            usageLimitService.checkAndConsumeQuestion(
+                    conversation.getUser(), conversation.getGuestSession(), request.content());
         }
 
         Message message = Message.builder()
@@ -85,7 +84,9 @@ public class MessageServiceImpl implements MessageService {
                 .build();
         message = messageRepository.save(message);
 
-        usageLimitService.increment(usageLimit);
+        if (request.role() == MsgRole.ASSISTANT && status == MsgStatus.COMPLETED) {
+            usageLimitService.consumeAnswer(conversation.getUser(), conversation.getGuestSession(), message.getContent());
+        }
 
         return toResponse(message, ticketIdOf(message));
     }
@@ -135,6 +136,12 @@ public class MessageServiceImpl implements MessageService {
         }
 
         message = messageRepository.save(message);
+
+        if (message.getStatus() == MsgStatus.COMPLETED) {
+            Conversation conversation = message.getConversation();
+            usageLimitService.consumeAnswer(conversation.getUser(), conversation.getGuestSession(), message.getContent());
+        }
+
         return toResponse(message, ticketIdOf(message));
     }
 

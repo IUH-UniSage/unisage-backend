@@ -45,6 +45,9 @@ public final class PredefinedPublicPaths {
             new PublicPath("GET", "/conversations/guest"),
             new PublicPath("POST", "/messages"),
             new PublicPath("GET", "/messages/conversation/**"),
+            // Remaining usage quota: a signed-in user reads their own, a guest reads the one tied to
+            // their session cookie. Identity is never taken from the request.
+            new PublicPath("GET", "/usage-limits/me"),
             // unisage-agent (Python) streams the answer and calls back here to persist/finalize
             // the assistant Message row. No end-user JWT context on that call — it's public from
             // Spring Security's point of view, but InternalSecretFilter (see security package)

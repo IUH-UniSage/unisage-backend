@@ -15,6 +15,7 @@ import com.unisage.backend.entity.*;
 import com.unisage.backend.repository.PermissionRepository;
 import com.unisage.backend.repository.RolePermissionRepository;
 import com.unisage.backend.repository.RoleRepository;
+import com.unisage.backend.repository.UsageLimitPlanRepository;
 import com.unisage.backend.service.rbac.RbacService;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
@@ -29,6 +30,7 @@ public class RbacServiceImpl implements RbacService {
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final RolePermissionRepository rolePermissionRepository;
+    private final UsageLimitPlanRepository usageLimitPlanRepository;
 
     @Override
     @Transactional
@@ -42,6 +44,7 @@ public class RbacServiceImpl implements RbacService {
                 .isSystemRole(request.isSystemRole())
                 .description(request.description())
                 .isActive(request.isActive() != null ? request.isActive() : true)
+                .usageLimitPlan(resolveUsageLimitPlan(request.usageLimitPlanId()))
                 .build();
         role = roleRepository.save(role);
 
@@ -68,6 +71,7 @@ public class RbacServiceImpl implements RbacService {
         }
         role.setIsSystemRole(request.isSystemRole());
         role.setDescription(request.description());
+        role.setUsageLimitPlan(resolveUsageLimitPlan(request.usageLimitPlanId()));
         if (request.isActive() != null) {
             role.setIsActive(request.isActive());
         }
@@ -76,6 +80,9 @@ public class RbacServiceImpl implements RbacService {
 
         if (request.permissionIds() != null) {
             rolePermissionRepository.deleteByRoleId(roleId);
+            // Hibernate runs inserts before deletes at flush time; without this, re-assigning a
+            // permission the role already had fails on the composite primary key.
+            rolePermissionRepository.flush();
 
             for (UUID pId : request.permissionIds()) {
                 assignPermissionToRole(roleId, pId);
@@ -231,7 +238,19 @@ public class RbacServiceImpl implements RbacService {
                 .updatedBy(role.getUpdatedBy() != null ? role.getUpdatedBy().getId().toString() : null)
                 .updatedByName(role.getUpdatedBy() != null ? role.getUpdatedBy().getFullName() : null)
                 .isActive(role.getIsActive())
+                .usageLimitPlan(role.getUsageLimitPlan() != null
+                        ? new UsageLimitPlanSummary(role.getUsageLimitPlan().getId(), role.getUsageLimitPlan().getName())
+                        : null)
                 .build();
+    }
+
+    /** Null id means "no plan of its own": the role then falls back to the default plan at request time. */
+    private UsageLimitPlan resolveUsageLimitPlan(UUID usageLimitPlanId) {
+        if (usageLimitPlanId == null) {
+            return null;
+        }
+        return usageLimitPlanRepository.findById(usageLimitPlanId)
+                .orElseThrow(() -> new AppException(ErrorCode.USAGE_LIMIT_PLAN_NOT_FOUND));
     }
 
     private PermissionResponse mapToPermissionResponse(Permission p) {
