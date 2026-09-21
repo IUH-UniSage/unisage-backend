@@ -33,7 +33,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class MessageServiceImplTest {
@@ -395,6 +398,99 @@ class MessageServiceImplTest {
         when(ticketRepository.findByMessageId(messageId)).thenReturn(Optional.empty());
 
         assertThat(messageService.getById(messageId).ticketId()).isNull();
+    }
+
+    // ── usage limit hooks ────────────────────────────────────────────────
+
+    @Test
+    void send_userMessage_checksAndCountsQuestionBeforeSaving() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        Conversation conversation = conversation(conversationId, owner, null);
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+
+        messageService.send(SendMessageRequest.builder()
+                .conversationId(conversationId).role(MsgRole.USER).content("hi").build(), owner.getId(), null);
+
+        verify(usageLimitService).checkAndConsumeQuestion(owner, null, "hi");
+        verify(usageLimitService, never()).consumeAnswer(any(), any(), any());
+    }
+
+    @Test
+    void send_userMessageOverLimit_propagatesAndSavesNothing() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        Conversation conversation = conversation(conversationId, owner, null);
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+        doThrow(new AppException(ErrorCode.USAGE_LIMIT_EXCEEDED))
+                .when(usageLimitService).checkAndConsumeQuestion(any(), any(), any());
+
+        SendMessageRequest request = SendMessageRequest.builder()
+                .conversationId(conversationId).role(MsgRole.USER).content("hi").build();
+
+        assertThatThrownBy(() -> messageService.send(request, owner.getId(), null))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USAGE_LIMIT_EXCEEDED);
+        verify(messageRepository, never()).save(any(Message.class));
+    }
+
+    @Test
+    void send_streamingAssistantPlaceholder_isNotCounted() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        Conversation conversation = conversation(conversationId, owner, null);
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+
+        messageService.send(SendMessageRequest.builder()
+                .conversationId(conversationId).role(MsgRole.ASSISTANT).status(MsgStatus.STREAMING).content("")
+                .build(), owner.getId(), null);
+
+        verify(usageLimitService, never()).checkAndConsumeQuestion(any(), any(), any());
+        verify(usageLimitService, never()).consumeAnswer(any(), any(), any());
+    }
+
+    @Test
+    void send_completedAssistantMessage_countsAnswer() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        Conversation conversation = conversation(conversationId, owner, null);
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+
+        messageService.send(SendMessageRequest.builder()
+                .conversationId(conversationId).role(MsgRole.ASSISTANT).status(MsgStatus.COMPLETED)
+                .content("answer").build(), owner.getId(), null);
+
+        verify(usageLimitService).consumeAnswer(owner, null, "answer");
+    }
+
+    @Test
+    void update_streamingToCompleted_countsAnswerOfFinalContent() {
+        UUID messageId = UUID.randomUUID();
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        Conversation conversation = conversation(conversationId, owner, null);
+        Message message = assistantMessage(messageId, conversation, MsgStatus.STREAMING, "partial");
+        when(messageRepository.findById(messageId)).thenReturn(Optional.of(message));
+
+        messageService.update(messageId, UpdateMessageRequest.builder()
+                .conversationId(conversationId).content("final answer").status(MsgStatus.COMPLETED).build());
+
+        verify(usageLimitService).consumeAnswer(owner, null, "final answer");
+    }
+
+    @Test
+    void update_streamingToError_doesNotCountAnswer() {
+        UUID messageId = UUID.randomUUID();
+        UUID conversationId = UUID.randomUUID();
+        Conversation conversation = conversation(conversationId);
+        Message message = assistantMessage(messageId, conversation, MsgStatus.STREAMING, "partial");
+        when(messageRepository.findById(messageId)).thenReturn(Optional.of(message));
+
+        messageService.update(messageId, UpdateMessageRequest.builder()
+                .conversationId(conversationId).content("oops").status(MsgStatus.ERROR).build());
+
+        verify(usageLimitService, never()).consumeAnswer(any(), any(), any());
     }
 
     // ── send() ownership ─────────────────────────────────────────────────

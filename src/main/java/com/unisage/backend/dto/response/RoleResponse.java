@@ -18,5 +18,7 @@ public record RoleResponse(
     LocalDateTime updatedAt,
     String updatedBy,
     String updatedByName,
-    Boolean isActive
+    Boolean isActive,
+    /** Null = the role uses the default usage limit plan. */
+    UsageLimitPlanSummary usageLimitPlan
 ) {}

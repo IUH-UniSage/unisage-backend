@@ -51,6 +51,13 @@ public final class PredefinedPermissions {
     public static final String ACCESS_LEVEL_UPDATE = "ACCESS_LEVEL_UPDATE";
     public static final String ACCESS_LEVEL_DELETE = "ACCESS_LEVEL_DELETE";
 
+    // ─── UsageLimitPlan ───────────────────────────────────────────────────
+    public static final String USAGE_LIMIT_PLAN_ALL    = "USAGE_LIMIT_PLAN_ALL";
+    public static final String USAGE_LIMIT_PLAN_READ   = "USAGE_LIMIT_PLAN_READ";
+    public static final String USAGE_LIMIT_PLAN_CREATE = "USAGE_LIMIT_PLAN_CREATE";
+    public static final String USAGE_LIMIT_PLAN_UPDATE = "USAGE_LIMIT_PLAN_UPDATE";
+    public static final String USAGE_LIMIT_PLAN_DELETE = "USAGE_LIMIT_PLAN_DELETE";
+
     // ─── Ticket ───────────────────────────────────────────────────────────
     public static final String TICKET_ALL    = "TICKET_ALL";
     public static final String TICKET_READ   = "TICKET_READ";

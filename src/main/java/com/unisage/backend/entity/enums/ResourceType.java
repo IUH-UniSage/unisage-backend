@@ -24,6 +24,9 @@ public enum ResourceType {
     CONVERSATION("Hội thoại"),
     MESSAGE("Tin nhắn"),
 
+    // Usage
+    USAGE_LIMIT_PLAN("Gói hạn mức"),
+
     // Support
     TICKET("Yêu cầu hỗ trợ"),
 

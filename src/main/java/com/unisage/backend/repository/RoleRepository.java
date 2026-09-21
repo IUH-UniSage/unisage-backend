@@ -10,7 +10,9 @@ import java.util.UUID;
 public interface RoleRepository extends JpaRepository<Role, UUID> {
  Optional<Role> findByName(String name);
 
+ boolean existsByUsageLimitPlanId(UUID usageLimitPlanId);
+
  @Override
- @EntityGraph(attributePaths = {"createdBy", "updatedBy"})
+ @EntityGraph(attributePaths = {"createdBy", "updatedBy", "usageLimitPlan"})
  Page<Role> findAll(Pageable pageable);
 }

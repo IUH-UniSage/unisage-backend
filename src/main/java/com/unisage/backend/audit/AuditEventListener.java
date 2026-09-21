@@ -47,7 +47,9 @@ public class AuditEventListener implements PostInsertEventListener, PostUpdateEv
     // user/assistant text - capturing full chat content verbatim into an admin-visible,
     // immutable audit table is a privacy exposure this trail was never meant to create, not
     // just noise. See docs/adr/0003-audit-log-persistence.md.
-    private static final Set<String> EXCLUDED_ENTITIES = Set.of("AuditLog", "Message", "Conversation");
+    // UsageLimit is the per-identity token counter, rewritten on every chat turn: pure bookkeeping.
+    private static final Set<String> EXCLUDED_ENTITIES =
+            Set.of("AuditLog", "Message", "Conversation", "UsageLimit");
 
     // Fields BaseEntity/AuthServiceImpl.login() touch as pure bookkeeping on every login - see
     // the skip check in handle() below.
@@ -70,7 +72,8 @@ public class AuditEventListener implements PostInsertEventListener, PostUpdateEv
             Map.entry("Conversation", ResourceType.CONVERSATION),
             Map.entry("Message", ResourceType.MESSAGE),
             Map.entry("Ticket", ResourceType.TICKET),
-            Map.entry("SystemConfig", ResourceType.SYSTEM_CONFIG));
+            Map.entry("SystemConfig", ResourceType.SYSTEM_CONFIG),
+            Map.entry("UsageLimitPlan", ResourceType.USAGE_LIMIT_PLAN));
 
     @Override
     public void onPostInsert(PostInsertEvent event) {
