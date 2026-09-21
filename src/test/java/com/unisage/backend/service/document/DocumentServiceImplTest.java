@@ -15,6 +15,7 @@ import com.unisage.backend.repository.AccessLevelRepository;
 import com.unisage.backend.repository.CategoryRepository;
 import com.unisage.backend.repository.DepartmentRepository;
 import com.unisage.backend.repository.DocumentRepository;
+import com.unisage.backend.repository.DocumentVersionRepository;
 import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.service.file.FileService;
 import com.unisage.backend.utils.SecurityUtil;
@@ -43,6 +44,7 @@ class DocumentServiceImplTest {
                 mock(CategoryRepository.class),
                 mock(UserRepository.class),
                 mock(AccessLevelRepository.class),
+                mock(DocumentVersionRepository.class),
                 mock(SecurityUtil.class),
                 fileService);
     }

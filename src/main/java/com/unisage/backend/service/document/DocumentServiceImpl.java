@@ -14,11 +14,13 @@ import com.unisage.backend.dto.request.UpdateDocumentRequest;
 import com.unisage.backend.dto.request.UpdateDocumentStatusRequest;
 import com.unisage.backend.dto.response.CitationDocumentResponse;
 import com.unisage.backend.dto.response.DocumentResponse;
+import com.unisage.backend.dto.response.DocumentVersionResponse;
 import com.unisage.backend.dto.response.PageResponse;
 import com.unisage.backend.entity.AccessLevel;
 import com.unisage.backend.entity.Category;
 import com.unisage.backend.entity.Department;
 import com.unisage.backend.entity.Document;
+import com.unisage.backend.entity.DocumentVersion;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.entity.enums.AuditAction;
 import com.unisage.backend.entity.enums.DocStatus;
@@ -29,6 +31,7 @@ import com.unisage.backend.repository.AccessLevelRepository;
 import com.unisage.backend.repository.CategoryRepository;
 import com.unisage.backend.repository.DepartmentRepository;
 import com.unisage.backend.repository.DocumentRepository;
+import com.unisage.backend.repository.DocumentVersionRepository;
 import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.service.file.FileService;
 import com.unisage.backend.utils.SecurityUtil;
@@ -45,6 +48,7 @@ public class DocumentServiceImpl implements DocumentService {
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
     private final AccessLevelRepository accessLevelRepository;
+    private final DocumentVersionRepository documentVersionRepository;
     private final SecurityUtil securityUtil;
     private final FileService fileService;
 
@@ -115,9 +119,25 @@ public class DocumentServiceImpl implements DocumentService {
         }
 
         if (request.file() != null && !request.file().isEmpty()) {
-            String oldObjectKey = document.getSourceUrl();
+            if (document.getSourceUrl() != null) {
+                UUID userId = securityUtil.getCurrentUserId();
+                User uploader = userRepository.findById(userId)
+                        .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+                DocumentVersion version = DocumentVersion.builder()
+                        .document(document)
+                        .versionNumber(document.getVersion())
+                        .sourceUrl(document.getSourceUrl())
+                        .fileType(document.getFileType())
+                        .uploadedBy(uploader)
+                        .createdAt(LocalDateTime.now())
+                        .build();
+                documentVersionRepository.save(version);
+
+                document.setVersion(document.getVersion() + 1);
+            }
+
             document.setSourceUrl(fileService.upload(request.file()));
-            fileService.delete(oldObjectKey);
         } else if (request.sourceUrl() != null) {
             document.setSourceUrl(request.sourceUrl());
         }
@@ -205,6 +225,29 @@ public class DocumentServiceImpl implements DocumentService {
                 .orElseThrow(() -> new AppException(ErrorCode.DOCUMENT_NOT_FOUND));
         document.setDeletedAt(LocalDateTime.now());
         documentRepository.save(document);
+    }
+
+    @Override
+    public List<DocumentVersionResponse> getVersionHistory(UUID documentId) {
+        documentRepository.findById(documentId)
+                .filter(d -> d.getDeletedAt() == null)
+                .orElseThrow(() -> new AppException(ErrorCode.DOCUMENT_NOT_FOUND));
+
+        List<DocumentVersion> versions = documentVersionRepository
+                .findByDocumentIdOrderByVersionNumberDesc(documentId);
+
+        return versions.stream()
+                .map(v -> DocumentVersionResponse.builder()
+                        .id(v.getId())
+                        .versionNumber(v.getVersionNumber())
+                        .fileType(v.getFileType())
+                        .fileName(toDisplayFileName(v.getSourceUrl()))
+                        .fileUrl(fileService.getPresignedUrl(v.getSourceUrl()))
+                        .uploadedByUserId(v.getUploadedBy() != null ? v.getUploadedBy().getId() : null)
+                        .uploadedByName(v.getUploadedBy() != null ? v.getUploadedBy().getFullName() : null)
+                        .createdAt(v.getCreatedAt())
+                        .build())
+                .toList();
     }
 
     /**

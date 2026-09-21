@@ -14,6 +14,7 @@ import com.unisage.backend.dto.request.UpdateDocumentStatusRequest;
 import com.unisage.backend.dto.response.ApiResponse;
 import com.unisage.backend.dto.response.CitationDocumentResponse;
 import com.unisage.backend.dto.response.DocumentResponse;
+import com.unisage.backend.dto.response.DocumentVersionResponse;
 import com.unisage.backend.dto.response.PageResponse;
 import com.unisage.backend.service.document.DocumentService;
 import com.unisage.backend.utils.MultipartRequestValidator;
@@ -57,6 +58,11 @@ public class DocumentController {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<DocumentResponse>> getDocument(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(documentService.getById(id)));
+    }
+
+    @GetMapping("/{id}/versions")
+    public ResponseEntity<ApiResponse<List<DocumentVersionResponse>>> getDocumentVersions(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success(documentService.getVersionHistory(id)));
     }
 
     @GetMapping("/{id}/citation")
