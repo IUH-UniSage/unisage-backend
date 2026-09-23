@@ -14,9 +14,13 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import com.unisage.backend.entity.Ticket;
+import com.unisage.backend.entity.enums.TicketStatus;
 
 @Repository
 public interface TicketRepository extends JpaRepository<Ticket, UUID>, JpaSpecificationExecutor<Ticket> {
+
+    /** UNISAGE-72: dashboard's "open support requests" tile. */
+    long countByStatus(TicketStatus status);
 
     boolean existsByMessageId(UUID messageId);
 

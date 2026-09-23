@@ -27,4 +27,13 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
     List<Document> findByDocPackageIdAndDeletedAtIsNull(UUID docPackageId);
 
     List<Document> findByStatusAndDeletedAtIsNull(DocStatus status);
+
+    /** UNISAGE-72: dashboard's "published documents" tile - COMPLETED is the closest analog to "published". */
+    long countByStatusAndDeletedAtIsNull(DocStatus status);
+
+    @Query("""
+        SELECT COUNT(DISTINCT d.docPackage.id) FROM Document d
+        WHERE d.status = :status AND d.deletedAt IS NULL
+        """)
+    long countDistinctDepartmentsByStatus(@Param("status") DocStatus status);
 }
