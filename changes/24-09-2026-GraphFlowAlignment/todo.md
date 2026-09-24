@@ -169,16 +169,16 @@ Rồi bỏ `_SECURITY_ACCESS_CONTROL_DEFERRED` trong `app/rag/prompting/__init__
 
 ### Task 7: Node 04 dựng `RoutePlan` từ `tasks`
 
-**Description:** `plan_route(classification) -> RoutePlan` theo AD4: `end` (`"SOCIAL_CHAT"` | `"OFF_TOPIC"` | `None`), `calculation_tasks: list[ClassifiedTask]`, `advisory_tasks: list[tuple[ClassifiedTask, QueryMode]]` với `QueryMode = SINGLE | MULTI`. `streaming_graph.py` rẽ theo `RoutePlan`: `end` → template/05 như cũ; có `advisory_tasks` → nhánh 06 (Task 7 tạm chỉ truyền **task đầu tiên** + mode của nó vào `_run_advisory_flow` — chạy nhiều task là Task 9/10); chỉ có `calculation_tasks` → vẫn đi nhánh advisory như baseline cho tới Task 8. Lượt resume: có `pending.origin_tasks` thì dùng, không có thì 1 task `SINGLE` trên `original_query` (field `origin_tasks` được thêm ở Task 10; trước đó luôn nhánh cũ).
+**Description:** `plan_route(classification) -> RoutePlan` theo AD4: `end` (`"SOCIAL_CHAT"` | `"OFF_TOPIC"` | `None`), `calculation_tasks: list[ClassifiedTask]`, `advisory_tasks: list[tuple[ClassifiedTask, QueryMode]]` với `QueryMode = SINGLE | MULTI`. `streaming_graph.py` rẽ theo `RoutePlan`: `end` → template/05 như cũ; mọi lượt có task học vụ (advisory và/hoặc tính toán) → vẫn chạy nhánh advisory trên **cả tin nhắn**, y như baseline (tin nhắn 1 câu hỏi có `task.query` chính là tin nhắn). `advisory_tasks`/`calculation_tasks` được dựng đủ nhưng chưa được dùng: truyền task + mode vào node 06 là Task 9/10, tách nhánh 07 là Task 8 — không thêm tham số chưa dùng vào `_run_advisory_flow`. Lượt resume: có `pending.origin_tasks` thì dùng, không có thì 1 task `SINGLE` trên `original_query` (field `origin_tasks` được thêm ở Task 10; trước đó luôn nhánh cũ).
 
 **Acceptance criteria:**
-- [ ] Bảng test: mỗi intent đơn × `routing_mode` ra đúng nhánh + `mode`
-- [ ] Tin nhắn ghép: `social_chat` + học vụ → chỉ còn phần học vụ; `off_topic` + học vụ → chỉ còn phần học vụ; `social_chat` + `off_topic` → `OFF_TOPIC`; chỉ `greeting` → 1 task advisory `SINGLE`
-- [ ] Tính toán + thủ tục → `calculation_tasks` 1 phần tử và `advisory_tasks` 1 phần tử (`SINGLE`)
-- [ ] Bỏ docstring "not implemented yet - degrade to the advisory flow"
+- [x] Bảng test: mỗi intent đơn × `routing_mode` ra đúng nhánh + `mode`
+- [x] Tin nhắn ghép: `social_chat` + học vụ → chỉ còn phần học vụ; `off_topic` + học vụ → chỉ còn phần học vụ; `social_chat` + `off_topic` → `OFF_TOPIC`; chỉ `greeting` → 1 task advisory `SINGLE`
+- [x] Tính toán + thủ tục → `calculation_tasks` 1 phần tử và `advisory_tasks` 1 phần tử (`SINGLE`)
+- [x] Bỏ docstring "not implemented yet - degrade to the advisory flow"
 
 **Verification:**
-- [ ] `pytest tests/graph/test_intent_routing_node.py tests/graph/test_graph_wiring.py`
+- [x] `pytest tests/graph/test_intent_routing_node.py tests/graph/test_graph_wiring.py`
 
 **Dependencies:** Task 6
 

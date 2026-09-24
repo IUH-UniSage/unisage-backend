@@ -105,7 +105,7 @@ Hiện trạng còn lệch so với design:
 - [x] Task 4: Pre-filter phân quyền ở node 08 + payload index
 - [x] Task 5: `security_access_control` theo `department_access` và bật trong prompt
 - [x] Task 6: Node 03 trả danh sách `tasks` (taxonomy 4 nhãn)
-- [ ] Task 7: Node 04 dựng `RoutePlan` từ `tasks` (4 đích, có thể 2 nhánh cùng lúc)
+- [x] Task 7: Node 04 dựng `RoutePlan` từ `tasks` (4 đích, có thể 2 nhánh cùng lúc)
 - [ ] Task 8: Node 07 CalculationNode placeholder + gộp với nhánh 06
 
 ### Checkpoint: Routing + Security
