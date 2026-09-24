@@ -242,18 +242,18 @@ Rồi bỏ `_SECURITY_ACCESS_CONTROL_DEFERRED` trong `app/rag/prompting/__init__
 ### Task 10: Decomposer cho task MULTI + node 08 fan-out + khung `chat_multi_intent_synthesis` + `origin_tasks`
 
 **Description:** Theo AD6, AD9:
-- Task MULTI: agent decomposer (`agent_multi_query_decomposer`) nhận `task.query` + lịch sử gần đây; **không chạy HyDE**. Parse `{"sub_queries": [...]}`, tối đa 3; rỗng / sai JSON / chỉ 1 → task đó rơi về `SINGLE` (HyDE).
+- Task MULTI: agent decomposer (`agent_multi_query_decomposer`) nhận `task.query` + lịch sử gần đây; **không chạy HyDE**. Parse `{"sub_queries": [...]}`, tối đa `CHAT_MAX_SUB_QUERIES` (mặc định 3, cấu hình qua env); rỗng / sai JSON / chỉ 1 → task đó rơi về `SINGLE` (HyDE).
 - Query của mọi task nối thành `SQ1..SQn` theo thứ tự task.
 - Node 08: quota `ceil(RETRIEVAL_MAX_CHUNKS / n)` mỗi sub-query, pre-filter mỗi lần; gộp theo `chunk_id` giữ điểm cao hơn, bằng điểm giữ sub-query đứng trước; sort ổn định, cắt `RETRIEVAL_MAX_CHUNKS`.
 - Builder: tách `_base_params(...)`, thêm `build_multi_intent_prompt(..., sub_queries)` render `SQk. ...` (task HyDE ghi `task.query`); Generation chọn khung theo AD9.
 - `PendingClarification.origin_tasks: list[ClassifiedTask] | None` (mặc định `None`) = các task nhánh 06 của lượt gốc; resume chạy lại đúng các task đó. `pending_sub_query_id` lấy từ `sub_query_id` của `ask_user_form` nếu thuộc `SQ1..SQn` (n = tổng số sub-query của lượt đó), ngược lại `None`; lượt chỉ có 1 sub-query luôn `None`.
 
 **Acceptance criteria:**
-- [ ] Câu so sánh 2 ngành → 2-3 sub-query → context có chunk của **mỗi** ngành, không trùng chunk
-- [ ] 2 task advisory khác chủ đề → context có chunk của **mỗi** task
+- [x] Câu so sánh 2 ngành → 2-3 sub-query → context có chunk của **mỗi** ngành, không trùng chunk
+- [x] 2 task advisory khác chủ đề → context có chunk của **mỗi** task
 - [ ] Prompt multi có `SQ1. ...`, `SQ2. ...`
 - [ ] Prompt SINGLE giống trước khi refactor builder, **ngoại trừ** khối `security_access_control` đã được bật ở Task 5 (test so chuỗi với snapshot lấy sau Task 5)
-- [ ] Decomposer trả rác hoặc 1 sub-query → task đó trả lời qua HyDE như SINGLE
+- [x] Decomposer trả rác hoặc 1 sub-query → task đó trả lời qua HyDE như SINGLE
 - [ ] `pending_sub_query_id`:
   - form có 2 sub-query và `sub_query_id: "SQ2"` → `pending_sub_query_id == "SQ2"`, lưu qua `clarification_state` repository rồi đọc lại vẫn là `"SQ2"`
   - `"SQ5"` (ngoài `SQ1..SQ2`), `"abc"`, hoặc không có khoá → `None`
