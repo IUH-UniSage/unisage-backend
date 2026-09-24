@@ -62,7 +62,7 @@ Lệnh kiểm tra chung (AGENTS.md của `unisage-agent`):
 
 **Acceptance criteria:**
 - [ ] Trace một lượt advisory: `01, 02, 03, 04, 06, 08, 09, 10`
-- [ ] `grep -rnE "05B_|1[0-3]_(Retrieval|PostRetrieval|Generation|Ticket)" app tests` không còn kết quả
+- [ ] `grep -rnE "05B_|10_Retrieval|11_PostRetrieval|12_Generation|13_Ticket" app tests` không còn kết quả
 
 **Verification:**
 - [ ] `pytest tests/test_graph_trace.py tests/graph/test_graph_wiring.py tests/e2e`
