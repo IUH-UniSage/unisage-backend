@@ -193,13 +193,13 @@ Rồi bỏ `_SECURITY_ACCESS_CONTROL_DEFERRED` trong `app/rag/prompting/__init__
 **Description:** `app/graph/nodes/calculation.py` với `CALCULATION_PLACEHOLDER_TEMPLATE` (AD11). Theo AD14: chỉ có `calculation_tasks` → stream placeholder, kết thúc lượt, trace `07_CalculationNode`; có cả hai nhánh → chạy nhánh 06 trước, rồi **nối** placeholder sau câu trả lời của 10/11 (một token riêng cách bằng dòng trống, không đi qua LLM), trace có `07_CalculationNode`. Không gọi LLM, không dùng `calculation_extractor.yaml`.
 
 **Acceptance criteria:**
-- [ ] Chỉ tính toán → trả placeholder, không chạy retrieval
-- [ ] Tính toán + thủ tục → câu trả lời có phần thủ tục (từ generation) **và** placeholder ở cuối; `response_text` lưu sang Java chứa cả hai
-- [ ] `confirmed_metadata`/`pending_clarification` được giữ nguyên qua lượt chỉ tính toán; lượt ghép giữ `pending_clarification` do nhánh 06 sinh ra
-- [ ] Citation của lượt ghép chỉ dựng từ phần trả lời học vụ (placeholder không có `[n]`)
+- [x] Chỉ tính toán → trả placeholder, không chạy retrieval
+- [x] Tính toán + thủ tục → câu trả lời có phần thủ tục (từ generation) **và** placeholder ở cuối; `response_text` lưu sang Java chứa cả hai
+- [x] `confirmed_metadata`/`pending_clarification` được giữ nguyên qua lượt chỉ tính toán; lượt ghép giữ `pending_clarification` do nhánh 06 sinh ra
+- [x] Citation của lượt ghép chỉ dựng từ phần trả lời học vụ (placeholder không có `[n]`)
 
 **Verification:**
-- [ ] Test mới trong `tests/graph/`; `pytest tests/graph`
+- [x] Test mới trong `tests/graph/`; `pytest tests/graph`
 
 **Dependencies:** Task 7
 
@@ -208,11 +208,11 @@ Rồi bỏ `_SECURITY_ACCESS_CONTROL_DEFERRED` trong `app/rag/prompting/__init__
 **Estimated scope:** Small
 
 ### Checkpoint: Routing + Security
-- [ ] Bộ lệnh kiểm tra chung pass
-- [ ] Mỗi intent đi đúng nhánh trong ảnh flow_design; tin nhắn ghép tính toán + học vụ đi cả hai nhánh
-- [ ] Khách chỉ đọc được chunk `is_public`
-- [ ] Prompt advisory có khối `security_access_control` nói theo `department_access`
-- [ ] Review với người dùng trước Phase 3
+- [x] Bộ lệnh kiểm tra chung pass
+- [x] Mỗi intent đi đúng nhánh trong ảnh flow_design; tin nhắn ghép tính toán + học vụ đi cả hai nhánh
+- [x] Khách chỉ đọc được chunk `is_public`
+- [x] Prompt advisory có khối `security_access_control` nói theo `department_access`
+- [x] Review với người dùng trước Phase 3
 
 ---
 

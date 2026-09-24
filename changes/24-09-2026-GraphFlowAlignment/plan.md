@@ -106,11 +106,11 @@ Hiện trạng còn lệch so với design:
 - [x] Task 5: `security_access_control` theo `department_access` và bật trong prompt
 - [x] Task 6: Node 03 trả danh sách `tasks` (taxonomy 4 nhãn)
 - [x] Task 7: Node 04 dựng `RoutePlan` từ `tasks` (4 đích, có thể 2 nhánh cùng lúc)
-- [ ] Task 8: Node 07 CalculationNode placeholder + gộp với nhánh 06
+- [x] Task 8: Node 07 CalculationNode placeholder + gộp với nhánh 06
 
 ### Checkpoint: Routing + Security
 
-- [ ] Mỗi intent đi đúng nhánh trong ảnh flow_design; tin nhắn ghép tính toán + học vụ đi cả hai nhánh; khách chỉ đọc được chunk `is_public`; review với người dùng
+- [x] Mỗi intent đi đúng nhánh trong ảnh flow_design; tin nhắn ghép tính toán + học vụ đi cả hai nhánh; khách chỉ đọc được chunk `is_public`; review với người dùng
 
 ### Phase 3: Query Transformation + Fallback
 
