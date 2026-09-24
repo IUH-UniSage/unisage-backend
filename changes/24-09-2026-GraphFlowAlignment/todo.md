@@ -83,25 +83,29 @@ Lệnh kiểm tra chung (AGENTS.md của `unisage-agent`):
 
 ### Task 4: Pre-filter phân quyền ở node 08 + payload index
 
-**Description:** Thêm hàm thuần `build_access_filter(security: AcademicSecurityContext) -> models.Filter` theo AD7 (gồm vế wildcard `*`). `search_chunks` nhận `query_filter` và truyền vào mọi `query_points` (cả 3 named vector). `RetrievalServiceProtocol.retrieve(query, *, security, limit=None)`; node 08 truyền `graph_input.security`. `ensure_collection` tạo payload index `department` (keyword) + `access_level` (integer) khi tạo collection mới (AD8; không xử lý collection cũ). Cập nhật docstring "Deliberately does NOT filter by permission yet" và các `FakeRetrievalService` trong test.
+**Description:** Thêm hàm thuần `build_access_filter(security: AcademicSecurityContext) -> models.Filter` theo AD7 (gồm vế wildcard `*`). `search_chunks` nhận `query_filter` và truyền vào mọi `query_points` (cả 3 named vector). `RetrievalServiceProtocol.retrieve(query, *, security, limit=None)`; node 08 truyền `graph_input.security`. `ensure_collection` tạo payload index `department` (keyword) + `access_level` (integer) + `is_public` (bool) khi tạo collection mới (AD8; không xử lý collection cũ). Cập nhật docstring "Deliberately does NOT filter by permission yet" và các `FakeRetrievalService` trong test.
+
+**Sửa trong lúc làm (xem ghi chú AD7 trong plan.md):** tiêu chí "công khai" không phải `access_level == 0` mà là field `is_public: bool` riêng (mirror `Document.isPublic` bên `unisage-backend`), vì khách vãng lai không có `access_level` nào để so — chỉ có `department_access = []`. Field này chưa tồn tại ở đâu trong `unisage-agent` nên phải thêm xuyên suốt: `EmbeddingRequest.is_public` (`app/schemas/ingestion.py`, mặc định `False`) → `embed_chunks.delay(...)` (`app/api/v1/ingestion.py`) → tham số `is_public` của Celery task `embed_chunks` (`app/worker/celery_app.py`) → `ChunkPoint.is_public` → payload Qdrant. Không có bước này thì không chunk nào có thể được đánh dấu công khai, và mọi câu hỏi của khách sẽ luôn rơi vào TicketFallback.
 
 **Acceptance criteria:**
-- [ ] Khách chỉ nhận chunk `access_level == 0`, mọi department
-- [ ] `[{KHOA_CNTT, 2}]` nhận: mọi chunk cấp 0 + chunk KHOA_CNTT cấp 1, 2; không nhận KHOA_CNTT cấp 3 hay chunk department khác cấp ≥ 1
+- [ ] Khách chỉ nhận chunk `is_public == True`, mọi department
+- [ ] `[{KHOA_CNTT, 2}]` nhận: mọi chunk `is_public == True` + chunk KHOA_CNTT cấp 1, 2 (không public); không nhận KHOA_CNTT cấp 3 hay chunk department khác cấp ≥ 1
 - [ ] Nhiều department với mức khác nhau: mỗi department dùng đúng mức của nó
 - [ ] Wildcard: `[{*, 2}]` thấy chunk mọi department cấp ≤ 2, không thấy cấp 3; `[{*, 1}, {KHOA_CNTT, 3}]` thấy KHOA_CNTT cấp 3 nhưng department khác chỉ tới cấp 1
+- [ ] Vế `is_public` độc lập với department/access_level: chunk `is_public = True` với `department`/`access_level` bất kỳ vẫn được thấy, kể cả khi người hỏi không có quyền department đó
 - [ ] `confirmed_metadata` chứa giá trị leo thang → filter sinh ra không đổi
-- [ ] Collection mới tạo có 2 payload index
+- [ ] Collection mới tạo có 3 payload index (`department`, `access_level`, `is_public`)
+- [ ] `EmbeddingRequest` không truyền `is_public` → mặc định `False` xuyên suốt tới `ChunkPoint`/payload; truyền `is_public: true` → giữ nguyên tới `ChunkPoint`
 
 **Verification:**
 - [ ] Unit test cho `build_access_filter`
-- [ ] `pytest tests/test_retrieval.py tests/test_qdrant_store.py tests/graph tests/api`
+- [ ] `pytest tests/test_retrieval.py tests/test_qdrant_store.py tests/test_embed_chunks_task.py tests/test_ingestion_embedding.py tests/test_ingestion_schemas.py tests/graph tests/api`
 
 **Dependencies:** Task 3
 
-**Files likely touched:** `app/rag/vectorstore/qdrant_store.py`, `app/rag/retrieval/service.py`, `app/graph/nodes/retrieval_filtering.py`, `app/graph/streaming_graph.py`, tests
+**Files likely touched:** `app/rag/vectorstore/qdrant_store.py`, `app/rag/retrieval/service.py`, `app/graph/nodes/retrieval_filtering.py`, `app/graph/streaming_graph.py`, `app/schemas/ingestion.py`, `app/api/v1/ingestion.py`, `app/worker/celery_app.py`, tests
 
-**Estimated scope:** Medium
+**Estimated scope:** Medium → Large (ingestion pipeline cũng bị chạm vì `is_public`)
 
 ---
 
