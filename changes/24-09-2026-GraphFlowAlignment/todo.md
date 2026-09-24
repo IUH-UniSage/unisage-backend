@@ -223,13 +223,13 @@ Rồi bỏ `_SECURITY_ACCESS_CONTROL_DEFERRED` trong `app/rag/prompting/__init__
 **Description:** `transform_query(agent, task, *, confirmed_metadata, history) -> list[str]` (1 phần tử — HyDE; không còn mode PROCEDURE/DOCUMENT, xem AD5); giữ nguyên `append_recent_history`, `extract_standalone_question`, việc gộp `confirmed_metadata`. `_run_advisory_flow` nhận **toàn bộ** `advisory_tasks`, chạy node 06 cho từng task song song (`asyncio.gather`), nối kết quả theo thứ tự task. Node 08 nhận `list[str]` (1 phần tử thì hành vi như cũ). Task MULTI ở bước này tạm chạy HyDE như SINGLE (decomposer là Task 10).
 
 **Acceptance criteria:**
-- [ ] 1 task SINGLE trả đúng 1 query, input LLM y như trước khi đổi (không có dòng chỉ dẫn theo mode)
-- [ ] 2 task advisory → 2 lời gọi HyDE chạy song song, 2 query theo đúng thứ tự task
-- [ ] 1 task: `resolved_query` truyền sang Generation vẫn như trước; 2+ task: `resolved_query = None`
-- [ ] `agents/hyde_generator.yaml` không đổi
+- [x] 1 task SINGLE trả đúng 1 query, input LLM y như trước khi đổi (không có dòng chỉ dẫn theo mode)
+- [x] 2 task advisory → 2 lời gọi HyDE chạy song song, 2 query theo đúng thứ tự task
+- [x] 1 task: `resolved_query` truyền sang Generation vẫn như trước; 2+ task: `resolved_query = None`
+- [x] `agents/hyde_generator.yaml` không đổi
 
 **Verification:**
-- [ ] `pytest tests/graph/test_query_transformation_node.py tests/e2e`
+- [x] `pytest tests/graph/test_query_transformation_node.py tests/e2e`
 
 **Dependencies:** Task 4, Task 7
 

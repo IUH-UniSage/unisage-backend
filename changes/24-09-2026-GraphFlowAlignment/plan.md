@@ -114,7 +114,7 @@ Hiện trạng còn lệch so với design:
 
 ### Phase 3: Query Transformation + Fallback
 
-- [ ] Task 9: Node 06 chạy từng task (HyDE), trả `transformed_queries`
+- [x] Task 9: Node 06 chạy từng task (HyDE), trả `transformed_queries`
 - [ ] Task 10: Decomposer cho task MULTI + node 08 fan-out + khung `chat_multi_intent_synthesis` + `origin_tasks`
 - [ ] Task 11: Node 11 TicketFallback gọi LLM, xoá `ui_buttons`
 
