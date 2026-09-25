@@ -1,0 +1,39 @@
+services:
+  unisage-db:
+    image: pgvector/pgvector:pg17
+    container_name: unisage-postgres
+    environment:
+      POSTGRES_DB: assistant_DB
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  unisage-minio:
+    image: minio/minio:latest
+    container_name: unisage-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+  backend-java:
+    build: .
+    container_name: backend-java
+    expose:
+      - "${SERVER_PORT:-8401}"
+    depends_on:
+      - unisage-db
+      - unisage-minio
+    env_file:
+      - .ENV
+    environment:
+      - DB_HOST=unisage-db
+      - DB_PORT=5432
+      - MINIO_ENDPOINT=http://unisage-minio:9000
+
+volumes:
+  postgres_data:
+  minio_data:
