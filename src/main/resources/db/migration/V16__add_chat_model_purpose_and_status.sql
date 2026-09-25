@@ -13,7 +13,13 @@ ALTER TABLE public.chat_models
     ADD COLUMN status character varying(20) NOT NULL DEFAULT 'PENDING',
     ADD COLUMN verified_at timestamp(6) without time zone,
     ADD COLUMN revision integer NOT NULL DEFAULT 0,
-    ADD COLUMN candidate_generation integer NOT NULL DEFAULT 0;
+    ADD COLUMN candidate_generation integer NOT NULL DEFAULT 0,
+    -- Identity measured at the row's last successful verify, for EMBEDDING only. Compared against
+    -- embedding_index_identity at activate/swap time (plan.md "Embedding identity guard") — the
+    -- verification job only remembers the candidate that was being tested, not what's currently
+    -- live on the row, so the row needs its own copy.
+    ADD COLUMN embedding_dimension integer,
+    ADD COLUMN embedding_fingerprint real[];
 
 ALTER TABLE public.chat_models
     ADD CONSTRAINT chat_models_model_purpose_check
@@ -72,6 +78,10 @@ CREATE TABLE public.chat_model_verifications (
 );
 
 CREATE INDEX ix_chat_model_verifications_chat_model_id ON public.chat_model_verifications (chat_model_id);
+
+-- Supports the claim query's WHERE (status = 'QUEUED' AND next_attempt_at <= now()) OR
+-- (status = 'RUNNING' AND lease_until < now()) — see ChatModelVerificationRepository#claimNextBatch.
+CREATE INDEX ix_chat_model_verifications_claimable ON public.chat_model_verifications (status, next_attempt_at, lease_until);
 
 -- At most 1 job not yet in a final state per credential — a new candidate
 -- supersedes the old job in the same transaction (see plan.md), never lets
