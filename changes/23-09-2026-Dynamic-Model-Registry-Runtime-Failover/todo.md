@@ -106,11 +106,11 @@ plan.md), chưa implement endpoint nghiệp vụ.
       mesh mTLS `STRICT` + `AuthorizationPolicy` theo service identity; đính kèm kết
       quả test vào checklist deploy, thiếu thì không release. Không thêm
       `127.0.0.1`/dải dùng chung vào CIDR
-- [ ] Script kiểm staging `scripts/k8s/verify-internal-access.sh` (dùng khi có
+- [x] Script kiểm staging `scripts/k8s/verify-internal-access.sh` (dùng khi có
       manifest K8s): chạy 1 pod thử không label được phép → gọi Java 8401 phải bị
       chặn; pod agent → `/internal/model-registry/version` 200; nếu có mesh: gọi
       bằng service account khác → 403. Script exit ≠ 0 khi bất kỳ bước nào sai
-- [ ] Log 1 dòng INFO `remoteAddr` cho request `/internal/**` (không header, không
+- [x] Log 1 dòng INFO `remoteAddr` cho request `/internal/**` (không header, không
       body), bật/tắt bằng `INTERNAL_LOG_REMOTE_ADDR` để dùng cho bước đo trên staging
 - [x] Filter `InternalResponseHeadersFilter` gắn `Cache-Control: no-store` +
       `Pragma: no-cache` cho **mọi** response `/internal/**` (gồm cả lỗi 4xx/5xx),
