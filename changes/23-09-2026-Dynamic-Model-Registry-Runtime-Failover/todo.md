@@ -93,7 +93,7 @@ plan.md), chưa implement endpoint nghiệp vụ.
       `BACKEND_JAVA_BASE_URL=http://backend-java:8401/api/v1` (hoặc `https://`)
 - [x] Gateway và agent fail startup ở profile `prod` nếu URI upstream có host
       `host.docker.internal`/`localhost`/`127.0.0.1`
-- [ ] `dev-onboard.md` mục production có tiểu mục Kubernetes (repo chưa có
+- [x] `dev-onboard.md` mục production có tiểu mục Kubernetes (repo chưa có
       manifest K8s — áp dụng khi thêm): Service Java `ClusterIP`, không Ingress tới
       `/api/v1/internal/**`, `NetworkPolicy` default-deny chỉ cho pod gateway/agent/
       Celery vào 8401. `INTERNAL_ALLOWED_CIDRS` **không** mặc định là pod CIDR: ghi
@@ -118,7 +118,7 @@ plan.md), chưa implement endpoint nghiệp vụ.
 - [x] `BackendJavaClient._client()` truyền **tường minh** `follow_redirects=False`
       (hiện chỉ dựa vào mặc định của httpx); mọi 3xx từ Java → raise
       `BackendJavaRedirectError`, không đọc body, không gọi `Location`
-- [ ] Contract **7 endpoint** (bảng "Internal API contract" trong plan.md — danh
+- [x] Contract **7 endpoint** (bảng "Internal API contract" trong plan.md — danh
       sách duy nhất, gồm GET/PUT `/embedding-index/{collection}/identity`) được
       review; DTO nội bộ của cả 7 đặt ở `dto/request/internal/`,
       `dto/response/internal/` — không controller SA nào import package này (thêm
@@ -143,22 +143,22 @@ plan.md), chưa implement endpoint nghiệp vụ.
         `dto/response/internal/` (đọc return type của handler method)
 
 **Verification:**
-- [ ] Tests pass: `./mvnw test` — secret đúng/không JWT → 200; không secret →
+- [x] Tests pass: `./mvnw test` — secret đúng/không JWT → 200; không secret →
       403; JWT SA không secret → 403; secret sai → 403; secret đúng nhưng IP ngoài
       CIDR → 403; CIDR rỗng → 403; secret đúng + IP ngoài CIDR + lần lượt từng header
       `X-Forwarded-For: 127.0.0.1`, `Forwarded: for=127.0.0.1`, `X-Real-IP: 127.0.0.1`
       → vẫn 403; ngược lại IP trong CIDR + XFF trỏ IP ngoài → vẫn 200 (header bị bỏ
       qua hoàn toàn); profile `prod` + secret mặc định → context fail
-- [ ] Tests pass: **startup fail** (không chỉ 403 lúc runtime) — `ApplicationContextRunner`
+- [x] Tests pass: **startup fail** (không chỉ 403 lúc runtime) — `ApplicationContextRunner`
       / `@SpringBootTest` với profile `prod` và lần lượt: `INTERNAL_ALLOWED_CIDRS`
       không đặt, đặt rỗng, đặt giá trị parse lỗi (`10.0.0.0/33`, `abc`) → context
       không khởi động được, message nêu đúng tên biến; profile `prod` với giá trị
       hợp lệ → khởi động được. Ở profile dev/test, CIDR rỗng không làm fail startup
       nhưng vẫn chặn mọi `/internal/**` (fail-closed)
-- [ ] Unit test `InternalCallerCidrFilterTest` dùng `MockHttpServletRequest` với
+- [x] Unit test `InternalCallerCidrFilterTest` dùng `MockHttpServletRequest` với
       `remoteAddr` đặt tường minh, và một test source-scan đơn giản xác nhận class
       filter không chứa chuỗi `X-Forwarded-For`/`Forwarded`/`X-Real-IP`/`getHeader(`
-- [ ] Tests pass: `api-gateway` `./mvnw test` — repo đã có
+- [x] Tests pass: `api-gateway` `./mvnw test` — repo đã có
       `AuthenticationFilterTest`, thêm 2 lớp test mới:
       - Unit `InternalPathBlockFilterTest`: `MockServerWebExchange` cho ma trận path
         bên dưới → 404, chain **không** được gọi; `getOrder()` nhỏ hơn
