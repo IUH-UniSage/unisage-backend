@@ -443,24 +443,28 @@ dựng hạ tầng theo mục "Hot-reload consistency" trong plan.md để Task 
 nghiệp vụ.
 
 **Acceptance criteria:**
-- [ ] `pom.xml` thêm `spring-boot-starter-data-redis`; `application.properties`
+- [x] `pom.xml` thêm `spring-boot-starter-data-redis`; `application.properties`
       thêm `spring.data.redis.url=${REDIS_URL:redis://localhost:6379/0}`
-- [ ] `backend-java/docker-compose.yml` truyền `REDIS_URL` cho service
+- [x] `backend-java/docker-compose.yml` truyền `REDIS_URL` cho service
       `backend-java`/`devcontainer`, trỏ **cùng** Redis của `unisage-agent` (không
       dựng Redis thứ 2); `dev-onboard.md` và `.ENV` example cập nhật
-- [ ] Bảng `model_registry_version` (singleton) + `ModelRegistryVersionService.bump()`
+- [x] Bảng `model_registry_version` (singleton) + `ModelRegistryVersionService.bump()`
       chạy `UPDATE ... RETURNING` trong transaction hiện tại (`MANDATORY`)
-- [ ] `ModelRegistryChangedEvent` + listener `@TransactionalEventListener(AFTER_COMMIT)`
+- [x] `ModelRegistryChangedEvent` + listener `@TransactionalEventListener(AFTER_COMMIT)`
       publish lên `model-registry:updates`; lỗi Redis chỉ log, không ném lên
-- [ ] Actuator health có Redis; Redis down không làm Java fail startup
-- [ ] Tests Java không cần Redis thật: publisher được mock ở unit test; 1 integration
-      test dùng Testcontainers Redis (thêm dependency `testcontainers` test scope)
+- [x] Actuator health có Redis; Redis down không làm Java fail startup
+      (`spring-boot-starter-data-redis` autoconfig, không có `required` gate riêng)
+- [x] Tests Java không cần Redis thật: publisher được mock ở unit test
+      (`ModelRegistryEventPublisherTest`); 1 integration test dùng Testcontainers
+      Redis (`ModelRegistryVersionServiceTest`, `GenericContainer` redis:7-alpine)
 
 **Verification:**
-- [ ] Tests pass: `./mvnw test` — gồm case transaction rollback → không publish,
+- [x] Tests pass: `./mvnw test` — gồm case transaction rollback → không publish,
       commit → publish đúng 1 lần với version mới
 - [ ] Manual check: `redis-cli SUBSCRIBE model-registry:updates` thấy message khi
-      gọi `bump()` qua 1 endpoint test
+      gọi `bump()` qua 1 endpoint test — chưa có endpoint test thật để gọi thủ công
+      (chỉ có qua `ModelRegistryVersionServiceTest` tự động); làm khi Task 7 nối
+      nghiệp vụ thật
 
 **Dependencies:** None (migration bảng version gộp vào V16 cùng Task 1)
 
