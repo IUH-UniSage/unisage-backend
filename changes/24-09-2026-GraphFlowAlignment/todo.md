@@ -298,14 +298,14 @@ Rồi bỏ `_SECURITY_ACCESS_CONTROL_DEFERRED` trong `app/rag/prompting/__init__
 **Description:** Builder `build_ticket_fallback_prompt(user_query, security, confirmed_metadata, history)` lắp `chat_ticket_fallback` + `ticket_fallback` + `security_access_control` (không có chunk, `task_1`, `task_2`). Node stream câu trả lời qua `stream_agent_text` với `models.generation`. Xoá `TicketFallbackResponse`, `ui_buttons` và payload dựng sẵn (AD10). Theo AD14: fallback chỉ thay cho node 10 khi toàn bộ chunk đã gộp của nhánh 06 không vượt ngưỡng; lượt ghép vẫn nối placeholder tính toán sau câu fallback.
 
 **Acceptance criteria:**
-- [ ] `has_valid_context = False` → text trả về là output LLM (stream từng token), `used_ticket_fallback = True`
-- [ ] Prompt không chứa **block dữ liệu** truy xuất: không có `{prepared_context}` được render và không có nội dung chunk nào (test: dựng chunk có chuỗi đánh dấu duy nhất, assert chuỗi đó không có trong prompt). Không assert trên tag `<academic_context>`, vì khối `security_access_control` hợp lệ có nhắc tên tag này
-- [ ] Prompt có khối "Quy Tắc Bảo Mật & Phân Quyền Thông Tin"
-- [ ] Lượt ghép tính toán + thủ tục mà nhánh 06 không có chunk → câu fallback + placeholder ở cuối
-- [ ] `grep -rniE "ui_buttons|OPEN_TICKET_MODAL" app tests` không còn kết quả
+- [x] `has_valid_context = False` → text trả về là output LLM (stream từng token), `used_ticket_fallback = True`
+- [x] Prompt không chứa **block dữ liệu** truy xuất: không có `{prepared_context}` được render và không có nội dung chunk nào (test: dựng chunk có chuỗi đánh dấu duy nhất, assert chuỗi đó không có trong prompt). Không assert trên tag `<academic_context>`, vì khối `security_access_control` hợp lệ có nhắc tên tag này
+- [x] Prompt có khối "Quy Tắc Bảo Mật & Phân Quyền Thông Tin"
+- [x] Lượt ghép tính toán + thủ tục mà nhánh 06 không có chunk → câu fallback + placeholder ở cuối
+- [x] `grep -rniE "ui_buttons|OPEN_TICKET_MODAL" app tests` không còn kết quả
 
 **Verification:**
-- [ ] `pytest tests/graph/test_ticket_fallback_node.py tests/e2e`
+- [x] `pytest tests/graph/test_ticket_fallback_node.py tests/e2e`
 
 **Dependencies:** Task 1, Task 3, Task 5, Task 8
 
@@ -314,8 +314,8 @@ Rồi bỏ `_SECURITY_ACCESS_CONTROL_DEFERRED` trong `app/rag/prompting/__init__
 **Estimated scope:** Small
 
 ### Checkpoint: Complete
-- [ ] Bộ lệnh kiểm tra chung pass
-- [ ] E2E: advisory SINGLE, so sánh (MULTI), 2 câu hỏi học vụ khác chủ đề, tính toán + thủ tục, chỉ tính toán, ticket fallback, khách vãng lai
+- [x] Bộ lệnh kiểm tra chung pass
+- [ ] E2E: advisory SINGLE, so sánh (MULTI), 2 câu hỏi học vụ khác chủ đề, tính toán + thủ tục, chỉ tính toán, ticket fallback, khách vãng lai (hiện chỉ có 3 test HTTP e2e: clarification round-trip, ticket fallback, guest; các kịch bản còn lại chỉ được test ở mức graph-wiring/unit - chưa có HTTP e2e riêng, xem ghi chú Task 12/known-gaps)
 - [ ] Review với người dùng
 
 ---
@@ -325,11 +325,11 @@ Rồi bỏ `_SECURITY_ACCESS_CONTROL_DEFERRED` trong `app/rag/prompting/__init__
 **Description:** Trong `docs/specs/known-gaps.md`: đổi tiêu đề thành "Known Gaps", nhóm mục cũ dưới `## Ingestion`, thêm `## Graph / Retrieval` theo draft trong `plan.md` (BM25, RRF, cross-encoder, nén ngữ cảnh, rủi ro ngưỡng cosine, CalculationNode placeholder, resume MULTI, hỏi lại từ hai nhánh cùng lúc, tối đa 3 task, kết quả tính toán chưa vào prompt). Cập nhật `docs/product/PRODUCT.md`/`DECISIONS.md` nếu còn câu nào mô tả "mỗi lượt một nhánh".
 
 **Acceptance criteria:**
-- [ ] Mỗi gap nêu: design nói gì, code làm gì, vì sao không làm, khi nào nên làm lại
-- [ ] Mục Ingestion cũ giữ nguyên nội dung, chỉ đổi cấp heading
+- [x] Mỗi gap nêu: design nói gì, code làm gì, vì sao không làm, khi nào nên làm lại
+- [x] Mục Ingestion cũ giữ nguyên nội dung, chỉ đổi cấp heading
 
 **Verification:**
-- [ ] Người dùng review nội dung
+- [ ] Người dùng review nội dung (viết bằng tiếng Anh để khớp văn phong hiện có của cả file `known-gaps.md`, dù draft trong `plan.md` viết tiếng Việt - cần xác nhận lại với người dùng)
 
 **Dependencies:** Task 11
 
