@@ -8,6 +8,7 @@ import com.unisage.backend.entity.enums.ChatModelSourceType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
+import com.unisage.backend.utils.SsrfGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,13 +17,19 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class ChatModelServiceImpl implements ChatModelService {
 
+    /** Providers proven (ADR 0005 spike) to accept an injected http_client for SSRF pinning. */
+    public static final Set<String> SUPPORTED_LLM_PROVIDERS = Set.of("openai", "anthropic");
+
     private final ChatModelRepository chatModelRepository;
+    private final SsrfGuard ssrfGuard;
 
     @Override
     @Transactional
@@ -70,11 +77,15 @@ public class ChatModelServiceImpl implements ChatModelService {
             if (!StringUtils.hasText(request.llmProvider())) {
                 throw new AppException(ErrorCode.CHAT_MODEL_PROVIDER_REQUIRED);
             }
+            if (!SUPPORTED_LLM_PROVIDERS.contains(request.llmProvider().toLowerCase(Locale.ROOT))) {
+                throw new AppException(ErrorCode.CHAT_MODEL_PROVIDER_UNSUPPORTED);
+            }
             if (!StringUtils.hasText(request.apiKey())) {
                 throw new AppException(ErrorCode.CHAT_MODEL_API_KEY_REQUIRED);
             }
         }
         // SELF_HOSTED: apiKey và modelSourceRef đều là tuỳ chọn, modelSourceRef không bị ràng buộc định dạng.
+        ssrfGuard.validate(request.apiBaseUrl());
     }
 
     @Override
