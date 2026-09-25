@@ -8,6 +8,8 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - unisage-prod
 
   unisage-minio:
     image: minio/minio:latest
@@ -18,6 +20,8 @@ services:
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
+    networks:
+      - unisage-prod
 
   backend-java:
     build: .
@@ -33,6 +37,14 @@ services:
       - DB_HOST=unisage-db
       - DB_PORT=5432
       - MINIO_ENDPOINT=http://unisage-minio:9000
+    networks:
+      - unisage-prod
+
+# Shared with api-gateway's and unisage-agent's docker-compose.prod.yml — create once with
+# `docker network create unisage-prod` before starting any of the 3 stacks.
+networks:
+  unisage-prod:
+    external: true
 
 volumes:
   postgres_data:
