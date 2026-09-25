@@ -283,7 +283,7 @@ Rồi bỏ `_SECURITY_ACCESS_CONTROL_DEFERRED` trong `app/rag/prompting/__init__
 
 **Verification:**
 - [x] Bộ lệnh kiểm tra chung pass
-- [ ] Kiểm tay lại với model thật (gpt-4o-mini) ví dụ "Học phí CNTT bao nhiêu, với lại điều kiện học bổng là gì?" → phải ra đúng 1 task `MULTI`
+- [x] Kiểm tay lại với model thật (gpt-4o-mini) ví dụ "Học phí CNTT bao nhiêu, với lại điều kiện học bổng là gì?" → phải ra đúng 1 task `MULTI` (2026-09-25: test với 3 câu hỏi phức hợp thật qua model + Qdrant thật, xem `live-test-report-2026-09-25.md` - cả 3 câu đều gộp đúng thành 1 task `MULTI` khi 2+ câu hỏi cùng nhãn `academic_advisory`)
 
 **Dependencies:** Task 10
 
