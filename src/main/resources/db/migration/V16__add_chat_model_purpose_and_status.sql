@@ -112,3 +112,15 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_embedding_index_identity_immutable
     BEFORE UPDATE OR DELETE ON public.embedding_index_identity
     FOR EACH ROW EXECUTE FUNCTION public.reject_embedding_index_identity_mutation();
+
+-- ── model_registry_version: singleton counter bumped in the same transaction
+--    as any registry change, published to Redis only after commit ─────────
+
+CREATE TABLE public.model_registry_version (
+    id smallint PRIMARY KEY DEFAULT 1,
+    version bigint NOT NULL DEFAULT 0,
+    updated_at timestamp(6) without time zone NOT NULL DEFAULT now(),
+    CONSTRAINT model_registry_version_singleton CHECK (id = 1)
+);
+
+INSERT INTO public.model_registry_version (id, version) VALUES (1, 0);
