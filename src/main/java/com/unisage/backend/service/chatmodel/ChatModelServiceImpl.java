@@ -5,6 +5,7 @@ import com.unisage.backend.dto.response.ChatModelResponse;
 import com.unisage.backend.dto.response.PageResponse;
 import com.unisage.backend.entity.ChatModel;
 import com.unisage.backend.entity.enums.ChatModelSourceType;
+import com.unisage.backend.entity.enums.ChatModelStatus;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
@@ -37,6 +38,10 @@ public class ChatModelServiceImpl implements ChatModelService {
         validateBySourceType(request);
 
         ChatModel chatModel = ChatModel.builder()
+                .modelPurpose(request.modelPurpose())
+                .status(ChatModelStatus.PENDING)
+                .revision(0)
+                .candidateGeneration(0)
                 .sourceType(request.sourceType())
                 .llmProvider(request.llmProvider())
                 .llmModelName(request.llmModelName())
@@ -101,15 +106,29 @@ public class ChatModelServiceImpl implements ChatModelService {
         return PageResponse.fromPage(page, this::mapToResponse);
     }
 
+    /**
+     * Soft-delete. Valid from any status (plan.md "State machine" — the "Delete" column has no
+     * rejected cell) — moves the row to {@code INACTIVE} and out of the routing snapshot, same as
+     * a manual deactivate, plus {@code isActive = false}. Any verification job still open for this
+     * row is cancelled in the same transaction once the verification service exists (Task 6); this
+     * row-level part is self-contained and doesn't need it.
+     */
     @Override
     @Transactional
     public void delete(UUID id) {
         ChatModel chatModel = chatModelRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.CHAT_MODEL_NOT_FOUND));
         chatModel.setIsActive(false);
+        chatModel.setStatus(ChatModelStatus.INACTIVE);
         chatModelRepository.save(chatModel);
     }
 
+    /**
+     * Undoes a soft-delete. Restores {@code isActive = true} but deliberately leaves {@code status}
+     * at {@code INACTIVE} — recovering a row must never put it back in the routing snapshot by
+     * itself; SA has to activate it explicitly afterwards (plan.md "State machine", row
+     * "(is_active=false)" / column "Recover").
+     */
     @Override
     @Transactional
     public void recover(UUID id) {
@@ -122,6 +141,10 @@ public class ChatModelServiceImpl implements ChatModelService {
     private ChatModelResponse mapToResponse(ChatModel chatModel) {
         return ChatModelResponse.builder()
                 .id(chatModel.getId())
+                .modelPurpose(chatModel.getModelPurpose())
+                .status(chatModel.getStatus())
+                .revision(chatModel.getRevision())
+                .verifiedAt(chatModel.getVerifiedAt())
                 .sourceType(chatModel.getSourceType())
                 .llmProvider(chatModel.getLlmProvider())
                 .llmModelName(chatModel.getLlmModelName())

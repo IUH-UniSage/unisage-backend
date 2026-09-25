@@ -2,6 +2,7 @@ package com.unisage.backend.service.chatmodel;
 
 import com.unisage.backend.dto.request.ChatModelRequest;
 import com.unisage.backend.entity.ChatModel;
+import com.unisage.backend.entity.enums.ChatModelPurpose;
 import com.unisage.backend.entity.enums.ChatModelSourceType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
@@ -58,6 +59,7 @@ class ChatModelServiceImplTest {
     @Test
     void create_cloudApiWithoutApiKey_throwsApiKeyRequired() {
         ChatModelRequest request = ChatModelRequest.builder()
+                .modelPurpose(ChatModelPurpose.CHAT)
                 .sourceType(ChatModelSourceType.CLOUD_API)
                 .llmProvider("openai")
                 .llmModelName("gpt-4o-mini")
@@ -74,6 +76,7 @@ class ChatModelServiceImplTest {
     @Test
     void create_cloudApiWithoutProvider_throwsProviderRequired() {
         ChatModelRequest request = ChatModelRequest.builder()
+                .modelPurpose(ChatModelPurpose.CHAT)
                 .sourceType(ChatModelSourceType.CLOUD_API)
                 .llmModelName("gpt-4o-mini")
                 .apiKey("sk-abc123")
@@ -90,6 +93,7 @@ class ChatModelServiceImplTest {
     @Test
     void create_cloudApiWithProviderAndApiKey_succeeds() {
         ChatModelRequest request = ChatModelRequest.builder()
+                .modelPurpose(ChatModelPurpose.CHAT)
                 .sourceType(ChatModelSourceType.CLOUD_API)
                 .llmProvider("openai")
                 .llmModelName("gpt-4o-mini")
@@ -107,6 +111,7 @@ class ChatModelServiceImplTest {
     @Test
     void create_selfHostedWithoutApiKeyOrModelSourceRef_succeeds() {
         ChatModelRequest request = ChatModelRequest.builder()
+                .modelPurpose(ChatModelPurpose.CHAT)
                 .sourceType(ChatModelSourceType.SELF_HOSTED)
                 .llmModelName("mistral-7b")
                 .apiBaseUrl("http://localhost:8000/v1")
@@ -122,6 +127,7 @@ class ChatModelServiceImplTest {
     @Test
     void create_selfHostedWithHuggingFaceRepoIdAsModelSourceRef_succeeds() {
         ChatModelRequest request = ChatModelRequest.builder()
+                .modelPurpose(ChatModelPurpose.CHAT)
                 .sourceType(ChatModelSourceType.SELF_HOSTED)
                 .llmModelName("mistral-7b")
                 .modelSourceRef("mistralai/Mistral-7B-Instruct-v0.3")
@@ -139,6 +145,7 @@ class ChatModelServiceImplTest {
     @Test
     void create_selfHostedWithFreeFormModelSourceRef_succeeds() {
         ChatModelRequest request = ChatModelRequest.builder()
+                .modelPurpose(ChatModelPurpose.CHAT)
                 .sourceType(ChatModelSourceType.SELF_HOSTED)
                 .llmModelName("my-custom-model")
                 .modelSourceRef("any free-form name !!")
@@ -157,6 +164,7 @@ class ChatModelServiceImplTest {
     void create_selfHostedLocalhost_rejectedWhenAllowlistEmpty() {
         chatModelService = new ChatModelServiceImpl(chatModelRepository, testSsrfGuard(""));
         ChatModelRequest request = ChatModelRequest.builder()
+                .modelPurpose(ChatModelPurpose.CHAT)
                 .sourceType(ChatModelSourceType.SELF_HOSTED)
                 .llmModelName("mistral-7b")
                 .apiBaseUrl("http://localhost:8000/v1")
@@ -170,8 +178,46 @@ class ChatModelServiceImplTest {
     }
 
     @Test
+    void create_embeddingPurposeSelfHosted_accepted_noPurposeSourceTypeRestriction() {
+        // plan.md "Open Questions": every modelPurpose accepts both CLOUD_API and SELF_HOSTED —
+        // no purpose-based validation is added anywhere in this service.
+        ChatModelRequest request = ChatModelRequest.builder()
+                .modelPurpose(ChatModelPurpose.EMBEDDING)
+                .sourceType(ChatModelSourceType.SELF_HOSTED)
+                .llmModelName("bge-m3")
+                .apiBaseUrl("http://localhost:8080/v1")
+                .maxRpm(60)
+                .build();
+
+        var response = chatModelService.create(request);
+
+        assertThat(response.modelPurpose()).isEqualTo(ChatModelPurpose.EMBEDDING);
+        assertThat(response.sourceType()).isEqualTo(ChatModelSourceType.SELF_HOSTED);
+    }
+
+    @Test
+    void create_setsPendingStatusAndRevisionZero() {
+        ChatModelRequest request = ChatModelRequest.builder()
+                .modelPurpose(ChatModelPurpose.CHAT)
+                .sourceType(ChatModelSourceType.CLOUD_API)
+                .llmProvider("openai")
+                .llmModelName("gpt-4o-mini")
+                .apiKey("sk-abc123")
+                .apiBaseUrl("https://api.openai.com/v1")
+                .maxRpm(60)
+                .build();
+
+        var response = chatModelService.create(request);
+
+        assertThat(response.status()).isEqualTo(com.unisage.backend.entity.enums.ChatModelStatus.PENDING);
+        assertThat(response.revision()).isEqualTo(0);
+        assertThat(response.verifiedAt()).isNull();
+    }
+
+    @Test
     void create_cloudApiWithUnsupportedProvider_throwsProviderUnsupported() {
         ChatModelRequest request = ChatModelRequest.builder()
+                .modelPurpose(ChatModelPurpose.CHAT)
                 .sourceType(ChatModelSourceType.CLOUD_API)
                 .llmProvider("some-random-provider")
                 .llmModelName("model-x")

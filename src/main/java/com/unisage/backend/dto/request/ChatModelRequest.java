@@ -1,5 +1,6 @@
 package com.unisage.backend.dto.request;
 
+import com.unisage.backend.entity.enums.ChatModelPurpose;
 import com.unisage.backend.entity.enums.ChatModelSourceType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -7,6 +8,10 @@ import lombok.Builder;
 
 @Builder
 public record ChatModelRequest(
+    /** Required at creation; immutable afterwards (plan.md "Credential rotation") — ignored on update. */
+    @NotNull(message = "modelPurpose không được để trống")
+    ChatModelPurpose modelPurpose,
+
     @NotNull(message = "sourceType không được để trống")
     ChatModelSourceType sourceType,
 
