@@ -41,6 +41,9 @@ services:
       - DB_PORT=5432
       - MINIO_ENDPOINT=http://unisage-minio:9000
       - MINIO_PUBLIC_ENDPOINT=http://localhost:9000
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   devcontainer:
     profiles:
@@ -72,6 +75,9 @@ services:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin123
       - MINIO_BUCKET=unisage-documents
+      - REDIS_URL=redis://host.docker.internal:6379/0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   postgres_data:
