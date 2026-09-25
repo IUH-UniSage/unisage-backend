@@ -1119,7 +1119,16 @@ không đổi.
       đường `.env` cũ
 - [ ] Các node dùng chung model (`classification`, `query_transformation`,
       `generation`) hoạt động y hệt khi registry có 1 credential — không regression
-- [ ] `settings.OPENAI_API_KEY`/`OPENAI_MODEL` đánh dấu deprecated, chưa xoá
+- [ ] `MODEL_REGISTRY_ENABLED=false` là **cờ rollout tạm thời duy nhất** còn được
+      phép đọc `settings.OPENAI_*`; khi cờ `true` (mặc định sau khi rollout xong),
+      `get_graph_models()` không được đọc `settings.OPENAI_API_KEY`/`OPENAI_MODEL`
+      dưới bất kỳ hình thức nào — kể cả làm giá trị dự phòng khi snapshot rỗng
+      (mục "Cutover khỏi cấu hình `.env` tĩnh" trong plan.md)
+- [ ] Test kiến trúc `test_no_env_fallback_when_registry_enabled.py`: với
+      `MODEL_REGISTRY_ENABLED=true` và snapshot không có credential CHAT nào →
+      raise lỗi rõ ràng (không dùng `.env`, không dựng `OpenAIChatModel` mặc định);
+      quét AST xác nhận nhánh `MODEL_REGISTRY_ENABLED=false` là **nhánh duy nhất**
+      trong `get_graph_models()` còn tham chiếu `settings.OPENAI_*`
 
 **Verification:**
 - [ ] Tests pass: `pytest tests/graph/` và `tests/api/`
@@ -1133,8 +1142,9 @@ không đổi.
 - `unisage-agent/app/core/llm/litellm_model.py`
 - `unisage-agent/pyproject.toml`
 - `unisage-agent/tests/api/test_deps.py`
+- `unisage-agent/tests/core/test_no_env_fallback_when_registry_enabled.py`
 
-**Estimated scope:** M (4 files)
+**Estimated scope:** M (5 files)
 
 ---
 
@@ -1220,6 +1230,9 @@ down thì job nằm chờ, không mất.
       chat (chấp nhận restart Python thủ công)
 - [ ] Key sai → SA thấy lý do lỗi, không ACTIVE
 - [ ] Tests pass ở cả 2 repo + kịch bản cross-repo
+- [ ] `OPENAI_API_KEY`/`OPENAI_MODEL`/`OPENAI_EMBEDDING_MODEL`/`MULTI_REP_LLM_MODEL`
+      xoá khỏi `.env.example`, `docker-compose`, deployment/production secret;
+      `test_no_env_fallback_when_registry_enabled.py` xanh
 - [ ] Review với human trước khi làm Phase 3
 
 ---

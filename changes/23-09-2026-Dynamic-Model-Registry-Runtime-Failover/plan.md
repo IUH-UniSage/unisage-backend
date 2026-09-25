@@ -122,6 +122,12 @@ Review vòng 9:
 | R9.4 | Test identity race đủ transaction semantics | Task 0.3: 201/409, delta UPDATE/DELETE = 0, đọc lại đúng, không upsert bằng danh tính sai |
 | R9.5 | Mọi checkpoint phải chạy pass | "Gate: implementation approved" bên dưới |
 
+Review vòng 10:
+
+| # | Điều kiện | Gỡ ở |
+|---|-----------|------|
+| R10.1 | Plan chưa nói rõ phải xoá `OPENAI_*`/`MULTI_REP_LLM_MODEL` khỏi runtime và cấm fallback về chúng khi bật registry | Mục "Cutover khỏi cấu hình `.env` tĩnh" (mới) + acceptance criteria Task 5, Checkpoint Phase 2 |
+
 **Trạng thái approve:**
 
 | Mức | Trạng thái | Điều kiện |
@@ -190,6 +196,55 @@ pass (không skip, không pending), có link CI run hoặc report JUnit đính k
   Cost Tracking** (`changes/23-09-2026-Cost-Tracking-Budget-Management/`). Số phase
   0-9 và số task 0-20 được giữ nguyên vì plan đó tham chiếu "Model Registry Phase
   0-6", "Phase 9", V16, V20.
+
+## Cutover khỏi cấu hình `.env` tĩnh
+
+Sau khi registry bật (từ Task 5 trở đi), `unisage-agent` **không còn nguồn credential
+nào khác ngoài snapshot của Java**. Luồng đúng duy nhất:
+
+```
+Java lưu credential mã hoá trong DB
+        ↓
+Python lấy snapshot từ Java (GET /internal/model-registry/snapshot)
+        ↓
+Python chọn provider/model/key từ snapshot (theo purpose + priority)
+        ↓
+Tạo client qua provider factory (Task 0.6, build_provider_http_client)
+```
+
+`.env` của `unisage-agent` sau cutover chỉ còn giữ:
+- Secret + URL kết nối Python ↔ Java (`APP_INTERNAL_SECRET_KEY`, `BACKEND_JAVA_BASE_URL`,
+  `INTERNAL_NETWORK_ENCRYPTED`).
+- Redis, DB, Qdrant, MinIO — hạ tầng của chính Python, không phải của provider LLM.
+- Cấu hình bảo mật/SSRF (`MODEL_REGISTRY_URL_ALLOWLIST`...).
+- Biến chỉ dùng cho công cụ migrate/bootstrap một lần (vd
+  `register_embedding_index_identity` đọc `.env` cũ **trước khi** registry bật cho
+  embedding — xem "Embedding identity guard").
+- Biến của profile test/fake provider (harness Task 0.5).
+
+**Bị xoá khỏi runtime, không chỉ khỏi `.env.example`:** `OPENAI_API_KEY`,
+`OPENAI_MODEL`, `OPENAI_EMBEDDING_MODEL`, `MULTI_REP_LLM_MODEL` — khỏi
+`docker-compose`, deployment manifest, và secret production. Ràng buộc bắt buộc,
+kiểm bằng test kiến trúc (Task 5):
+- Không route nào của chat/ingest/retrieval/Celery đọc `settings.OPENAI_*` hay
+  `settings.MULTI_REP_LLM_MODEL` nữa — `openai_embedder.py`,
+  `multi_representation.py`, `get_graph_models()` (đã chuyển sang factory ở Task
+  0.6) đều phải nhận credential từ snapshot, không đọc `Settings` cho phần này.
+- **Không fallback về OpenAI** khi registry lỗi hoặc không có credential cho một
+  purpose — lỗi phải rõ ràng (xem "SSE error contract"/Task 13 FAILED), không âm
+  thầm dùng key `.env` cũ.
+- **Không hardcode** `OpenAI(...)`/`AsyncOpenAI(...)` làm client mặc định ở bất kỳ
+  đường gọi provider nào ngoài factory (đã có test kiến trúc
+  `test_no_raw_provider_clients.py` ở Task 0.6 — quét luôn 4 biến trên trong
+  `app/core/config.py` sau khi bị xoá, không chỉ quét lệnh gọi client).
+- **Giữ được chuỗi `"openai"` trong dữ liệu registry** (giá trị `llmProvider` của
+  một `ChatModel` cụ thể) — đây là cấu hình động do SA nhập, khác hẳn việc code
+  đọc biến môi trường `OPENAI_*` làm mặc định cứng.
+
+Trong giai đoạn Phase 2-3 (trước khi mọi purpose đều có credential ACTIVE ổn định),
+Python vẫn có thể fail startup rõ ràng nếu registry rỗng (xem "Checkpoint: Phase
+2") thay vì âm thầm dùng `.env` — không có trạng thái lưng chừng "vừa đọc registry
+vừa đọc `.env`".
 
 ## Internal API contract
 
@@ -937,6 +992,11 @@ backend, Slack, response SA. Quy tắc:
       lần chat (chấp nhận restart Python 1 lần)
 - [ ] Agent tắt khi SA tạo credential → job ở QUEUED, bật agent lên → tự verify
 - [ ] Tests pass ở cả 2 repo + kịch bản cross-repo tương ứng
+- [ ] `OPENAI_API_KEY`/`OPENAI_MODEL`/`OPENAI_EMBEDDING_MODEL`/`MULTI_REP_LLM_MODEL`
+      đã xoá khỏi `.env.example`, `docker-compose`, deployment; test kiến trúc xác
+      nhận không route/Celery task nào đọc các biến này qua `Settings`, và không có
+      fallback về OpenAI khi registry rỗng/lỗi (mục "Cutover khỏi cấu hình `.env`
+      tĩnh")
 
 ### Phase 3: Hot reload không cần restart
 - [ ] Task 7: Java tăng version + publish sau commit cho mọi thay đổi registry
