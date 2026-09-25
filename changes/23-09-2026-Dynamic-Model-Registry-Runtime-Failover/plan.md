@@ -11,8 +11,8 @@ là sửa `.env` và restart. Các field `priority`/`errorCount`/`lastErrorAt` t
 
 Feature này nối hai phía lại: mở rộng `ChatModel` để phân biệt 3 vai trò (CHAT /
 EMBEDDING / EXTRACTION), cho Python đọc registry này qua 1 API nội bộ riêng, gọi
-provider qua LiteLLM SDK (bọc trong adapter PydanticAI — xem Architecture
-Decisions), đồng bộ runtime qua Redis để mọi worker process (gunicorn + Celery)
+provider qua model native của PydanticAI theo từng provider (xem Architecture
+Decisions, ADR 0005), đồng bộ runtime qua Redis để mọi worker process (gunicorn + Celery)
 thấy config mới mà không cần restart, và triển khai auto-failover **chỉ cho Chat
 và Extraction** (Embedding cố tình không auto-failover). Sự cố cần SA can thiệp
 (hết credit, key thu hồi, hết fallback) bắn cảnh báo qua Slack Incoming Webhook.
@@ -154,18 +154,23 @@ pass (không skip, không pending), có link CI run hoặc report JUnit đính k
 
 ## Architecture Decisions
 
-- **LiteLLM SDK nhúng trực tiếp vào Python, không dùng LiteLLM Proxy riêng.** Giữ
-  request path `Python → Provider`. Java đã là control plane duy nhất; thêm Proxy
-  là thêm 1 service vận hành không cần thiết ở giai đoạn này.
-- **LiteLLM đi vào qua adapter `LiteLLMModel(pydantic_ai.models.Model)`, không
-  thay graph execution layer.** Toàn bộ graph node đang dùng `Agent(model=...)`
-  và streaming đi qua đúng 1 chỗ `stream_agent_text()` → `agent.run_stream()`
-  (`app/graph/streaming.py`). Thay cả lớp này bằng lời gọi `litellm.acompletion`
-  trực tiếp sẽ phải viết lại mọi node, `FunctionModel` test doubles
-  (`tests/llm_mocks.py`) và luồng usage mà plan Cost Tracking dựa vào. Adapter chỉ
-  cần implement `request()` + `request_stream()` của `Model`, graph giữ nguyên.
-  Quyết định này **phụ thuộc kết quả spike Task 0.2**; nếu spike fail thì phương
-  án dự phòng đã chốt sẵn (xem Task 0.2) và ADR ghi lại phương án thực tế.
+- **Model native của PydanticAI per provider (`OpenAIChatModel`, `AnthropicModel`,
+  ...), không dùng LiteLLM SDK.** Đã đổi từ kế hoạch ban đầu (adapter
+  `LiteLLMModel(pydantic_ai.models.Model)`) sau khi spike Task 0.2 chạy thật:
+  LiteLLM SDK không cho inject `httpx.AsyncClient`/transport theo cách
+  `PinnedNetworkBackend` (Task 0.6, SSRF) cần — `litellm.acompletion(client=...)`
+  đòi một object dạng OpenAI SDK client hoặc `aiohttp.ClientSession`, không nhận
+  `httpx.AsyncClient` trần. Model native (`OpenAIProvider(http_client=...)`) thì
+  nhận đúng transport này — đã xác nhận bằng spike (kèm test đối chứng: transport
+  giả nhận đúng 1 request). Streaming, structured output (kể cả khi stream),
+  usage, exception typed đều PASS ở cả 2 phương án — quyết định chỉ dựa trên tiêu
+  chí SSRF, đúng nhánh đã chốt sẵn ở gate Task 0.2. Chi tiết + bảng PASS/FAIL:
+  `unisage-backend/docs/adr/0005-dynamic-model-registry.md`.
+  `get_graph_models()` map `llmProvider` → cặp (Model class, Provider class);
+  provider ngoài danh sách → từ chối như provider không hỗ trợ SSRF (đã có sẵn
+  trong thiết kế "SSRF guard là gate"). Toàn bộ graph node/`stream_agent_text()`/
+  `FunctionModel` test doubles giữ nguyên — quyết định này chỉ đổi cách build
+  `Model` instance, không đổi cách gọi nó.
 - **Embedding không auto-failover, không auto-switch model.** Đổi embedding model
   (kể cả cùng số chiều) làm vector nằm ở không gian ngữ nghĩa khác — retrieval
   degrade âm thầm. Tại một thời điểm chỉ có đúng 1 credential EMBEDDING active
@@ -881,9 +886,9 @@ backend, Slack, response SA. Quy tắc:
   do ta tạo ghi đè hành vi này.
 - **Một factory duy nhất** `app/core/llm/http_client.py::build_provider_http_client(credential)`
   là nơi duy nhất tạo HTTP client gọi provider. Mọi đường gọi provider phải dùng nó:
-  - adapter LiteLLM (Chat/Extraction qua `model_router`);
-  - provider native PydanticAI (`OpenAIProvider`, `AnthropicProvider`, provider
-    OpenAI-compatible) nếu Task 0.2 chọn phương án dự phòng, truyền qua `http_client=`;
+  - Provider native PydanticAI theo từng `llmProvider` (`OpenAIProvider`,
+    `AnthropicProvider`, provider OpenAI-compatible cho `SELF_HOSTED`) — quyết định
+    ADR 0005, truyền qua `http_client=` của từng `Provider` class;
   - Embedding (`openai_embedder.py`, hiện `OpenAI(api_key=...)` tự tạo client);
   - Multi-representation (`multi_representation.py`, hiện tương tự);
   - Verifier (Task 6).
@@ -904,12 +909,13 @@ backend, Slack, response SA. Quy tắc:
 ## Task List
 
 ### Phase 0: Quyết định & ADR
-- [ ] Task 0: Viết ADR cho Dynamic Model Registry (chốt sau Task 0.2)
+- [x] Task 0: Viết ADR cho Dynamic Model Registry — `unisage-backend/docs/adr/0005-dynamic-model-registry.md`
 
 ### Phase 0.5: Gỡ blocker trước khi code tính năng
 - [ ] Task 0.1: Internal API security flow `/internal/**` (Java + gateway)
-- [ ] Task 0.2: Spike adapter LiteLLM → PydanticAI (streaming, structured output,
-      usage, custom transport)
+- [x] Task 0.2: Spike adapter LiteLLM → PydanticAI (streaming, structured output,
+      usage, custom transport) — kết luận: bỏ LiteLLM, dùng model native theo
+      provider (ADR 0005)
 - [ ] Task 0.3: State machine + ràng buộc DB (chốt thiết kế, test matrix)
 - [ ] Task 0.4: Redis cho Java: dependency, config, deploy, version table,
       publish-after-commit
@@ -984,7 +990,8 @@ backend, Slack, response SA. Quy tắc:
 
 ### Phase 2: Python — Đọc registry thay vì .env
 - [ ] Task 4: Client `/internal/model-registry/snapshot` + cache snapshot
-- [ ] Task 5: `get_graph_models()` build `LiteLLMModel` từ snapshot (chưa failover)
+- [ ] Task 5: `get_graph_models()` build model native theo `llmProvider` từ
+      snapshot (ADR 0005, chưa failover)
 - [ ] Task 6: Verify-before-active theo job lifecycle pull-based
 
 ### Checkpoint: Phase 2
@@ -1065,7 +1072,7 @@ backend, Slack, response SA. Quy tắc:
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Adapter LiteLLM → PydanticAI không giữ được streaming delta / structured output / usage | High — chặn Phase 2 | Spike Task 0.2 có decision gate; phương án dự phòng chốt sẵn |
+| ~~Adapter LiteLLM → PydanticAI không giữ được streaming delta / structured output / usage~~ | — | **Đã gỡ**: spike Task 0.2 chạy thật, chốt dùng model native theo provider thay vì adapter LiteLLM (ADR 0005) |
 | API key plaintext lộ qua log/response SA | High (bảo mật) | DTO nội bộ tách package, `toString` che key, `no-store`, test controller SA không bao giờ có field `apiKey` |
 | `/internal/**` lộ qua gateway | High (bảo mật) | `InternalPathBlockFilter` chạy trước auth + Java yêu cầu secret; test tự động cả 2 lớp |
 | Gọi thẳng port Java bỏ qua gateway để lấy snapshot (plaintext key) | High (bảo mật) | Không publish port ở production, `INTERNAL_ALLOWED_CIDRS`, secret mạnh bắt buộc |
@@ -1076,7 +1083,7 @@ backend, Slack, response SA. Quy tắc:
 | Proxy môi trường hoặc provider SDK tự tạo client bỏ qua SSRF guard | High (bảo mật) | `trust_env=False`, factory duy nhất + test kiến trúc |
 | Health report từ snapshot cũ DISABLE nhầm credential vừa rotate | Medium | `credentialRevision` trong report; key circuit breaker gắn revision |
 | Key đã lưu bị gửi tới host mới do SA (hoặc tài khoản SA bị chiếm) đổi base URL | High (bảo mật) | Đổi host bắt buộc nhập lại key |
-| LiteLLM error taxonomy không khớp permanent/transient | High — failover sai, alert spam | Task 9 kiểm `error.code`/`type` thực tế từng provider, test từng case |
+| Exception taxonomy của từng provider SDK (OpenAI, Anthropic...) không khớp permanent/transient | High — failover sai, alert spam | Task 9 kiểm `status_code`/loại exception thực tế từng provider SDK, test từng case |
 | Worker lệch snapshot khi mất pub/sub hoặc Redis down | Medium | Version trong DB + poll 30s; publish best-effort |
 | Race khi 2 SA activate embedding cùng lúc | Medium | Unique partial index + `FOR UPDATE` + map lỗi 409 |
 | SSRF qua Custom Base URL / DNS rebinding / redirect | High (bảo mật) | Task 0.6: guard 2 lớp, pin IP lúc kết nối, tắt redirect, allowlist qua env |

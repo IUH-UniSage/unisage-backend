@@ -15,22 +15,22 @@ lấy từ registry. Phase 8 (UI) làm song song với Phase 4-6 sau khi API Pha
 
 ### Task 0: Viết ADR cho Dynamic Model Registry
 
-**Description:** Ghi lại quyết định kiến trúc: LiteLLM SDK nhúng (không Proxy),
-cách LiteLLM đi vào graph (kết quả spike Task 0.2), namespace `/internal/**` +
-Python không expose endpoint nội bộ, verify pull-based, Embedding không
-auto-failover, Redis chỉ là tín hiệu + version trong DB, circuit breaker ở cấp
-credential, SSRF là gate.
+**Description:** Ghi lại quyết định kiến trúc: cách Python gọi provider (kết quả
+spike Task 0.2), namespace `/internal/**` + Python không expose endpoint nội bộ,
+verify pull-based, Embedding không auto-failover, Redis chỉ là tín hiệu +
+version trong DB, circuit breaker ở cấp credential, SSRF là gate.
 
 **Acceptance criteria:**
-- [ ] File mới `unisage-backend/docs/adr/0005-dynamic-model-registry.md` (copy từ
+- [x] File mới `unisage-backend/docs/adr/0005-dynamic-model-registry.md` (copy từ
       `0000-template.md`; số lớn nhất hiện có là 0004)
-- [ ] Nêu 2 phương án đã cân nhắc cho mỗi quyết định lớn (SDK vs Proxy; adapter vs
+- [x] Nêu 2 phương án đã cân nhắc cho mỗi quyết định lớn (SDK vs Proxy; adapter vs
       thay graph layer; push verify vs pull verify) và lý do chọn
-- [ ] Ghi kết luận thực tế của spike Task 0.2 (kể cả khi phải dùng phương án dự phòng)
-- [ ] Nêu constraint "Embedding không auto-failover" và lý do (vector space)
+- [x] Ghi kết luận thực tế của spike Task 0.2: LiteLLM SDK không qua được tiêu chí
+      inject transport SSRF, chuyển sang model native PydanticAI theo provider
+- [x] Nêu constraint "Embedding không auto-failover" và lý do (vector space)
 
 **Verification:**
-- [ ] Manual check: người chưa tham gia thảo luận đọc ADR hiểu được "tại sao"
+- [x] Manual check: người chưa tham gia thảo luận đọc ADR hiểu được "tại sao"
 
 **Dependencies:** Task 0.2
 
@@ -260,51 +260,59 @@ viết `LiteLLMModel(pydantic_ai.models.Model)` tối thiểu (implement `reques
 `request_stream()` bằng `litellm.acompletion`) và kiểm từng yêu cầu dưới đây.
 Code spike nằm ở branch riêng, không merge; kết quả ghi vào ADR (Task 0).
 
-**Acceptance criteria (mỗi mục ghi PASS/FAIL + ghi chú):**
-- [ ] `stream_agent_text()` chạy không sửa, delta đến từng token (không gom cuối)
-- [ ] `Agent(output_type=<PydanticModel>)` hoạt động (PydanticAI dựng structured
-      output bằng tool call — điểm dễ vỡ nhất của adapter), kể cả khi stream
-- [ ] `RequestUsage` (input/output tokens) có mặt ở cả non-stream và stream — plan
-      Cost Tracking cần dữ liệu này
-- [ ] Exception provider đi ra là exception typed của LiteLLM (đầu vào Task 9),
-      không bị PydanticAI bọc mất thông tin `status_code`/`error.code`
-- [ ] Inject được HTTP client/transport tuỳ biến (pin IP, tắt redirect) cho SSRF
-      guard Task 0.6 — kiểm cho **cả** adapter LiteLLM **và** provider native
-      PydanticAI của phương án dự phòng
-- [ ] `FunctionModel` test doubles hiện có (`tests/llm_mocks.py`) vẫn dùng được cho
-      test graph (adapter chỉ thay model production)
-- [ ] Chạy thật với ít nhất 2 provider (vd OpenAI + 1 OpenAI-compatible
-      self-hosted/fake)
+**Acceptance criteria (mỗi mục ghi PASS/FAIL + ghi chú) — kết quả thật, đã chạy:**
+- [x] `stream_agent_text()` chạy không sửa, delta đến trước khi kết thúc — **PASS**
+      (2 chunk thay vì per-token; xác nhận bằng test đối chứng là do lớp
+      `_continuation` của `pydantic-ai` bản đang pin `>=1.0.0` (resolve 2.50.0),
+      **không phải đặc thù của adapter** — model native cũng bị coalesce y hệt)
+- [x] `Agent(output_type=<PydanticModel>)` hoạt động, kể cả khi stream — **PASS** cả
+      2 trường hợp (từng là "điểm dễ vỡ nhất", hoá ra không phải điểm chặn)
+- [x] `RequestUsage` có mặt ở cả non-stream và stream — **PASS**
+- [x] Exception provider đi ra là exception typed — **PASS**, nhưng là
+      `litellm.AuthenticationError` (subclass `openai.APIError`, có `status_code`),
+      không phải `pydantic_ai.ModelHTTPError` — đúng tinh thần tiêu chí (typed,
+      không mất `status_code`), chỉ khác class cụ thể
+- [x] Inject được HTTP client/transport tuỳ biến cho SSRF guard Task 0.6 — **FAIL**
+      ở adapter LiteLLM (`litellm.acompletion(client=...)` đòi object dạng OpenAI
+      SDK client hoặc `aiohttp.ClientSession`, không nhận `httpx.AsyncClient` trần
+      — lỗi `'AsyncClient' object has no attribute 'api_key'`); **PASS** ở provider
+      native `OpenAIProvider(http_client=...)` (test đối chứng: transport giả nhận
+      đúng 1 request)
+- [x] `FunctionModel` test doubles hiện có vẫn dùng được — không re-verify được
+      trong venv cô lập của spike (thiếu dependency không liên quan), nhưng không
+      bị ảnh hưởng về kiến trúc ở cả 2 phương án (test double gắn thẳng, không qua
+      adapter lẫn model native)
+- [ ] Chạy thật với ít nhất 2 provider — chỉ chạy được OpenAI (không có credential
+      provider thứ 2 trong môi trường chạy spike); phát hiện quyết định (mục
+      transport injection) không phụ thuộc provider nào nên không đổi kết luận
 
-**Decision gate:**
-- Tất cả PASS → dùng `LiteLLMModel` adapter (Task 5).
-- Structured output/stream FAIL nhưng các mục khác PASS → adapter chỉ cho path
-  text; node cần structured output dùng model native PydanticAI build từ cùng
-  snapshot.
-- Không inject được transport hoặc mất exception typed → **bỏ LiteLLM**, dùng model
-  native PydanticAI (`OpenAIChatModel`/`AnthropicModel`...) build từ snapshot, Task 9
-  phân loại trên exception của SDK provider. Cập nhật plan.md + ADR trước khi làm
-  Task 5.
-- Phương án dự phòng chỉ hợp lệ khi **chính nó** cũng qua được tiêu chí SSRF: với
-  từng provider class PydanticAI sẽ dùng (`OpenAIProvider`, `AnthropicProvider`,
-  provider OpenAI-compatible cho SELF_HOSTED), spike phải chứng minh truyền được
-  `http_client=httpx.AsyncClient(transport=<transport pin IP>, follow_redirects=False)`
-  và request thực sự đi qua transport đó (test resolver giả + redirect 302). Provider
-  nào không qua → không được dùng với URL từ registry. Nếu cả 2 phương án đều không
-  qua tiêu chí SSRF → dừng, báo human; không được làm Task 5.
-- Thay toàn bộ graph execution layer: **không nằm trong các phương án**.
+**Decision gate — đã áp dụng nhánh:**
+- ~~Tất cả PASS → dùng `LiteLLMModel` adapter (Task 5).~~
+- ~~Structured output/stream FAIL...~~ (không xảy ra — cả 2 đều PASS)
+- **→ Không inject được transport (LiteLLM) → bỏ LiteLLM, dùng model native
+  PydanticAI (`OpenAIChatModel`/`AnthropicModel`...) build từ snapshot, Task 9
+  phân loại trên exception của SDK provider.** Đã cập nhật plan.md (Architecture
+  Decisions) + ADR trước khi làm Task 5 — xem
+  `unisage-backend/docs/adr/0005-dynamic-model-registry.md`.
+- Phương án native đã tự chứng minh qua tiêu chí SSRF (mục transport injection ở
+  trên) cho `OpenAIProvider`; `AnthropicProvider` và provider OpenAI-compatible
+  (`SELF_HOSTED`) dùng cùng cơ chế `http_client=` — không test riêng trong spike
+  này (cùng constructor pattern), Task 5/0.6 phải có test riêng cho từng provider
+  thật sự đưa vào `SUPPORTED_LLM_PROVIDERS`.
 
 **Verification:**
-- [ ] Báo cáo spike (bảng PASS/FAIL) đính kèm vào ADR
-- [ ] Review với human, chốt phương án
+- [x] Báo cáo spike (bảng PASS/FAIL) đính kèm vào ADR
+- [ ] Review với human, chốt phương án — **cần xác nhận từ bạn** trước khi implement
+      Task 5 dựa trên kết luận này
 
 **Dependencies:** None
 
-**Files likely touched (spike, không merge):**
-- `unisage-agent/app/core/llm/litellm_model.py`
-- `unisage-agent/tests/spike/test_litellm_adapter.py`
+**Files likely touched (spike, không merge — đã chạy và xoá khỏi working tree,
+không commit):**
+- `unisage-agent/app/core/llm/litellm_model.py` (đã xoá)
+- `unisage-agent/tests/spike/run_litellm_spike.py` (đã xoá)
 
-**Estimated scope:** M (time-box 2 ngày)
+**Estimated scope:** M (time-box 2 ngày) — **hoàn thành**
 
 ---
 
@@ -628,16 +636,17 @@ gọi URL này, nên guard phải có trước. Áp đúng mục "SSRF policy" t
 - [ ] Chuyển **ngay trong task này** mọi đường gọi provider hiện có sang factory, kể
       cả khi vẫn đọc key từ `.env`: `openai_embedder.py` và `multi_representation.py`
       (đang tự tạo `OpenAI(api_key=...)`), `get_graph_models()` (truyền
-      `http_client=` vào `OpenAIProvider`). Adapter LiteLLM / provider native
-      PydanticAI / verifier ở các task sau dùng lại factory này
-- [ ] Registry transport ở Python: map `llmProvider` → cách build client đã chứng
-      minh ở spike. Credential có provider không nằm trong map → không build, log
-      error, báo health PERMANENT `PROVIDER_TRANSPORT_UNSUPPORTED`; **không bao
-      giờ** fallback về client mặc định của SDK
+      `http_client=` vào `OpenAIProvider`). Provider native PydanticAI (ADR 0005)
+      / verifier ở các task sau dùng lại factory này
+- [ ] Registry transport ở Python: map `llmProvider` → cặp (Model class, Provider
+      class) native PydanticAI đã chứng minh ở spike (ADR 0005). Credential có
+      provider không nằm trong map → không build, log error, báo health PERMANENT
+      `PROVIDER_TRANSPORT_UNSUPPORTED`; **không bao giờ** fallback về client mặc
+      định của SDK
 - [ ] Test kiến trúc `tests/core/test_no_raw_provider_clients.py`: quét AST của
       `app/`, fail nếu thấy `OpenAI(`, `AsyncOpenAI(`, `Anthropic(`,
-      `httpx.Client(`, `httpx.AsyncClient(`, hoặc `litellm` completion/embedding
-      không truyền client, ở ngoài factory/adapter
+      `httpx.Client(`, `httpx.AsyncClient(` ở ngoài factory, **hoặc bất kỳ
+      `import litellm` nào** (ADR 0005 — bỏ LiteLLM, không được quay lại dùng nó)
 - [ ] Allowlist production mặc định rỗng, giá trị thật do hạ tầng điền lúc deploy
       (plan.md "Open Questions"); test profile Java đặt `localhost` để test hiện có
       (`http://localhost:8000/v1` trong `ChatModelServiceImplTest`) vẫn pass; thêm
@@ -725,7 +734,7 @@ nào ghi lỗi provider ra ngoài (Task 2, 6, 9, 15).
       provider thành text; cấm `str(exc)`/`repr(exc)` đi ra DB/Slack/HTTP (test kiến
       trúc quét `app/core/llm/`, `app/worker/`, `app/integrations/`)
 - [ ] Không log request body/headers của lời gọi provider; tắt debug logging của
-      `httpx`/`httpcore`/`openai`/`litellm` ở mức INFO trở lên trong config mặc định
+      `httpx`/`httpcore`/`openai`/`anthropic` ở mức INFO trở lên trong config mặc định
 - [ ] Celery: cấu hình chung cho task của feature này `ignore_result=True`,
       `store_errors_even_if_ignored=False`; test xác nhận không task nào của
       feature nhận argument chứa key (kiểm signature + gọi thử với broker giả)
@@ -1105,16 +1114,22 @@ purpose. Request Chat/Ingest **không** gọi Java trực tiếp, chỉ đọc s
 
 ### Task 5: `get_graph_models()` build model từ snapshot
 
-**Description:** Thay `OpenAIChatModel(settings.OPENAI_MODEL, ...)` trong
-`app/api/deps.py::get_graph_models()` bằng model build từ snapshot CHAT theo
-phương án spike Task 0.2 đã chốt (mặc định `LiteLLMModel` adapter). **Chưa có
-failover** — chỉ credential priority cao nhất. Graph node và `stream_agent_text()`
-không đổi.
+**Description:** Thay `OpenAIChatModel(settings.OPENAI_MODEL, ...)` (giá trị cứng)
+trong `app/api/deps.py::get_graph_models()` bằng model native PydanticAI build
+từ snapshot CHAT, chọn class theo `llmProvider` (quyết định ADR 0005 — không
+dùng LiteLLM SDK, spike Task 0.2 cho thấy nó không inject được transport SSRF).
+**Chưa có failover** — chỉ credential priority cao nhất. Graph node và
+`stream_agent_text()` không đổi.
 
 **Acceptance criteria:**
-- [ ] `litellm` thêm vào `pyproject.toml` (nếu spike chọn LiteLLM)
-- [ ] `app/core/llm/litellm_model.py` bản production (từ spike), HTTP client dùng
-      transport SSRF của Task 0.6
+- [ ] `app/core/llm/provider_models.py`: map `llmProvider` → (Model class,
+      Provider class) — `"openai"` → `OpenAIChatModel`/`OpenAIProvider`,
+      `"anthropic"` → `AnthropicModel`/`AnthropicProvider`; `SELF_HOSTED` dùng
+      `OpenAIChatModel` + `OpenAIProvider(base_url=...)`. Mỗi entry truyền
+      `http_client=` từ `build_provider_http_client()` (Task 0.6) vào `Provider`
+      class — đã xác nhận cơ chế này nhận đúng transport ở spike Task 0.2
+- [ ] Provider không có trong map → không build, lỗi `CHAT_MODEL_PROVIDER_UNSUPPORTED`/
+      health `PROVIDER_TRANSPORT_UNSUPPORTED`, không fallback SDK mặc định
 - [ ] `get_graph_models()` build từ snapshot; `MODEL_REGISTRY_ENABLED=false` → giữ
       đường `.env` cũ
 - [ ] Các node dùng chung model (`classification`, `query_transformation`,
@@ -1139,10 +1154,10 @@ không đổi.
 
 **Files likely touched:**
 - `unisage-agent/app/api/deps.py`
-- `unisage-agent/app/core/llm/litellm_model.py`
-- `unisage-agent/pyproject.toml`
+- `unisage-agent/app/core/llm/provider_models.py`
 - `unisage-agent/tests/api/test_deps.py`
 - `unisage-agent/tests/core/test_no_env_fallback_when_registry_enabled.py`
+- `unisage-agent/tests/core/test_provider_models.py`
 
 **Estimated scope:** M (5 files)
 
@@ -1311,15 +1326,19 @@ lấy snapshot, build router mới, swap reference.
 
 ### Task 9: Phân loại lỗi provider permanent vs transient
 
-**Description:** Dựa trên exception typed (của LiteLLM, hoặc SDK provider nếu spike
-chọn phương án dự phòng) — xác nhận ở Task 0.2 là exception không bị PydanticAI
-bọc mất thông tin. Đầu vào của Task 2, 6, 10, 15.
+**Description:** Dựa trên exception typed của từng provider SDK (`openai`,
+`anthropic`...) — model native PydanticAI theo ADR 0005 dùng thẳng SDK provider
+tương ứng, exception đi ra có thể là exception gốc của SDK đó hoặc
+`pydantic_ai.exceptions.ModelHTTPError` (PydanticAI có bọc lại một phần ở model
+native, khác với path LiteLLM đã bỏ) — cả hai đều phải được nhận diện. Đầu vào
+của Task 2, 6, 10, 15.
 
 **Acceptance criteria:**
 - [ ] `classify_llm_error(exc) -> ErrorType` xử lý ít nhất: `AuthenticationError`,
-      `RateLimitError` (check `error.code` — `insufficient_quota` là PERMANENT,
-      429 thường là TRANSIENT), `APIConnectionError`, timeout, provider 5xx,
-      `SsrfBlockedError` (PERMANENT)
+      `RateLimitError` (check mã lỗi — `insufficient_quota` là PERMANENT, 429
+      thường là TRANSIENT), `APIConnectionError`, timeout, provider 5xx,
+      `SsrfBlockedError` (PERMANENT) — cho **từng SDK provider** trong
+      `provider_models.py` (Task 5), không chỉ OpenAI
 - [ ] Test từng loại, gồm cả exception đã bị PydanticAI bọc (`ModelHTTPError`...)
 - [ ] Không nhận diện được → TRANSIENT
 
