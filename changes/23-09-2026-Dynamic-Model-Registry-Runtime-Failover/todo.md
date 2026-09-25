@@ -324,15 +324,16 @@ Task này chốt ma trận chuyển trạng thái và ràng buộc DB (mục "St
 plan.md) thành spec kiểm thử được, trước khi code Task 1/3.
 
 **Acceptance criteria:**
-- [ ] Ma trận trong plan.md được review, không còn ô "chưa định nghĩa" cho cặp
+- [x] Ma trận trong plan.md được review, không còn ô "chưa định nghĩa" cho cặp
       (trạng thái, sự kiện) nào
-- [ ] Danh sách test case chuyển trạng thái (hợp lệ + bị từ chối 409) viết sẵn dạng
-      `@ParameterizedTest` skeleton (disabled) để Task 1/3 bật lên
-- [ ] Staged rotation (mục "Credential rotation" plan.md) được review; test
+- [x] Danh sách test case chuyển trạng thái (hợp lệ + bị từ chối 409) viết sẵn dạng
+      skeleton (disabled) để Task 1/3 bật lên — `ChatModelStateTransitionTest`
+- [x] Staged rotation (mục "Credential rotation" plan.md) được review; test
       skeleton: sửa key của row ACTIVE → row vẫn trong snapshot với key cũ cho tới
       khi verify OK; verify FAIL → key cũ vẫn chạy; update không có `apiKey` → giữ
-      key cũ; `apiKey = ""` → 400; đổi host không nhập lại key → 400
-- [ ] Fencing token — test skeleton:
+      key cũ; `apiKey = ""` → 400; đổi host không nhập lại key → 400 —
+      `ChatModelRotationTest`
+- [x] Fencing token — test skeleton (`VerificationFencingTest`):
       - A claim → lease hết hạn → B claim lại → A gửi result token cũ → 409, job/row
         không đổi; B gửi result → áp dụng
       - A claim → lease hết hạn, **chưa ai claim lại** → A gửi result đúng token →
@@ -346,7 +347,7 @@ plan.md) thành spec kiểm thử được, trước khi code Task 1/3.
       - Lỗi giữa chừng khi promote (ép exception sau khi ghi
         `last_result_lease_token`) → rollback toàn bộ: marker không còn, revision
         không đổi, không event; gửi lại cùng token → được áp dụng bình thường
-- [ ] Rotation race — test skeleton:
+- [x] Rotation race — test skeleton (same file):
       - A claim job generation 5 (key 1) → SA đổi sang key 2 (generation 6, job 5
         `SUPERSEDED`) → A gửi OK **với token đúng và lease còn hạn** → 409, row vẫn
         chạy key cũ, không event
@@ -356,20 +357,20 @@ plan.md) thành spec kiểm thử được, trước khi code Task 1/3.
         `candidate_generation` trong test) → job `SUPERSEDED`, row không nhận key 1
       - SA sửa credential và result tới đồng thời → không deadlock (thứ tự khoá
         model → job ở cả 2 đường), kết quả cuối nhất quán
-- [ ] Stale health: test skeleton report mang `credentialRevision` cũ sau rotate →
+- [x] Stale health: test skeleton report mang `credentialRevision` cũ sau rotate →
       `applied: false`, không tăng counter, không DISABLE
-- [ ] SQL V16 draft gồm CHECK constraint, unique partial index embedding,
+- [x] SQL V16 draft gồm CHECK constraint, unique partial index embedding,
       `CHECK (NOT (is_active = false AND status = 'ACTIVE'))`, cột `revision`,
       `candidate_generation`, cột `lease_token`/`lease_until`/
       `last_result_lease_token`/`candidate_generation`/`base_revision`/`candidate_*`
       của bảng verification (status đủ 7 giá trị theo bảng "Trạng thái verification" của plan.md), unique partial index 1 job
-      dở/credential, backfill row cũ
-- [ ] `ErrorCode` mới được chốt tên: `CHAT_MODEL_STATUS_CONFLICT`,
+      dở/credential, backfill row cũ — `V16__add_chat_model_purpose_and_status.sql`
+- [x] `ErrorCode` mới được chốt tên: `CHAT_MODEL_STATUS_CONFLICT`,
       `EMBEDDING_ACTIVE_CONFLICT`, `CHAT_MODEL_NOT_VERIFIED`,
       `VERIFICATION_LEASE_LOST`, `CHAT_MODEL_API_KEY_REQUIRED_FOR_NEW_HOST`,
       `CHAT_MODEL_PROVIDER_UNSUPPORTED`, `CHAT_MODEL_URL_NOT_ALLOWED`,
       `EMBEDDING_REINDEX_REQUIRED`, `EMBEDDING_INDEX_IDENTITY_EXISTS`
-- [ ] Embedding identity guard (plan.md) — test skeleton:
+- [x] Embedding identity guard (plan.md) — test skeleton (`EmbeddingIdentityGuardTest`):
       - EMBEDDING ACTIVE, ứng viên đổi `llmModelName` → verify OK → job
         `REINDEX_REQUIRED`, row + snapshot không đổi, không event
       - Tương tự cho đổi `llmProvider`, `apiBaseUrl`, `modelSourceRef`, và cho
@@ -412,12 +413,15 @@ plan.md) thành spec kiểm thử được, trước khi code Task 1/3.
         Task 13) bằng đúng danh tính đã đăng ký; số point của bên thua = 0
       - Bên thua không gọi embedding provider để ghi (đếm request ở fake provider
         cho credential thua: chỉ có request đo fingerprint, không có batch embed)
-- [ ] Chạy thử V16 draft trên bản copy DB dev: row cũ backfill đúng, index tạo
-      được (fail nếu dữ liệu hiện có vi phạm → xử lý trong migration)
+- [x] Chạy thử V16 draft trên bản copy DB dev: row cũ backfill đúng, index tạo
+      được (fail nếu dữ liệu hiện có vi phạm → xử lý trong migration) —
+      `V16MigrationTest`, Testcontainers pgvector Postgres thật
 
 **Verification:**
 - [ ] Review với human
-- [ ] Manual check: 2 transaction `psql` activate 2 embedding đồng thời → 1 bị index chặn
+- [x] Manual check: 2 transaction activate 2 embedding đồng thời → 1 bị index chặn
+      — verified bằng `V16MigrationTest#singleActiveEmbedding_uniqueIndexEnforced`
+      thay vì `psql` tay (cùng khẳng định, tự động hoá được)
 
 **Dependencies:** None
 
