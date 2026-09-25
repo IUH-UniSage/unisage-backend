@@ -45,7 +45,9 @@ public class InternalSecretFilter extends OncePerRequestFilter {
 
     /** Paths only ever meant to be called by trusted internal services, never an end-user. */
     private static final List<PublicPath> INTERNAL_ONLY_PATHS = List.of(
-            new PublicPath("PATCH", "/messages/*")
+            new PublicPath("PATCH", "/messages/*"),
+            // Dynamic Model Registry internal namespace — see plan.md "Internal API contract".
+            new PublicPath("*", "/internal/**")
     );
 
     private final ObjectMapper objectMapper;

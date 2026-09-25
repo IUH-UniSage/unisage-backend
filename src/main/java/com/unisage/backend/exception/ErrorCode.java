@@ -71,6 +71,23 @@ public enum ErrorCode {
     SYSTEM_CONFIG_INVALID_VALUE(HttpStatus.BAD_REQUEST, 2146, "Giá trị cấu hình không hợp lệ với kiểu dữ liệu của cấu hình này."),
     SYSTEM_CONFIG_NOT_EDITABLE(HttpStatus.FORBIDDEN, 2147, "Cấu hình này không thể chỉnh sửa."),
 
+    // Internal API (/internal/**) — X-Internal-Secret is checked separately by
+    // InternalSecretFilter (code 1007); this is the CIDR layer.
+    INTERNAL_CALLER_NOT_ALLOWED(HttpStatus.FORBIDDEN, 2500, "Địa chỉ gọi không nằm trong danh sách cho phép."),
+
+    // Dynamic Model Registry (25xx)
+    CHAT_MODEL_STATUS_CONFLICT(HttpStatus.CONFLICT, 2510, "Trạng thái model đã thay đổi, vui lòng tải lại."),
+    EMBEDDING_ACTIVE_CONFLICT(HttpStatus.CONFLICT, 2511, "Một model embedding khác vừa được kích hoạt."),
+    CHAT_MODEL_NOT_VERIFIED(HttpStatus.CONFLICT, 2512, "Model chưa được xác minh, không thể kích hoạt."),
+    VERIFICATION_LEASE_LOST(HttpStatus.CONFLICT, 2513, "Lượt xác minh đã hết hạn hoặc bị lấy lại bởi tiến trình khác."),
+    CHAT_MODEL_API_KEY_REQUIRED_FOR_NEW_HOST(HttpStatus.BAD_REQUEST, 2514,
+            "Phải nhập lại apiKey khi đổi apiBaseUrl sang host mới."),
+    CHAT_MODEL_PROVIDER_UNSUPPORTED(HttpStatus.BAD_REQUEST, 2515, "Provider này chưa được hỗ trợ."),
+    CHAT_MODEL_URL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, 2516, "apiBaseUrl không hợp lệ hoặc không được phép."),
+    EMBEDDING_REINDEX_REQUIRED(HttpStatus.CONFLICT, 2517,
+            "Model embedding này khác danh tính với dữ liệu đã index, cần re-index trước khi dùng."),
+    EMBEDDING_INDEX_IDENTITY_EXISTS(HttpStatus.CONFLICT, 2518, "Danh tính index của collection này đã được xác lập."),
+
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),
     FILE_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2402, "Không thể xoá file khỏi hệ thống lưu trữ."),
