@@ -83,10 +83,10 @@ plan.md), chưa implement endpoint nghiệp vụ.
       `/api/v1/master/` hoặc `/api/v1/ai/` chứa `%2F`, `%5C`, `%2E`, `%25`, `\`, `;`
       → 404 ngay; phần còn lại decode lặp tới ổn định (≤ 3 lần), gộp `//`, resolve
       `.`/`..`, lowercase rồi mới match (plan.md, Security flow bước 3)
-- [ ] Deploy production: `backend-java/docker-compose.yml` hiện publish
+- [x] Deploy production: `backend-java/docker-compose.yml` hiện publish
       `8401:8401` — giữ cho dev, thêm override/manifest production chỉ `expose`
       trong network nội bộ; ghi vào `dev-onboard.md` mục production
-- [ ] Manifest production đặt gateway, Java, agent vào cùng network nội bộ và
+- [x] Manifest production đặt gateway, Java, agent vào cùng network nội bộ và
       dùng tên service thay cho `host.docker.internal` (mặc định hiện tại ở
       `api-gateway/docker-compose.yml`): `JAVA_BACKEND_URI=http://backend-java:8401`,
       `PYTHON_AI_URI=http://unisage-agent:8402`, agent

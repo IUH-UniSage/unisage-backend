@@ -102,6 +102,21 @@ class InternalCallerCidrFilterTest {
     }
 
     @Test
+    void logRemoteAddr_offByDefault() {
+        assertThat(ReflectionTestUtils.getField(filter, "logRemoteAddr")).isEqualTo(false);
+    }
+
+    @Test
+    void logRemoteAddr_whenEnabled_stillProceeds() throws Exception {
+        ReflectionTestUtils.setField(filter, "logRemoteAddr", true);
+        HttpServletRequest request = requestFor("/internal/model-registry/version", "172.30.0.5");
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(filterChain, times(1)).doFilter(request, response);
+    }
+
+    @Test
     void sourceNeverReadsForwardedHeaders() throws IOException {
         Path source = Path.of("src/main/java/com/unisage/backend/security/InternalCallerCidrFilter.java");
         String content = Files.readString(source);

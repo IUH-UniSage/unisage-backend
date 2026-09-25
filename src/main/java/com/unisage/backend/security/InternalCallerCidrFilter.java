@@ -36,6 +36,9 @@ public class InternalCallerCidrFilter extends OncePerRequestFilter {
     @Value("${app.internal.allowed-cidrs:}")
     private String allowedCidrsRaw;
 
+    @Value("${app.internal.log-remote-addr:false}")
+    private boolean logRemoteAddr;
+
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
     @Override
@@ -47,6 +50,10 @@ public class InternalCallerCidrFilter extends OncePerRequestFilter {
         if (!isInternalPath(normalizedPath)) {
             filterChain.doFilter(request, response);
             return;
+        }
+
+        if (logRemoteAddr) {
+            log.info("remoteAddr={} for /internal/**", request.getRemoteAddr());
         }
 
         CidrMatcher matcher = CidrMatcher.parse(allowedCidrsRaw);
