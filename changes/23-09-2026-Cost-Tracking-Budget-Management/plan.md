@@ -4,243 +4,465 @@
 
 Phase này nối tiếp **sau khi** Dynamic Model Registry + Runtime Active Switch
 (`changes/23-09-2026-Dynamic-Model-Registry-Runtime-Failover/`) đã triển khai
-xong Phase 0-8 (bắt buộc, vì phase này cần Model Registry đã hoạt động để biết
-credential/provider/model nào đang được gọi cho từng request). SA hiện không có
-cách nào biết hệ thống đang tốn bao nhiêu tiền LLM mỗi ngày/tháng, theo chức
-năng nào (Chat/Ingest/Embedding), hay dừng lại khi vượt ngân sách. Phase này bổ
-sung: đo cost mỗi request, dashboard, budget & giới hạn chi tiêu, cảnh báo, lịch
-sử/đối soát, trang chi tiết từng request, và section usage trong `/profile`.
+**và nghiệm thu** xong Phase 0-6 (LiteLLM trong `get_graph_models()`,
+`model_router`, failover Chat/Extraction, Embedding đọc registry). Tại thời
+điểm viết plan này, code vẫn dùng `OpenAIChatModel` (`app/api/deps.py`) và
+OpenAI SDK trực tiếp (`multi_representation.py`, `openai_embedder.py`), chưa có
+`litellm`/`model_router` — nên **Phase 0 của plan này là cổng chặn**: không bắt
+đầu Phase 2 khi chưa chốt được điểm lấy usage/token thật cho từng loại call.
+
+SA hiện không có cách nào biết hệ thống đang tốn bao nhiêu tiền LLM mỗi
+ngày/tháng, theo chức năng nào (Chat/Extraction/Embedding), hay dừng lại khi
+vượt ngân sách. Phase này bổ sung: đo cost từng LLM call, dashboard, budget &
+giới hạn chi tiêu (soft limit + reservation), cảnh báo, lịch sử/đối soát, trang
+chi tiết từng request.
 
 **Routing Policy nâng cao (LOWEST_COST/BALANCED/PRIORITY/QUALITY_FIRST) không
-nằm trong phase này** — đã được thêm làm Phase 9 trong plan Active Switch, vì nó
-tiêu thụ dữ liệu cost/latency mà phase này tạo ra, nên phải làm sau.
+nằm trong phase này** — là Phase 9 trong plan Active Switch, tiêu thụ dữ liệu
+cost/latency theo credential mà `RequestUsageLine` của phase này tạo ra.
+
+## Phản hồi review
+
+| Blocker trong review | Quyết định |
+|---|---|
+| 1. 1 record/1 `chatModel` không đủ cho multi-model/failover | Parent `RequestUsageLog` + child `RequestUsageLine` (1 dòng/1 LLM hoặc embedding call, kể cả attempt failover lỗi), snapshot provider/model/sourceType tại thời điểm gọi |
+| 2. Budget chưa phải hard limit, race khi concurrent | **Soft limit** (đã chốt) + **reservation mỗi request** bằng Redis Lua atomic; THROTTLE = giới hạn concurrency; ma trận hành vi theo scope ở mục "Budget semantics" |
+| 3. USER_GROUP/`scopeRefId` không có domain | Bỏ USER_GROUP khỏi phase này (code chưa có khái niệm nhóm). Thay `scopeRefId` bằng 2 cột có kiểu: `scopeProvider` (String), `scopePurpose` (enum) |
+| 4. Thiếu persistence cho alert config, debounce có race | Entity `BudgetAlertSetting`; `BudgetAlertLog.dedupeKey` UNIQUE + claim bằng `INSERT ... ON CONFLICT DO NOTHING`; Slack cấu hình qua **env** (đã chốt) |
+| 5. Endpoint nội bộ không qua được RBAC | Whitelist tường minh trong `InternalSecretFilter` + `PredefinedPublicPaths`, prefix `/internal/**`, test đủ 5 case |
+| 6. Prerequisite chưa có | Phase 0 = gate nghiệm thu Model Registry + spike chốt nguồn usage cho PydanticAI/LiteLLM/embedding/extraction |
+| Thiếu sót khác | Lưu cả `userMessageId` + `assistantMessageId`; FK `ON DELETE SET NULL`; `requestId` idempotent; quy tắc `costUsd = null`; timezone `app.timezone`; index bổ sung; RBAC `USAGE_LOG`/`BUDGET`; spec đầy đủ cho UI |
+
+**Vòng 2:**
+
+| Blocker | Quyết định |
+|---|---|
+| 1. PROVIDER budget không có reservation atomic | Mỗi provider attempt gọi `acquire_provider.lua` (check + tăng `reserved`/`inflight` atomic) và `release_provider.lua` khi attempt xong; failover = release provider cũ, acquire provider mới |
+| 2. Unique index với cột NULL không chặn trùng SYSTEM | 3 partial unique index riêng cho SYSTEM/PROVIDER/PURPOSE + CHECK constraint theo scope |
+| 3. `BudgetAlertSetting` 1 dòng chưa enforce; retry alert không có trạng thái | PK cố định `id = 1` + `CHECK (id = 1)`, seed bằng migration, API chỉ GET/PUT; `BudgetAlertLog` thêm `attemptCount`, `nextAttemptAt`, `lastAttemptAt`, status `GAVE_UP` |
+| 4. Version migration sai (repo đang ở V15) | Chốt số: Model Registry V16, plan này V17-V19, Routing Policy V20 — xem "Migration versions" |
+| 5. `timestamptz` không khớp `LocalDateTime` | Giữ `timestamp(6) without time zone` chứa giá trị **UTC** (convention của `Clock.systemUTC()` / `UsageLimitServiceImpl`); cắt kỳ theo `APP_TIMEZONE` rồi đổi sang UTC khi query |
+| 6. Outbox worker, scheduler, Redis persistence chưa có deploy | Task 11b: Celery beat + task drain/reclaim/release/reconcile, Taskfile + README, Redis AOF + volume, health báo outbox/dead-letter, lệnh replay dead-letter |
+| 7. Mail env chưa có | Đã thêm `SPRING_MAIL_*` + `BUDGET_ALERT_MAIL_FROM` vào `.env.example`/`.ENV`; thiếu host/from → `SKIPPED`; tắt `management.health.mail` |
+| Bổ sung | Request không có LLM call → không tạo parent; `conversationId` FK ON DELETE SET NULL; Redis lưu **micro-USD integer**; `APP_TIMEZONE` + biến budget đã thêm vào `unisage-agent/.env.example` |
 
 ## Architecture Decisions
 
-- **Không tự xây bảng giá trong DB, không fetch giá tự động từ web provider.**
-  LiteLLM đã có sẵn bảng giá nội bộ cho hầu hết model CLOUD_API phổ biến và hàm
-  `litellm.completion_cost(completion_response=response)` tính cost ($) trực
-  tiếp từ response — không cần SA nhập tay, không cần scrape (scrape dễ vỡ âm
-  thầm vì provider không có API giá chính thức, và giá thực SA trả có thể khác
-  giá public do hợp đồng riêng).
-- **`SELF_HOSTED` model = cost $0, không tính vào budget.** Đây là chi phí hạ
-  tầng cố định (GPU/server), khác bản chất với ngân sách "trả theo API call" mà
-  phase này theo dõi. Không đưa vào dashboard chi phí, không trừ vào budget.
-- **Bảng giá hiển thị cho SA (tab Pricing) là dữ liệu tĩnh, hardcode ở frontend
-  — chỉ mang tính tham khảo, không phải nguồn tính cost thật.** Cost thật luôn
-  đến từ `litellm.completion_cost()` ở Python, ghi vào `RequestUsageLog` (Java).
-  Rủi ro: bảng FE có thể lệch giá thật nếu provider đổi giá và không ai cập nhật
-  — chấp nhận rủi ro này vì đây chỉ là thông tin tham khảo, không ảnh hưởng số
-  liệu dashboard/budget (số liệu dashboard luôn lấy từ `RequestUsageLog` thật).
-- **Cost tính ở Python, gửi kết quả đã tính về Java để lưu.** 1 pipeline Chat có
-  nhiều node LLM (classification, direct_llm, query_transformation, generation)
-  — Python tổng hợp cost của toàn bộ node trong 1 lần xử lý request thành 1 con
-  số cuối cùng trước khi gửi về Java, không gửi từng node riêng lẻ (tránh Java
-  phải biết chi tiết cấu trúc pipeline nội bộ của Python).
-- **Budget enforcement real-time dùng running-total trong Redis, không gọi Java
-  đồng bộ trên mỗi request** (giữ đúng fast-path constraint đã chốt ở phase Model
-  Registry). Java là nguồn cấu hình budget chính; Python giữ running-total được
-  cập nhật mỗi khi ghi 1 record cost, và định kỳ đối soát lại với Java để tránh
-  lệch tích luỹ (cùng pattern version-check đã dùng cho hot-reload Model Registry).
-- **Reuse Slack Incoming Webhook đã dựng ở phase trước** cho kênh cảnh báo budget,
-  không dựng tích hợp Slack thứ 2.
-- **Request detail (query/answer/chunks) join với `Message`/`Conversation` đã có
-  sẵn ở Java, không lưu trùng nội dung text hay chunk.** `Message.citations`
-  (JSON, đã tồn tại — build bởi `app/rag/prompting/citations.py`, chứa
-  `documentId`/`title`/`section`/`pageStart`/`pageEnd`/`sourceType` cho các
-  chunk thực sự được trích dẫn `[n]` trong câu trả lời) **đã là đúng dữ liệu
-  cần cho phần "chunks đã dùng"** ở Tab Lịch sử sử dụng — không thêm field mới.
-  `RequestUsageLog` chỉ cần `messageId` (FK, nullable) + số liệu cost/token/
-  latency; nội dung câu hỏi/câu trả lời và chunks đọc qua `Message` khi join.
-  Lưu ý: `citations` chỉ chứa chunk **được trích dẫn trong câu trả lời cuối**,
-  không phải toàn bộ chunk RAG đã retrieve (có thể có chunk retrieve về nhưng
-  không được model dùng) — nếu sau này cần audit cả tập retrieve đầy đủ, đó là
-  1 field/bảng bổ sung riêng, ngoài scope hiện tại.
+- **Không tự xây bảng giá trong DB, không scrape giá.** Cost thật tính bằng
+  `litellm.completion_cost()` (chat) / `litellm.cost_per_token()` (embedding,
+  và ước tính cho reservation). Giá thực SA trả có thể khác giá public do hợp
+  đồng riêng — chấp nhận, dashboard ghi rõ "theo giá niêm yết LiteLLM".
+- **`SELF_HOSTED` = cost $0**, vẫn ghi `RequestUsageLine` (để có token/latency
+  cho routing) nhưng `costStatus = FREE`, không reserve, không trừ budget.
+- **Bảng giá tab Pricing là dữ liệu tĩnh ở FE, chỉ tham khảo.** Số liệu
+  dashboard/budget luôn từ `RequestUsageLog`/`RequestUsageLine`.
+- **Cost tính ở Python, gửi về Java theo từng call (line), không gộp thành 1
+  con số.** Python gửi 1 payload/request gồm parent + danh sách line. Java không
+  cần biết cấu trúc graph — `nodeName` trên line chỉ là nhãn hiển thị. Tổng của
+  request được Java tính khi insert và lưu denormalized trên parent để dashboard
+  query nhanh.
+- **Ghi usage qua outbox Redis, không gọi Java trực tiếp trong request.** Python
+  `LPUSH` payload vào `usage:outbox` (nhanh, không phụ thuộc Java sống); worker
+  drain gửi `POST /internal/usage-logs` với retry/backoff. Java down → payload
+  nằm chờ trong outbox, không mất và không làm chậm Chat.
+- **Idempotency theo `requestId`.** `request_usage_logs.request_id` UNIQUE;
+  Java insert bằng `ON CONFLICT (request_id) DO NOTHING` và trả 200 kèm id có sẵn
+  → worker retry an toàn. First-write-wins, không merge.
+- **Budget là soft limit, enforcement ở Python qua Redis, không gọi Java đồng
+  bộ** (giữ fast-path constraint của Model Registry). Chi tiết ở "Budget
+  semantics".
+- **Alert do Java phát hiện và gửi** (nguồn sự thật là DB; SMTP và in-app đều ở
+  Java; 1 chỗ duy nhất để dedupe). Slack gửi bằng 1 client webhook nhỏ ở Java,
+  URL đọc từ env `BUDGET_ALERT_SLACK_*` (không lưu DB, không nhập qua UI). Có thể
+  trỏ cùng webhook với `SLACK_APIKEY_ALERT_WEBHOOK_URL` của Python nếu SA muốn
+  chung channel — đó là việc cấu hình env, không phải code dùng chung.
+- **Mọi kỳ DAILY/MONTHLY tính theo `app.timezone`** (`APP_TIMEZONE`, mặc định
+  `Asia/Ho_Chi_Minh`, đã dùng bởi `UsageLimitServiceImpl`). Python đọc cùng
+  biến (`Settings.APP_TIMEZONE`) để sinh `periodKey` Redis khớp với Java.
+- **Thời gian lưu `timestamp(6) without time zone`, giá trị luôn là UTC** — cùng
+  convention hiện có (`TimeConfig` cung cấp `Clock.systemUTC()`, migration V15
+  dùng `timestamp without time zone`). Entity dùng `LocalDateTime`. Mốc kỳ tính
+  ở `APP_TIMEZONE` rồi đổi sang UTC trước khi so sánh; group theo ngày dùng
+  `(started_at AT TIME ZONE 'UTC') AT TIME ZONE :tz`. Query kỳ **không** dựa vào
+  `BaseEntity.createdAt` (auditing lấy giờ theo default zone của JVM, không đảm
+  bảo UTC) mà dùng `startedAt`/`occurredAt` do Java set từ `Clock` hoặc parse từ
+  ISO-8601 UTC trong payload.
+- **Tiền:** DB `NUMERIC(18,8)`; Redis lưu **micro-USD integer** (`INCRBY`,
+  `round_half_up(usd × 1_000_000)`), không dùng `INCRBYFLOAT` để tránh drift.
+- **Request không có LLM call** (bị chặn trước graph, lỗi validate, cache hit...)
+  → **không tạo parent**, chỉ settle để trả reservation. API `POST
+  /internal/usage-logs` giữ yêu cầu `lines` không rỗng; dashboard đếm request
+  có phát sinh gọi provider.
+- **Request detail join `Message` có sẵn, không lưu trùng text/chunk.** Query
+  đọc qua `userMessageId`, answer + `citations` qua `assistantMessageId`.
+  `citations` chỉ chứa chunk được trích dẫn trong câu trả lời, không phải toàn bộ
+  chunk đã retrieve — audit tập retrieve đầy đủ nằm ngoài scope.
 
 ## Data Model (Java, control plane)
 
-- **`RequestUsageLog`** (bảng mới): `id`, `requestId` (UUID, để correlate log
-  Python↔Java), `purpose` (CHAT/EMBEDDING/EXTRACTION), `messageId` (FK tới
-  `Message`, nullable — null cho Embedding/Extraction không gắn với 1 message
-  chat cụ thể), `userId` (FK, nullable), `guestIp` (nullable, khi chưa đăng
-  nhập), `chatModelId` (FK tới `ChatModel`), `inputTokens`, `outputTokens`,
-  `cachedTokens`, `costUsd`, `latencyMs`, `status` (SUCCESS/ERROR), `createdAt`.
-  Chunks đã dùng đọc qua `Message.citations` (join theo `messageId`), không
-  lưu trùng ở đây.
-- **`Budget`**: `id`, `scope` (SYSTEM/PROVIDER/USER_GROUP/PURPOSE), `scopeRefId`
-  (nullable — id provider/group/purpose cụ thể tuỳ scope), `period`
-  (DAILY/MONTHLY), `limitUsd`, `action` (ALERT/THROTTLE/BLOCK), `isEnabled`.
-- **`BudgetAlertLog`**: lịch sử alert đã gửi (budget nào, ngưỡng nào, kênh nào,
-  thời điểm) — để hiển thị tab Cảnh báo và tránh gửi trùng (debounce).
+### `RequestUsageLog` (parent — 1 dòng/1 request nghiệp vụ)
+`id`, `requestId` (UUID, UNIQUE), `purpose` (CHAT/EMBEDDING/EXTRACTION),
+`conversationId` (FK `conversations`, nullable, ON DELETE SET NULL), `userMessageId` + `assistantMessageId` (FK
+`messages`, nullable, **ON DELETE SET NULL**), `userId` (FK, nullable, ON DELETE
+SET NULL), `guestIp` (nullable), `status` (SUCCESS/ERROR/PARTIAL),
+`totalInputTokens`, `totalOutputTokens`, `totalCachedTokens`, `totalCostUsd`
+(tổng các line đã định giá), `estimatedUnpricedCostUsd` (tổng ước tính của line
+không định giá được), `unpricedLineCount`, `lineCount`, `latencyMs` (end-to-end),
+`startedAt`, `finishedAt`, `createdAt`.
 
-## Giao diện quản lý ngân sách (unisage-web) — Tabs & nội dung
+### `RequestUsageLine` (child — 1 dòng/1 lần gọi provider)
+`id`, `usageLogId` (FK parent, ON DELETE CASCADE), `seq` (thứ tự trong request),
+`nodeName` (vd `GenerationSynthesisNode`, `embed_batch`), `attempt` (0 = lần đầu,
+≥1 = failover), `chatModelId` (FK `chat_models`, nullable, ON DELETE SET NULL),
+**snapshot**: `provider`, `modelName`, `sourceType` (CLOUD_API/SELF_HOSTED) —
+giữ nguyên dù `ChatModel` bị sửa/xoá sau này; `inputTokens`, `outputTokens`,
+`cachedTokens`, `costUsd` (nullable), `estimatedCostUsd` (luôn có khi
+CLOUD_API), `costStatus` (PRICED/UNPRICED/FREE), `latencyMs`, `status`
+(SUCCESS/ERROR), `errorCode` (nullable), `occurredAt` (UTC, lúc attempt bắt đầu).
 
-Trang mới `AI Cost Management` trong khu admin, chia 5 tab:
+### Index
+- `request_usage_logs`: UNIQUE(`request_id`); (`started_at`);
+  (`purpose`, `started_at`); (`user_id`, `started_at`); (`status`,
+  `started_at`); (`user_message_id`); (`assistant_message_id`);
+  (`conversation_id`).
+- `request_usage_lines`: (`usage_log_id`); (`occurred_at`); (`provider`,
+  `occurred_at`); (`chat_model_id`, `occurred_at`).
 
-### Tab 1 — Tổng quan (Overview)
-- 4 KPI card đầu trang: **Chi phí tháng này** ($ + % thay đổi so tháng trước),
-  **Ngân sách tháng** (limit đã cấu hình cho scope SYSTEM), **% ngân sách đã
-  dùng** (progress bar: xanh <50%, vàng 50-80%, đỏ >80%), **Còn lại** ($).
-- **Phân bổ chi phí theo chức năng**: donut/bar chart Chat/Ingest/Embedding, kèm
-  $ và % (giống mock-up bạn đưa: Chat 51.4%, Ingest 35%, Embedding 13.6%).
-- **Phân bổ theo provider/model**: bar chart ngang, top provider/model tốn nhiều
-  nhất trong kỳ.
-- **Biểu đồ xu hướng theo ngày**: line chart chi phí/ngày trong tháng hiện tại,
-  để thấy ngày nào tăng đột biến.
-- **Top người dùng/API key tốn nhiều nhất**: bảng nhỏ top 5-10.
-- Filter chung của tab: khoảng thời gian (hôm nay/tuần/tháng/tuỳ chọn), purpose,
-  provider — áp dụng cho toàn bộ chart trong tab.
+### `Budget`
+`id`, `scope` (SYSTEM/PROVIDER/PURPOSE), `scopeProvider` (String, bắt buộc khi
+PROVIDER, so khớp chuẩn hoá lowercase với `ChatModel.provider`), `scopePurpose`
+(enum, bắt buộc khi PURPOSE), `period` (DAILY/MONTHLY), `limitUsd`, `action`
+(ALERT/THROTTLE/BLOCK), `throttleMaxConcurrency` (bắt buộc khi THROTTLE),
+`isEnabled`. Ràng buộc DB (không dùng 1 index gộp vì PostgreSQL coi các NULL là
+khác nhau trong unique index):
+- `CHECK`: SYSTEM → cả 2 ref NULL; PROVIDER → `scope_provider` NOT NULL và
+  `scope_purpose` NULL; PURPOSE → ngược lại; `action = 'THROTTLE'` ⇔
+  `throttle_max_concurrency` NOT NULL và > 0.
+- `ux_budgets_system (period) WHERE is_enabled AND scope = 'SYSTEM'`
+- `ux_budgets_provider (lower(scope_provider), period) WHERE is_enabled AND scope = 'PROVIDER'`
+- `ux_budgets_purpose (scope_purpose, period) WHERE is_enabled AND scope = 'PURPOSE'`
+- Service map vi phạm unique (`DataIntegrityViolationException`) sang `ErrorCode`
+  riêng thay vì 500.
 
-### Tab 2 — Ngân sách & Giới hạn (Budget & Limits)
-- Bảng danh sách `Budget` đã cấu hình: cột Scope, Period, Limit, Đã dùng (kỳ hiện
-  tại), % , Action khi vượt ngưỡng, Enabled/Disabled, nút Sửa/Xoá.
-- Form thêm/sửa 1 budget: chọn Scope (System-wide / Provider / Nhóm người dùng /
-  Purpose: Chat-Ingest-Embedding), chọn Period (Daily/Monthly), nhập Limit ($),
-  chọn Action (Cảnh báo / Giới hạn (throttle) / Dừng request (block)).
-- Cảnh báo rõ trên UI: chỉ budget scope **SYSTEM** khi hết mới **từ chối** request
-  thay vì fallback provider khác; budget scope hẹp hơn hết thì hệ thống tự
-  fallback sang provider/credential khác (liên kết với Phase 9 - Routing Policy
-  ở plan Active Switch).
+### `BudgetAlertSetting` (singleton, cấu hình toàn cục)
+Không kế thừa id UUID của `BaseEntity`: `id SMALLINT PRIMARY KEY DEFAULT 1
+CHECK (id = 1)`, dòng duy nhất seed trong migration, API chỉ `GET`/`PUT` (không
+có `POST`/`DELETE`) → không thể tạo dòng thứ 2 kể cả khi request đồng thời.
+`thresholdsPercent` (mảng int, mặc định `[50, 80, 100]`, cho phép thêm ngưỡng
+tuỳ chỉnh 1-200), `spikeDetectionEnabled`, `spikeThresholdPercent` (mặc định
+50 = cao hơn 50% so với trung bình 7 ngày), `inAppEnabled` (mặc định true),
+`emailEnabled`, `emailRecipients` (mảng email, validate), `slackEnabled`
+(toggle phía DB; chỉ có hiệu lực khi env `BUDGET_ALERT_SLACK_ENABLED=true` và có
+webhook URL).
 
-### Tab 3 — Cảnh báo (Alerts)
-- Cấu hình ngưỡng: checkbox/input cho 50%, 80%, 100% (mặc định bật cả 3, có thể
-  thêm ngưỡng tuỳ chỉnh), toggle "Phát hiện chi phí tăng đột biến" kèm % ngưỡng
-  spike so với trung bình 7 ngày trước.
-- Cấu hình kênh nhận cảnh báo: In-app (mặc định bật), Email (danh sách địa chỉ),
-  Slack (reuse webhook URL đã cấu hình ở phase Active Switch — 1 dropdown chọn
-  dùng chung channel API key incident hay tạo channel riêng cho budget).
-- Bảng **lịch sử cảnh báo đã gửi**: thời điểm, budget/scope liên quan, ngưỡng đã
-  đạt, kênh đã gửi, trạng thái gửi (thành công/lỗi).
+### `BudgetAlertLog`
+`id`, `alertType` (THRESHOLD/SPIKE), `budgetId` (FK, nullable cho SPIKE, ON
+DELETE SET NULL), `periodStart` (date, theo `app.timezone`), `thresholdPercent`
+(nullable cho SPIKE), `channel` (IN_APP/EMAIL/SLACK), `dedupeKey` (UNIQUE — vd
+`THRESHOLD:{budgetId}:{periodStart}:{threshold}:{channel}`,
+`SPIKE:{date}:{channel}`), `spentUsd`, `limitUsd`, `status`
+(PENDING/SENT/FAILED/GAVE_UP/SKIPPED), `attemptCount`, `lastAttemptAt`,
+`nextAttemptAt`, `errorMessage`, `sentAt`, `dismissedAt`, `dismissedBy` (chỉ
+dùng cho IN_APP; dismiss là trạng thái chung cho mọi SA, không theo từng user).
+Index (`status`, `next_attempt_at`) cho job retry.
 
-### Tab 4 — Bảng giá (Pricing, chỉ xem)
-- Bảng tĩnh (hardcode ở FE): Provider, Model, Loại token (Input/Output/Cached),
-  Đơn vị tính, Giá/1K token. Nhóm theo provider.
-- Model SELF_HOSTED hiển thị dòng riêng ghi "Không tính phí (hạ tầng nội bộ)".
-- Ghi chú cố định đầu bảng: "Bảng giá chỉ mang tính tham khảo tại thời điểm cập
-  nhật gần nhất. Chi phí thực tế trong Dashboard được hệ thống tính tự động qua
-  LiteLLM ngay tại thời điểm gọi model."
+**Vòng đời gửi:** claim → `PENDING` (`attemptCount = 0`, `nextAttemptAt = now`).
+Job lấy dòng `PENDING`/`FAILED` có `next_attempt_at <= now` bằng
+`SELECT ... FOR UPDATE SKIP LOCKED` (2 instance không gửi cùng 1 dòng), gửi,
+`attemptCount += 1`. Thành công → `SENT`; lỗi → `FAILED`, `nextAttemptAt = now
++ 2^attemptCount phút`; `attemptCount = 3` vẫn lỗi → `GAVE_UP`. Kênh chưa cấu
+hình (thiếu SMTP/Slack env) → `SKIPPED`, không retry.
 
-### Tab 5 — Lịch sử sử dụng (Usage History)
-- Bảng có filter (thời gian, purpose, provider/model, user/IP, status): cột
-  Thời điểm, User/IP (guest), Purpose, Provider/Model, Input/Output/Cached
-  tokens, Cost, Latency, Trạng thái.
-- Click 1 dòng → **Drawer/trang chi tiết request**:
-  - Query (câu hỏi user, đọc từ `Message` liên kết)
-  - Answer (câu trả lời, đọc từ `Message` liên kết)
-  - Chunks đã dùng để trả lời (đọc từ `Message.citations` đã có sẵn — nguồn tài
-    liệu, section, trang; đây là chunk được trích dẫn trong câu trả lời, không
-    phải toàn bộ chunk RAG đã retrieve)
-  - Model đã dùng (provider + model name thực tế tại thời điểm đó — quan trọng
-    vì có thể đã failover sang model khác so với model mặc định)
-  - Token breakdown (input/output/cached) và Cost ($)
-  - IP (nếu request từ guest chưa đăng nhập) hoặc thông tin user
-  - Request ID (để đối chiếu log kỹ thuật khi cần debug)
+## Budget semantics
 
-### `/profile` — đã có sẵn, KHÔNG cần xây mới
-`unisage-web` đã có `UsageLimitCard` (`src/features/usage-limits/`), lấy dữ liệu
-từ `GET /usage-limits/me` (`UsageLimitController`/`UsageLimitServiceImpl`, Java),
-hiển thị 2 window `DAILY`/`WEEKLY` (entity `UsageLimit`, enum `UsageLimitWindow`
-— không có `MONTHLY`). Đây là **hệ thống rate-limit/quota theo gói (plan)**,
-không phải billing: `checkAndConsumeQuestion`/`consumeAnswer` đếm token bằng
-**ước lượng độ dài text** câu hỏi/câu trả lời, không phải token thật do provider
-trả về — khác nguồn dữ liệu với `RequestUsageLog` (token thật, dùng để tính cost
-$) mà phase này xây dựng.
+**Soft limit.** Budget có thể bị vượt, nhưng mức vượt bị chặn trên bởi phần
+chênh giữa cost thực và cost đã reserve của các request đang chạy dở. BLOCK chỉ
+ngăn request **mới** khi `committed + reserved + estimate > limit`; không huỷ
+request đang chạy. Đây là giới hạn vận hành, không phải hoá đơn.
 
-Vì "user xem token tuần/tháng ở profile" **đã tồn tại** (dù thiếu window
-MONTHLY và dùng số ước lượng thay vì số thật), **bỏ hẳn task xây section mới** —
-xem "Open Questions" bên dưới cho quyết định cần chốt về việc có nối 2 hệ thống
-này lại hay để riêng.
+Reservation có **2 tầng**, đều là Lua atomic trên Redis, đơn vị micro-USD
+integer:
+
+| Tầng | Khi nào | Scope | Script |
+|---|---|---|---|
+| Request | 1 lần ở đầu request (Chat: trước node LLM đầu tiên; Extraction: mỗi lần enrich; Embedding: mỗi batch) | SYSTEM + PURPOSE | `reserve_request.lua` / `settle_request.lua` |
+| Attempt | Trước **mỗi** lần gọi provider (mỗi node, mỗi attempt failover) | PROVIDER của credential sắp gọi | `acquire_provider.lua` / `release_provider.lua` |
+
+**Ước tính (`estimate`):**
+- CLOUD_API: `litellm.cost_per_token(model, input_tokens_est, max_output_tokens)`;
+  `input_tokens_est` ước lượng từ độ dài text.
+- Request-level: estimate của model primary cho purpose × multiplier
+  (`BUDGET_RESERVATION_MULTIPLIER_CHAT` mặc định 1.5 để phủ các node phụ; 1.0 cho
+  Extraction/Embedding).
+- Attempt-level: estimate của đúng model/credential sắp gọi, không nhân.
+- Không có giá trong LiteLLM → `BUDGET_RESERVATION_FALLBACK_USD`.
+- SELF_HOSTED → 0 (vẫn gọi script để giữ counter `inflight` nếu có THROTTLE).
+
+**1. `reserve_request.lua`** — với các budget SYSTEM và PURPOSE đang enabled:
+- BLOCK và `committed + reserved + estimate > limit` → `REJECT_EXCEEDED`, không ghi gì.
+- THROTTLE, `committed + reserved ≥ limit` và `inflight ≥ throttleMaxConcurrency`
+  → `REJECT_THROTTLED`, không ghi gì.
+- Ngược lại: `reserved += estimate`, `inflight += 1` cho mọi scope áp dụng; ghi
+  hash `budget:resv:{requestId}` (field `req` = danh sách key + số đã cộng) và
+  `ZADD budget:resv:expiry now+TTL {requestId}`.
+
+**2. `acquire_provider.lua(requestId, seq, provider, estimate)`** — `model_router`
+gọi trước mỗi candidate credential:
+- PROVIDER BLOCK và `committed + reserved + estimate > limit` → `DENY_EXCEEDED`.
+- PROVIDER THROTTLE, đã vượt limit và `inflight ≥ cap` → `DENY_THROTTLED`.
+- Router nhận DENY → bỏ credential đó, thử candidate kế tiếp (acquire lại với
+  provider mới); hết candidate → lỗi `BUDGET_EXCEEDED`/`BUDGET_THROTTLED`.
+- `OK` → `reserved += estimate`, `inflight += 1` của provider; ghi field
+  `p:{seq}` vào hash reservation. Không có budget PROVIDER nào → vẫn ghi field
+  với số 0 (để release có chỗ commit cost thực).
+
+**3. `release_provider.lua(requestId, seq, actualMicroUsd)`** — ngay khi attempt
+kết thúc (thành công, lỗi, huỷ stream): trừ `reserved`/`inflight` đúng số trong
+field `p:{seq}`, cộng `committed` của provider bằng cost thực của line, xoá
+field. Field không còn → no-op (idempotent). **Failover** = release attempt cũ
+(cost thực của attempt lỗi, thường 0) rồi acquire provider mới.
+
+**4. `settle_request.lua(requestId, lines)`** — cuối request: release mọi field
+`p:*` còn sót (an toàn khi code quên release), trừ `reserved`/`inflight` của
+field `req`, cộng `committed` SYSTEM + PURPOSE = tổng cost thực. Line UNPRICED
+dùng `estimatedCostUsd` (thận trọng, không coi là $0). Xoá hash + `ZREM`; set
+marker `budget:settled:{requestId}` (TTL 1 ngày) → gọi lại là no-op.
+
+**5. Reservation treo** (process crash): job release theo `budget:resv:expiry`
+quá hạn — trả `reserved`/`inflight` của cả `req` và mọi `p:*`, không cộng
+`committed` (cost thực sẽ được đối soát từ DB nếu log đã tới Java).
+
+**Key Redis:** `budget:{committed|reserved|inflight}:{scopeKey}:{period}:{periodKey}`,
+`scopeKey` = `SYSTEM` | `PURPOSE:CHAT` | `PROVIDER:openai` (lowercase);
+`periodKey` = `2026-09-25` / `2026-09` theo `APP_TIMEZONE`. TTL = hết kỳ + 3
+ngày. `inflight` không có kỳ: `budget:inflight:{scopeKey}` (TTL an toàn 1 giờ,
+làm mới mỗi lần tăng).
+
+**Ma trận hành vi khi vượt limit:**
+
+| Scope | ALERT | THROTTLE | BLOCK |
+|---|---|---|---|
+| SYSTEM | Cho qua, Java gửi alert | Tối đa `throttleMaxConcurrency` request in-flight toàn hệ thống; vượt → từ chối `BUDGET_THROTTLED` (HTTP 429, không queue, không delay) | Từ chối `BUDGET_EXCEEDED` trước mọi call provider |
+| PURPOSE | Như SYSTEM, chỉ cho purpose đó | Như SYSTEM, đếm in-flight theo purpose | Như SYSTEM — **không fallback được** vì mọi provider của purpose đều dùng chung budget |
+| PROVIDER | Cho qua | `acquire_provider` DENY khi in-flight của provider ≥ cap → router fallback; hết candidate → `BUDGET_THROTTLED` | `acquire_provider` DENY → router fallback; hết candidate → `BUDGET_EXCEEDED` |
+
+Ingest (Extraction/Embedding) bị từ chối vì budget → job ingest đánh dấu lỗi
+retry được (không mất tài liệu), không retry dồn dập ngay.
+
+**Redis lỗi/không kết nối được** → fail-open (cho qua, log error), vì đây là
+soft limit; không chặn Chat.
+
+**Cấu hình Python (env, có mặc định, placeholder đã có trong
+`unisage-agent/.env.example`):** `APP_TIMEZONE`,
+`BUDGET_RESERVATION_MULTIPLIER_CHAT`, `BUDGET_RESERVATION_FALLBACK_USD`,
+`BUDGET_RESERVATION_TTL_SECONDS`, `BUDGET_SNAPSHOT_REFRESH_SECONDS`.
+
+**Snapshot budget ở Python:** đọc `GET /internal/budgets/snapshot` định kỳ +
+khi nhận `config_version` qua pub/sub của Model Registry; Java publish version
+mới khi CRUD budget. Snapshot được truyền vào Lua qua `ARGV` (limit, action,
+cap) — Lua không đọc DB.
+
+**Đối soát `committed`:** job định kỳ, cho từng scope của kỳ hiện tại:
+1. Lua đọc atomic `LLEN usage:outbox` + `LLEN usage:outbox:processing` +
+   `committed` hiện tại (`C0`); outbox/processing khác rỗng → bỏ qua lượt này.
+2. Lấy `dbTotal` từ `GET /internal/usage-logs/period-totals`.
+3. `INCRBY committed (dbTotal − C0)` — cộng delta thay vì `SET`, nên settle chạy
+   xen giữa bước 1-3 không bị ghi đè. Sai lệch còn lại (payload vừa vào DB trong
+   khoảng đó) tự triệt tiêu ở lượt sau.
+
+## Migration versions
+
+Repo đang ở `V15__usage_limit_plans_and_token_windows.sql`. Chốt số để 2 plan
+không đụng nhau:
+
+| Version | Plan | Nội dung |
+|---|---|---|
+| V16 | Model Registry | `V16__add_chat_model_purpose_and_status.sql` (plan Model Registry đã sửa từ `V10` cũ) |
+| V17 | Plan này | `V17__add_request_usage_logs.sql` |
+| V18 | Plan này | `V18__add_budget_tables.sql` |
+| V19 | Plan này | `V19__seed_cost_permissions.sql` |
+| V20 | Model Registry Phase 9 | `V20__add_routing_policy.sql` |
+
+Trước khi tạo file, chạy `ls db/migration | sort -V | tail -1`; nếu đã có
+migration khác chen vào thì dời cả dải V16-V20 lên và cập nhật bảng này ở cả 2
+plan trong cùng commit.
+
+## Deployment (worker, scheduler, Redis)
+
+- **Celery beat** (chưa có trong agent) chạy các task định kỳ:
+  - `drain_usage_outbox` mỗi 5 giây — giữ lock `usage:outbox:lock` (`SET NX EX
+    60`) nên chỉ 1 drainer chạy; đầu mỗi lượt có lock, đưa toàn bộ
+    `usage:outbox:processing` về outbox (reclaim item kẹt do worker chết).
+  - `release_expired_reservations` mỗi 1 phút.
+  - `reconcile_budget_committed` mỗi 1 giờ.
+- Taskfile thêm `worker` và `beat`; README cập nhật lệnh chạy; devcontainer
+  compose thêm service `celery-worker` và `celery-beat`.
+- **Redis persistence là acceptance criterion:** compose chạy
+  `redis-server --appendonly yes --appendfsync everysec` + volume `redis_data`.
+  Test: `docker compose restart redis` → outbox và counter còn nguyên.
+- **Giám sát:** `GET /api/v1/health` của agent trả `usageOutbox.pending`,
+  `usageOutbox.dead`; `dead > 0` → `status = degraded` (trang System Health của
+  Java đã poll health agent). Lệnh `task usage:replay-dead` đẩy lại dead-letter
+  về outbox sau khi sửa nguyên nhân.
+
+## Internal API & bảo mật
+
+- Prefix `/internal/**`, khai báo tường minh từng method+path (không wildcard
+  rộng) ở **cả hai** nơi: `InternalSecretFilter.INTERNAL_ONLY_PATHS` (thiếu/sai
+  secret → 403 ngay tại filter) và `PredefinedPublicPaths.PUBLIC_PATHS` (để
+  `DynamicAuthorizationManager` không đòi JWT) — cùng pattern `PATCH /messages/*`
+  hiện có.
+- Endpoint nội bộ: `POST /internal/usage-logs`, `GET /internal/budgets/snapshot`,
+  `GET /internal/usage-logs/period-totals`.
+- Secret hợp lệ **không** mở được endpoint user-facing: filter chỉ set attribute,
+  `/usage-logs`, `/budgets`... vẫn phải qua RBAC bằng JWT.
+- RBAC: thêm `ResourceType.USAGE_LOG` ("Nhật ký chi phí AI"), `BUDGET` ("Ngân
+  sách AI"); permission trong `PredefinedPermissions`; `DataInitializer` gán cho
+  SYSTEM_ADMIN; migration Flyway insert permission + role_permission cho DB đã
+  tồn tại (vì `DataInitializer` chỉ seed DB mới).
+
+## Giao diện quản lý ngân sách (unisage-web)
+
+**Wiring:** route segment `cost-management` trong `ROUTE_SEGMENTS`; entry
+`FEATURE_REGISTRY` (workspace `system-admin`, label "Chi phí AI", icon
+`Wallet`); `PERMISSION_POLICIES.costManagement` (theo permission `USAGE_LOG`
+read) và `costManagementBudgets` (theo `BUDGET` write, ẩn nút sửa nếu thiếu);
+feature folder `src/features/cost-management/` với `api/` (client), `query-keys.ts`,
+`schemas.ts` (zod cho response + form), `components/`, tabs con.
+
+### Tab 1 — Tổng quan
+- 4 KPI card: Chi phí tháng này (+% so tháng trước), Ngân sách tháng (budget
+  SYSTEM MONTHLY), % đã dùng (xanh <50, vàng 50-80, đỏ >80), Còn lại.
+- Card phụ "Chưa định giá": số call UNPRICED + tổng ước tính, không cộng lẫn vào
+  chi phí thực.
+- Phân bổ theo purpose (donut), theo provider/model (bar ngang — từ line), xu
+  hướng theo ngày (line chart), top user/IP (bảng top 10).
+- Filter: khoảng thời gian, purpose, provider.
+
+### Tab 2 — Ngân sách & Giới hạn
+- Bảng: Scope (+ provider/purpose), Period, Limit, Đã dùng kỳ hiện tại, %,
+  Action, Enabled, Sửa/Xoá.
+- Form: Scope (Hệ thống / Provider — dropdown provider lấy từ Model Registry /
+  Purpose), Period, Limit ($), Action; Action = THROTTLE thì hiện input "Số
+  request đồng thời tối đa".
+- Ghi chú trên UI: budget là **giới hạn mềm** (có thể vượt nhẹ bởi request đang
+  chạy); PROVIDER hết thì fallback provider khác, SYSTEM/PURPOSE hết thì từ chối.
+
+### Tab 3 — Cảnh báo
+- Ngưỡng 50/80/100% + thêm ngưỡng tuỳ chỉnh; toggle spike + % spike.
+- Kênh: In-app, Email (danh sách địa chỉ), Slack (toggle + hiển thị trạng thái
+  "Đã cấu hình: #label" / "Chưa cấu hình webhook trong env" — không có ô nhập
+  URL).
+- Bảng lịch sử: thời điểm, loại, budget/scope, ngưỡng, kênh, trạng thái, lỗi.
+
+### Tab 4 — Bảng giá (chỉ xem)
+Bảng tĩnh ở FE theo provider/model, dòng SELF_HOSTED "Không tính phí", ghi chú
+"chỉ tham khảo".
+
+### Tab 5 — Lịch sử sử dụng
+- Bảng request (parent) có filter thời gian/purpose/provider/model/user-IP/
+  status; cột: thời điểm, user/IP, purpose, model(s), tokens, cost, latency,
+  status, badge "failover" nếu có line `attempt ≥ 1`.
+- Drawer: Query (từ `userMessageId`), Answer + chunks trích dẫn (từ
+  `assistantMessageId.citations`), **bảng line** (node, provider/model snapshot,
+  attempt, tokens, cost/costStatus, latency, lỗi), tổng cost, user/IP, Request ID.
+  Message đã bị xoá (guest cleanup) → hiển thị "Nội dung đã bị xoá", số liệu cost
+  vẫn còn.
+
+### In-app alert
+`features/notifications` hiện chỉ là placeholder — phase này **không** xây
+notification center. Chỉ thêm `BudgetAlertBanner` trong layout system-admin,
+poll `GET /budget-alerts/active` (60s), dismiss qua
+`POST /budget-alerts/{id}/dismiss`.
+
+### `/profile` — giữ nguyên
+`UsageLimitCard` (DAILY/WEEKLY, token ước lượng) là quota theo gói, khác nguồn
+với `RequestUsageLog`. Để 2 hệ thống độc lập (xem Open Questions).
 
 ## Task List
 
-### Phase 1: Java — Data model & Budget API (nền tảng)
-- [ ] Task 1: Entity `RequestUsageLog` + migration
-- [ ] Task 2: API ghi nhận usage log (nội bộ, gọi bởi Python)
-- [ ] Task 3: Entity `Budget` + `BudgetAlertLog` + migration + CRUD API cho SA
-- [ ] Task 4: API tổng hợp dashboard (theo ngày/tháng/provider/model/user/purpose)
+### Phase 0: Gate
+- [ ] Task 0: Nghiệm thu Model Registry + spike chốt nguồn usage/token
 
-### Checkpoint: Phase 1
-- [ ] `./mvnw test` pass
-- [ ] Tạo thử 1 budget + insert usage log giả lập qua Postman → API dashboard trả
-      đúng số liệu tổng hợp
+### Phase 1: Java — Data model, internal API, RBAC
+- [ ] Task 1: Entity `RequestUsageLog` + `RequestUsageLine` + migration
+- [ ] Task 2: Internal auth whitelist + `POST /internal/usage-logs` idempotent
+- [ ] Task 3: `Budget` + `BudgetAlertSetting` + `BudgetAlertLog` + CRUD + RBAC
+- [ ] Task 4: API dashboard/lịch sử/chi tiết + internal snapshot/period-totals
 
-### Phase 2: Python — Tính cost & ghi log
-- [ ] Task 5: Tích hợp `litellm.completion_cost()` sau mỗi lần gọi model (CLOUD_API)
-- [ ] Task 6: Tổng hợp cost nhiều node trong 1 pipeline Chat thành 1 con số, gửi
-      `RequestUsageLog` về Java (async, không chặn response trả cho user)
-- [ ] Task 7: Áp dụng tương tự cho Extraction và Embedding (Embedding: chỉ ghi
-      log, không có multi-node tổng hợp)
+### Phase 2: Python — Đo usage & outbox
+- [ ] Task 5: `cost_calculator` (actual + estimate)
+- [ ] Task 6: `UsageRecorder` theo request, ghi line cho mọi call Chat
+- [ ] Task 7: Outbox Redis + worker drain về Java
+- [ ] Task 8: Extraction + Embedding ghi usage
 
-### Checkpoint: Phase 2
-- [ ] Gửi 1 request chat thật → 1 record `RequestUsageLog` xuất hiện đúng ở Java
-      với cost/token khớp thực tế
+### Phase 3: Python — Budget enforcement (soft limit + reservation)
+- [ ] Task 9: Lua reserve/settle request + acquire/release provider + budget snapshot
+- [ ] Task 10: Gắn reservation vào Chat/Extraction/Embedding + acquire/release trong router
+- [ ] Task 11: Đối soát + release reservation treo
+- [ ] Task 11b: Deploy Celery worker/beat, Redis AOF, health outbox, replay dead-letter
 
-### Phase 3: Python — Budget enforcement real-time
-- [ ] Task 8: Running-total budget trong Redis, cập nhật mỗi khi ghi usage log
-- [ ] Task 9: Kiểm tra budget trước khi gọi provider (fast-path, không gọi Java
-      đồng bộ); scope SYSTEM hết → từ chối; scope hẹp hơn hết → theo `action`
-      cấu hình (ALERT/THROTTLE/BLOCK) cho đúng scope đó
-- [ ] Task 10: Định kỳ đối soát running-total Redis với Java (tránh lệch tích luỹ)
+### Phase 4: Cảnh báo (Java)
+- [ ] Task 12: Job phát hiện ngưỡng + spike, claim atomic
+- [ ] Task 13: Gửi In-app/Email/Slack (env)
 
-### Checkpoint: Phase 3
-- [ ] Set budget SYSTEM = $0 → request Chat mới bị từ chối ngay, không gọi provider
-- [ ] Set budget 1 provider cụ thể = $0, budget SYSTEM còn → request vẫn thành
-      công qua provider khác (nếu Model Registry có fallback khả dụng)
-
-### Phase 4: Cảnh báo
-- [ ] Task 11: Job kiểm tra ngưỡng 50/80/100% + spike detection
-- [ ] Task 12: Gửi alert qua kênh cấu hình (in-app/email/Slack), ghi `BudgetAlertLog`
-- [ ] Task 13: unisage-web hiển thị in-app alert (banner/notification)
-
-### Checkpoint: Phase 4
-- [ ] Chi phí vượt 80% ngân sách → alert xuất hiện đúng kênh đã cấu hình, đúng 1
-      lần (không lặp lại liên tục)
-
-### Phase 5: unisage-web — Trang AI Cost Management
-- [ ] Task 14: Tab Tổng quan (KPI + charts)
-- [ ] Task 15: Tab Ngân sách & Giới hạn (CRUD budget)
-- [ ] Task 16: Tab Cảnh báo (cấu hình ngưỡng/kênh + lịch sử)
-- [ ] Task 17: Tab Bảng giá (bảng tĩnh, chỉ đọc)
-- [ ] Task 18: Tab Lịch sử sử dụng + drawer chi tiết request
-
-### Checkpoint: Phase 5 (checkpoint cuối — không còn Phase 6, xem "/profile" ở trên)
-- [ ] Toàn bộ 5 tab render đúng dữ liệu thật từ API Phase 1/4
-- [ ] Drawer chi tiết request hiển thị đúng query/answer/chunks/model/cost
+### Phase 5: unisage-web
+- [ ] Task 14: Wiring (route, registry, permission, api client, query keys, schema)
+- [ ] Task 15: Tab Tổng quan
+- [ ] Task 16: Tab Ngân sách & Giới hạn
+- [ ] Task 17: Tab Cảnh báo + `BudgetAlertBanner`
+- [ ] Task 18: Tab Bảng giá
+- [ ] Task 19: Tab Lịch sử sử dụng + drawer
 
 ### Checkpoint: Hoàn chỉnh
-- [ ] Toàn bộ acceptance criteria ở mục Success đã xác nhận đều pass
-- [ ] SA xem được dashboard, set budget, nhận cảnh báo, xem chi tiết từng request
-      — toàn bộ qua UI
+- [ ] Toàn bộ test ở mục "Test bắt buộc" pass
+- [ ] SA xem dashboard, set budget, nhận cảnh báo, xem chi tiết request qua UI
 - [ ] Ready for review
+
+## Test bắt buộc (xuyên phase)
+
+| Tình huống | Nơi test |
+|---|---|
+| 50 request đồng thời, budget SYSTEM BLOCK còn đủ cho ~10 estimate → số `OK` ≤ 10; overshoot ≤ tổng chênh lệch actual−estimate | pytest + Redis thật (fakeredis không chạy Lua đủ) |
+| 50 request đồng thời, budget PROVIDER openai BLOCK đủ cho ~10 attempt → ≤ 10 attempt openai được acquire, phần còn lại fallback sang provider khác | pytest + Redis thật |
+| 50 request đồng thời, PROVIDER openai THROTTLE cap 3 (đã vượt limit) → tại mọi thời điểm `inflight` openai ≤ 3; kết thúc thì `inflight` = 0, `reserved` = 0 | pytest + Redis thật |
+| Failover giữa chừng → attempt cũ đã release, attempt mới đã acquire; gọi release/settle 2 lần không trừ/cộng đôi | pytest + Redis thật |
+| Cost cộng dồn 10.000 lần giá nhỏ (vd $0.0000015) → `committed` micro-USD khớp tổng Decimal, không drift | pytest |
+| `docker compose restart redis` → outbox, dead-letter và counter còn nguyên (AOF) | manual, ghi kết quả vào checkpoint |
+| SMTP/Slack env trống → alert `SKIPPED`, `/actuator/health` vẫn UP | `./mvnw test` |
+| Tạo đồng thời 2 budget SYSTEM MONTHLY enabled → 1 thành công, 1 lỗi validate (không 500) | `./mvnw test` trên PostgreSQL thật (Testcontainers), không H2 |
+| Alert gửi lỗi 3 lần → `GAVE_UP`, `attemptCount = 3`; 2 instance không gửi trùng 1 dòng retry | `./mvnw test` |
+| Request không có LLM call → không có parent ở Java, reservation đã trả | pytest |
+| Worker gửi cùng `requestId` 2 lần → 1 parent, không nhân đôi line | `./mvnw test` |
+| Java down 5 phút → Chat vẫn trả lời, outbox giữ payload, Java lên lại → đủ record; đối soát không hạ `committed` khi outbox còn | pytest |
+| Model không có giá → line UNPRICED, budget cộng estimate, dashboard hiển thị riêng | pytest + `./mvnw test` |
+| Failover OpenAI → Anthropic trong 1 request → 2 line, provider đúng, cost cộng vào PROVIDER đúng của từng line | pytest |
+| Guest cleanup xoá message/conversation → usage log còn, `userMessageId`/`assistantMessageId` = null | `./mvnw test` |
+| Request lúc 23:59:59 và 00:00:01 giờ VN → rơi vào 2 kỳ DAILY khác nhau ở cả Redis và query Java | pytest + `./mvnw test` |
+| Internal endpoint: không secret → 403; sai secret → 403; đúng secret → 2xx; secret đúng gọi `/budgets` không JWT → bị RBAC từ chối; JWT SA gọi `/internal/*` không secret → 403 | `./mvnw test` |
+| 2 instance chạy job alert cùng lúc → mỗi `dedupeKey` gửi đúng 1 lần | `./mvnw test` |
 
 ## Risks and Mitigations
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Bảng giá FE hardcode lệch giá thật khi provider đổi giá | Low (chỉ ảnh hưởng tab tham khảo, không ảnh hưởng số liệu dashboard) | Ghi chú rõ trên UI "chỉ tham khảo"; số liệu dashboard luôn từ `RequestUsageLog` thật (Task 5, dùng `litellm.completion_cost()` trực tiếp, không phụ thuộc bảng FE) |
-| Ghi `RequestUsageLog` đồng bộ làm chậm response Chat | Medium | Task 6 gửi log về Java bất đồng bộ (fire-and-forget hoặc qua queue nhẹ), không chặn response trả cho user |
-| Running-total Redis lệch với tổng thật ở Java (double count, mất update do crash) | Medium — budget enforcement sai | Task 10 đối soát định kỳ; chấp nhận sai số nhỏ trong khoảng đối soát, ưu tiên availability hơn chính xác tuyệt đối cho mục đích cảnh báo (không phải hoá đơn chính thức) |
-| `litellm.completion_cost()` không hỗ trợ đầy đủ mọi model provider đang dùng (model mới ra, chưa có trong bảng giá nội bộ LiteLLM) | Medium — thiếu cost cho 1 số request | Task 5 xử lý case `completion_cost()` trả None/lỗi: ghi log với `costUsd = null` + flag "không xác định được giá", hiển thị rõ trên dashboard thay vì mặc định 0 (tránh hiểu lầm miễn phí) |
-| Alert spam nếu nhiều budget cùng vượt ngưỡng cùng lúc | Low | Task 12 debounce theo `BudgetAlertLog` — không gửi lại cùng 1 ngưỡng trong cùng kỳ (ngày/tháng) đã gửi rồi |
+| Estimate reservation thấp hơn cost thực nhiều (câu trả lời dài, nhiều node) → vượt budget | Medium | Soft limit đã chấp nhận; multiplier chỉnh qua env; dashboard hiển thị overshoot; settle luôn dùng cost thực |
+| Reservation treo khi process crash làm "khoá" budget | Medium | TTL + job `release_expired_reservations` mỗi phút |
+| Outbox Redis mất dữ liệu nếu Redis không bật persistence | Medium | AOF + volume là acceptance criterion của Task 11b, có test restart |
+| Dead-letter tích tụ không ai thấy | Medium | Health agent `degraded` khi `dead > 0`, hiện ở trang System Health; `task usage:replay-dead` |
+| Số migration đụng với plan Model Registry | Medium | Bảng "Migration versions" chốt V16-V20, kiểm tra `sort -V` trước khi tạo file |
+| LiteLLM không có giá model mới | Medium | UNPRICED + estimate fallback, không coi là $0 |
+| Bảng giá FE lệch giá thật | Low | Chỉ tham khảo, ghi chú trên UI |
+| Slack webhook URL lộ | Medium | Chỉ trong env (`.ENV` không commit), không lưu DB, không trả về API |
+| Email không gửi được vì chưa cấu hình SMTP | Low | Task 13 thêm cấu hình `spring.mail.*` qua env; thiếu cấu hình → log `SKIPPED`, không crash |
 
 ## Open Questions
 
-- **`/profile` đã có `UsageLimitCard` (DAILY/WEEKLY, token ước lượng cho mục
-  đích quota) — có nên thay số ước lượng bằng token thật từ `RequestUsageLog`,
-  và/hoặc thêm window `MONTHLY`, hay để 2 hệ thống độc lập** (`UsageLimit` tiếp
-  tục phục vụ rate-limit thời gian thực bằng ước lượng nhanh, không phụ thuộc
-  Python phải gọi về; `RequestUsageLog`/dashboard SA phục vụ billing chính xác)?
-  Đề xuất: **để riêng, không gộp** — `checkAndConsumeQuestion` cần chạy đồng bộ,
-  nhanh, ngay trong Java trước khi cho phép câu hỏi tiếp theo (không thể chờ
-  Python tính cost xong rồi báo về); gộp 2 nguồn sẽ làm quota check chậm hoặc
-  phức tạp hoá luồng chặn request. Nếu SA/product muốn dashboard cost cũng hiển
-  thị lại cho end-user, làm ở 1 task bổ sung riêng sau, đọc `RequestUsageLog`
-  qua API `me` (đã có ở Task 4/19 cũ) mà không đụng vào `UsageLimit`.
-- Cost có nên hiển thị bằng $ cho end-user ở đâu đó trong `/profile` (ngoài
-  `UsageLimitCard` hiện có, vốn không hiển thị $) — mặc định plan này **không**
-  thêm hiển thị $ cho end-user ở đợt này.
-- `BALANCED`/`QUALITY_FIRST` (Phase 9 ở plan Active Switch) cần latency trung
-  bình tích luỹ theo credential — phase này (Task 1) chỉ lưu `latencyMs` mỗi
-  request; cần xác nhận khi bắt đầu Phase 9 xem có cần thêm 1 bảng
-  materialized/aggregate riêng cho latency trung bình hay tính on-the-fly từ
-  `RequestUsageLog` là đủ nhanh.
+- **`/profile`**: để `UsageLimit` (quota, ước lượng, đồng bộ trong Java) và
+  `RequestUsageLog` (billing, token thật, bất đồng bộ) độc lập — đề xuất giữ
+  nguyên; nếu cần hiển thị cost cho end-user làm task riêng sau.
+- **USER_GROUP budget**: bỏ khỏi phase này. Nếu cần sau, phải chốt trước "nhóm"
+  là `Role`, `Department` hay `UsageLimitPlan`.
+- **Latency trung bình cho Routing Phase 9**: tính on-the-fly từ
+  `request_usage_lines` (index `chat_model_id, created_at`) hay bảng aggregate —
+  chốt khi bắt đầu Phase 9.

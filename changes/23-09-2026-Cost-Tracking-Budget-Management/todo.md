@@ -1,574 +1,733 @@
 # Todo: Cost Tracking + Budget Management
 
-Xem `plan.md` trong cùng thư mục cho bối cảnh, data model, và thiết kế tab UI
-đầy đủ. Bắt đầu phase này **sau khi** Phase 0-8 của
-`changes/23-09-2026-Dynamic-Model-Registry-Runtime-Failover/` đã xong (cần
-Model Registry hoạt động để biết credential nào đang gọi mỗi request). Toàn bộ
-6 phase dưới đây làm trong 1 lượt (không cắt MVP nhỏ hơn), trừ Routing Policy đã
-tách sang plan Active Switch (Phase 9 ở đó).
+Xem `plan.md` cùng thư mục cho data model, "Budget semantics" (soft limit +
+reservation, ma trận scope × action), internal API và thiết kế UI. Không bắt
+đầu Phase 2 khi Task 0 chưa nghiệm thu xong.
+
+Quyết định đã chốt với product owner:
+- Budget là **soft limit**, có **reservation mỗi request**.
+- Tham số Slack nằm trong **env** backend-java (`BUDGET_ALERT_SLACK_*`, đã thêm
+  placeholder vào `.env.example` và `.ENV`), không lưu DB, không nhập qua UI.
+- SMTP cũng qua env (`SPRING_MAIL_*`, `BUDGET_ALERT_MAIL_FROM`, placeholder đã
+  thêm). `APP_TIMEZONE` + `BUDGET_*` đã thêm vào `unisage-agent/.env.example`.
+- Migration: V17-V19 (xem "Migration versions" trong plan.md).
 
 ---
 
-## Phase 1: Java — Data model & Budget API
+## Phase 0: Gate
 
-### Task 1: Entity `RequestUsageLog` + migration
+### Task 0: Nghiệm thu Model Registry + spike chốt nguồn usage/token
 
-**Description:** Bảng lưu từng lần gọi model đã hoàn tất (thành công hoặc lỗi),
-là nguồn dữ liệu duy nhất cho dashboard, lịch sử, và budget enforcement. Theo
-convention Flyway hiện có, kiểm tra số migration lớn nhất hiện tại trước khi đặt
-tên file mới.
+**Description:** Plan này cần biết chính xác provider/model/credential và
+usage thật của từng call. Code hiện tại chưa có (`OpenAIChatModel` trong
+`app/api/deps.py`, OpenAI SDK trực tiếp trong `multi_representation.py` và
+`openai_embedder.py`, chưa có `litellm`/`model_router`).
 
 **Acceptance criteria:**
-- [ ] Entity `RequestUsageLog` extends `BaseEntity`, fields: `requestId` (UUID,
-      unique, dùng để correlate log Python↔Java khi debug), `purpose`
-      (CHAT/EMBEDDING/EXTRACTION), `messageId` (FK `Message`, nullable),
-      `chatModel` (FK `ChatModel`), `userId` (FK `User`, nullable), `guestIp`
-      (String, nullable), `inputTokens`, `outputTokens`, `cachedTokens`
-      (Integer), `costUsd` (BigDecimal, nullable — null nghĩa là không xác định
-      được giá, xem Risk trong plan.md), `latencyMs` (Integer), `status`
-      (SUCCESS/ERROR) — KHÔNG có field chunk riêng: chunks đã dùng đọc qua
-      `Message.citations` (đã tồn tại) khi join theo `messageId`, tránh lưu trùng
-- [ ] Migration mới thêm bảng `request_usage_logs`, index trên
-      (`purpose`, `created_at`), (`chat_model_id`, `created_at`), (`user_id`)
-      để phục vụ query dashboard theo khoảng thời gian
+- [ ] Model Registry Phase 0-6 (`changes/23-09-2026-Dynamic-Model-Registry-Runtime-Failover/`)
+      đã tick xong và được human nghiệm thu
+- [ ] Ghi vào `unisage-agent/docs/product/DECISIONS.md` bảng "nguồn usage" cho 4
+      loại call, mỗi dòng có: điểm hook trong code, field input/output/cached
+      token, cách lấy provider/model/`chatModelId` thực tế sau failover, cách lấy
+      latency — PydanticAI agent run (`result.usage()`), LiteLLM completion
+      (`response.usage` + `completion_cost`), embedding (`response.usage.prompt_tokens`),
+      extraction
+- [ ] Xác nhận streaming Chat trả usage ở chunk cuối (hoặc cách thay thế) cho
+      provider đang dùng
+- [ ] Xác nhận 1 hook duy nhất trong `model_router` gọi được callback "trước
+      mỗi attempt" và "sau mỗi attempt" (cần cho Task 6 và Task 10)
 
 **Verification:**
-- [ ] Tests pass: `./mvnw test`
-- [ ] Build succeeds: `./mvnw clean package -DskipTests`
+- [ ] Human đọc bảng trong DECISIONS.md và approve
 
-**Dependencies:** None (nhưng chỉ nên bắt đầu code sau khi Model Registry Phase
-0-8 đã xong theo mô tả ở đầu file)
+**Dependencies:** Model Registry Phase 0-6
 
 **Files likely touched:**
-- `unisage-backend/src/main/java/com/unisage/backend/entity/RequestUsageLog.java`
-- `unisage-backend/src/main/java/com/unisage/backend/entity/enums/RequestStatus.java`
-- `unisage-backend/src/main/resources/db/migration/V1X__add_request_usage_logs.sql`
+- `unisage-agent/docs/product/DECISIONS.md`
 
-**Estimated scope:** S (3 files)
+**Estimated scope:** S
 
 ---
 
-### Task 2: API ghi nhận usage log — nội bộ, gọi bởi Python
+## Phase 1: Java — Data model, internal API, RBAC
 
-**Description:** Endpoint nội bộ (cùng cơ chế xác thực nội bộ như health-update
-API ở phase Model Registry, Task 2) để Python gửi 1 `RequestUsageLog` sau khi đã
-tính cost xong. Phải nhanh và không blocking vì Python gọi bất đồng bộ ngay sau
-mỗi request.
+### Task 1: Entity `RequestUsageLog` + `RequestUsageLine` + migration
+
+**Description:** Parent/child theo `plan.md` mục "Data Model". Repo đang ở V15,
+Model Registry dùng V16 → file của task này là `V17__add_request_usage_logs.sql`
+(kiểm tra lại bằng `sort -V` trước khi tạo).
 
 **Acceptance criteria:**
-- [ ] `POST /internal/usage-logs` nhận đúng field như Task 1, insert 1 dòng
-- [ ] Trả về nhanh (không có xử lý nặng đồng bộ trong request này — mọi tổng hợp
-      cho dashboard tính ở Task 4, không tính lại ở đây)
-- [ ] Không public, dùng cơ chế internal-secret như Task 2 của phase trước
+- [ ] `RequestUsageLog` đủ field theo plan, có `userMessageId` +
+      `assistantMessageId`, tổng denormalized, `unpricedLineCount`
+- [ ] `RequestUsageLine` đủ field theo plan, snapshot `provider`/`modelName`/
+      `sourceType`, `costStatus` (PRICED/UNPRICED/FREE), `attempt`
+- [ ] Enum mới: `UsagePurpose`, `UsageRequestStatus`, `UsageCostStatus`
+- [ ] `V17__add_request_usage_logs.sql`: FK `conversation_id`, `user_message_id`,
+      `assistant_message_id`, `user_id`, `chat_model_id` là **ON DELETE SET NULL**;
+      `usage_log_id` ON DELETE CASCADE; UNIQUE `request_id`; đủ index ở plan
+- [ ] Cột thời gian `timestamp(6) without time zone` chứa UTC, entity dùng
+      `LocalDateTime`; `startedAt`/`finishedAt`/`occurredAt` set từ `Clock` bean
+      hoặc parse ISO-8601 UTC, không dựa vào `createdAt` của auditing
+- [ ] Tiền `NUMERIC(18,8)` ↔ `BigDecimal`
+- [ ] `ddl-auto=validate` khởi động được (entity khớp migration)
+- [ ] Thêm Testcontainers PostgreSQL (`org.testcontainers:postgresql`,
+      `junit-jupiter`) + base class `PostgresIntegrationTest` chạy Flyway thật —
+      repo chưa có test DB nào, mà các ràng buộc của plan (partial index, `ON
+      CONFLICT`, `SKIP LOCKED`, `ON DELETE SET NULL`) chỉ kiểm được trên
+      PostgreSQL
 
 **Verification:**
-- [ ] Tests pass: `./mvnw test`
-- [ ] Manual check: gọi qua Postman với payload mẫu, xác nhận record xuất hiện
-      đúng trong DB
+- [ ] `./mvnw test`
+- [ ] Test: xoá message/conversation theo đúng luồng
+      `GuestSessionServiceImpl.purgeExpiredBatch` → usage log còn, 2 message id = null
+
+**Dependencies:** Task 0
+
+**Files likely touched:**
+- `backend-java/src/main/java/com/unisage/backend/entity/RequestUsageLog.java`
+- `backend-java/src/main/java/com/unisage/backend/entity/RequestUsageLine.java`
+- `backend-java/src/main/java/com/unisage/backend/entity/enums/Usage*.java`
+- `backend-java/src/main/resources/db/migration/V17__add_request_usage_logs.sql`
+- `backend-java/pom.xml`
+- `backend-java/src/test/java/com/unisage/backend/support/PostgresIntegrationTest.java`
+- `backend-java/src/test/java/com/unisage/backend/usagelog/GuestSessionCleanupUsageLogTest.java`
+
+**Estimated scope:** M
+
+---
+
+### Task 2: Internal auth whitelist + `POST /internal/usage-logs` idempotent
+
+**Description:** Python (worker outbox) gửi 1 payload/request gồm parent + list
+line. Endpoint phải qua được `DynamicAuthorizationManager` mà không có JWT, và
+chỉ khi có secret hợp lệ.
+
+**Acceptance criteria:**
+- [ ] Thêm `POST /internal/usage-logs`, `GET /internal/budgets/snapshot`,
+      `GET /internal/usage-logs/period-totals` vào **cả**
+      `InternalSecretFilter.INTERNAL_ONLY_PATHS` và `PredefinedPublicPaths.PUBLIC_PATHS`
+      (method + path tường minh, không `/internal/**` wildcard)
+- [ ] Insert parent + lines trong 1 transaction; Java tự tính tổng từ lines, không
+      tin tổng do client gửi
+- [ ] `requestId` trùng → `INSERT ... ON CONFLICT (request_id) DO NOTHING`, trả
+      200 với id có sẵn, không ghi thêm line
+- [ ] Validate: `lines` không rỗng (request không có LLM call thì Python không
+      gửi — xem plan), `seq` không trùng, token ≥ 0, `costStatus = PRICED` thì
+      `costUsd` bắt buộc, timestamp có offset `Z`
+- [ ] Controller/Service đi qua checklist `api-review-checklist`
+
+**Verification:**
+- [ ] `./mvnw test` có 5 case auth: không secret → 403; sai secret → 403; đúng
+      secret → 200; đúng secret gọi `GET /budgets` không JWT → bị từ chối; JWT SA
+      gọi `/internal/usage-logs` không secret → 403
+- [ ] Test gửi cùng payload 2 lần → 1 parent, đúng số line
+- [ ] Test 2 thread gửi cùng `requestId` đồng thời → 1 parent
 
 **Dependencies:** Task 1
 
 **Files likely touched:**
-- `unisage-backend/src/main/java/com/unisage/backend/controller/RequestUsageLogController.java`
-- `unisage-backend/src/main/java/com/unisage/backend/service/usagelog/RequestUsageLogServiceImpl.java`
-- `unisage-backend/src/main/java/com/unisage/backend/dto/request/RequestUsageLogCreateRequest.java`
+- `backend-java/src/main/java/com/unisage/backend/security/InternalSecretFilter.java`
+- `backend-java/src/main/java/com/unisage/backend/predefined/PredefinedPublicPaths.java`
+- `backend-java/src/main/java/com/unisage/backend/controller/InternalUsageLogController.java`
+- `backend-java/src/main/java/com/unisage/backend/service/usagelog/RequestUsageLogServiceImpl.java`
+- `backend-java/src/main/java/com/unisage/backend/dto/request/UsageLogIngestRequest.java`
+- `backend-java/src/main/java/com/unisage/backend/repository/RequestUsageLogRepository.java`
 
-**Estimated scope:** S (3 files)
+**Estimated scope:** M
 
 ---
 
-### Task 3: Entity `Budget` + `BudgetAlertLog` + CRUD API cho SA
+### Task 3: `Budget` + `BudgetAlertSetting` + `BudgetAlertLog` + CRUD + RBAC
 
-**Description:** Cho phép SA cấu hình budget theo scope/period/limit/action, và
-bảng ghi lịch sử alert đã gửi (dùng ở Task 12 để debounce, và Tab Cảnh báo để
-hiển thị).
+**Description:** Cấu hình budget, cấu hình alert toàn cục, lịch sử alert, và
+quyền truy cập cho SA.
 
 **Acceptance criteria:**
-- [ ] Entity `Budget`: `scope` (SYSTEM/PROVIDER/USER_GROUP/PURPOSE), `scopeRefId`
-      (nullable), `period` (DAILY/MONTHLY), `limitUsd`, `action`
-      (ALERT/THROTTLE/BLOCK), `isEnabled`
-- [ ] Entity `BudgetAlertLog`: `budgetId` (FK), `thresholdPercent` (50/80/100),
-      `channel` (IN_APP/EMAIL/SLACK), `sentAt`, `status` (SUCCESS/FAILED)
-- [ ] Migration mới cho cả 2 bảng
-- [ ] CRUD API: `POST/GET/PUT/DELETE /budgets`, `GET /budgets/{id}/alert-history`
-- [ ] Validate: chỉ 1 budget `SYSTEM` + cùng `period` được `isEnabled=true` tại 1
-      thời điểm (tránh 2 budget SYSTEM mâu thuẫn nhau)
+- [ ] `Budget` theo plan: scope SYSTEM/PROVIDER/PURPOSE, `scopeProvider`,
+      `scopePurpose`, `throttleMaxConcurrency`; validate ở service **và** `CHECK`
+      constraint ở DB theo scope/action
+- [ ] 3 partial unique index riêng `ux_budgets_system`, `ux_budgets_provider`
+      (`lower(scope_provider)`), `ux_budgets_purpose` — không dùng 1 index gộp
+      có cột nullable; vi phạm unique map sang `ErrorCode`, không trả 500
+- [ ] `BudgetAlertSetting` singleton: `id SMALLINT PRIMARY KEY DEFAULT 1 CHECK
+      (id = 1)`, seed trong migration (`[50,80,100]`, spike tắt, in-app bật); chỉ
+      có API `GET`/`PUT`; validate email và ngưỡng 1-200
+- [ ] `BudgetAlertLog` có `dedupeKey` UNIQUE, `attemptCount`, `lastAttemptAt`,
+      `nextAttemptAt`, status gồm `GAVE_UP`, index (`status`, `next_attempt_at`),
+      `dismissedAt`/`dismissedBy`
+- [ ] API: `GET/POST/PUT/DELETE /budgets` (response kèm "đã dùng kỳ hiện tại"
+      tính từ DB), `GET/PUT /budget-alert-settings` (response có
+      `slackConfigured` + `slackChannelLabel` đọc từ env, không bao giờ trả URL),
+      `GET /budget-alerts?filters&page=`, `GET /budget-alerts/active`,
+      `POST /budget-alerts/{id}/dismiss`
+- [ ] CRUD budget publish `config_version` mới (kênh pub/sub của Model Registry)
+      để Python reload snapshot
+- [ ] `ResourceType.USAGE_LOG` + `ResourceType.BUDGET`; permission trong
+      `PredefinedPermissions`; `DataInitializer` gán SYSTEM_ADMIN; migration insert
+      permission + role_permission cho DB đã có
+- [ ] `ErrorCode` mới cho validate budget/alert setting
 
 **Verification:**
-- [ ] Tests pass: `./mvnw test`
-- [ ] Manual check qua Postman: tạo budget SYSTEM, thử tạo budget SYSTEM thứ 2
-      cùng period → bị từ chối theo đúng validate
+- [ ] `./mvnw test` (Testcontainers): budget SYSTEM MONTHLY thứ 2 enabled → lỗi
+      validate; tạo đồng thời 2 cái → đúng 1 thành công; `INSERT` dòng
+      `BudgetAlertSetting` id=2 → DB từ chối; user không có permission → 403
+- [ ] Manual: app khởi động trên DB cũ, migration chạy, SA thấy permission mới
 
 **Dependencies:** None
 
 **Files likely touched:**
-- `unisage-backend/src/main/java/com/unisage/backend/entity/Budget.java`
-- `unisage-backend/src/main/java/com/unisage/backend/entity/BudgetAlertLog.java`
-- `unisage-backend/src/main/java/com/unisage/backend/controller/BudgetController.java`
-- `unisage-backend/src/main/java/com/unisage/backend/service/budget/BudgetServiceImpl.java`
-- `unisage-backend/src/main/resources/db/migration/V1X__add_budget_tables.sql`
+- `backend-java/src/main/java/com/unisage/backend/entity/{Budget,BudgetAlertSetting,BudgetAlertLog}.java`
+- `backend-java/src/main/java/com/unisage/backend/entity/enums/{BudgetScope,BudgetPeriod,BudgetAction,AlertChannel,AlertType,AlertStatus,ResourceType}.java`
+- `backend-java/src/main/java/com/unisage/backend/controller/{BudgetController,BudgetAlertController}.java`
+- `backend-java/src/main/java/com/unisage/backend/service/budget/*`
+- `backend-java/src/main/java/com/unisage/backend/predefined/PredefinedPermissions.java`
+- `backend-java/src/main/java/com/unisage/backend/config/DataInitializer.java`
+- `backend-java/src/main/java/com/unisage/backend/exception/ErrorCode.java`
+- `backend-java/src/main/resources/db/migration/V18__add_budget_tables.sql`
+- `backend-java/src/main/resources/db/migration/V19__seed_cost_permissions.sql`
 
-**Estimated scope:** M (5 files)
+**Estimated scope:** L — tách 3a (entity + migration + RBAC) và 3b (API) nếu dài
 
 ---
 
-### Task 4: API tổng hợp dashboard
+### Task 4: API dashboard/lịch sử/chi tiết + internal snapshot/period-totals
 
-**Description:** Endpoint(s) trả dữ liệu đã tổng hợp cho Tab Tổng quan và Tab
-Lịch sử sử dụng — group theo ngày/tháng/provider/model/user/purpose, tránh để
-FE tự tổng hợp từ raw log (dữ liệu có thể rất lớn).
+**Description:** Dữ liệu tổng hợp cho UI và dữ liệu cho Python. Mọi mốc ngày/
+tháng tính theo `app.timezone`.
 
 **Acceptance criteria:**
 - [ ] `GET /usage-logs/summary?from=&to=&groupBy=purpose|provider|model|user|day`
-      trả tổng cost/tokens/số request theo nhóm được chọn
-- [ ] `GET /usage-logs?filters...&page=` trả danh sách phân trang cho Tab Lịch
-      sử sử dụng (kèm filter theo purpose/provider/model/user/status/thời gian)
-- [ ] `GET /usage-logs/{id}` trả chi tiết 1 record kèm join `Message` (query,
-      answer, và `citations` có sẵn cho phần chunks) cho drawer chi tiết
-- [ ] Query có index phù hợp (dùng index đã tạo ở Task 1), không full table scan
-      trên khoảng thời gian rộng
+      — `provider`/`model` group trên `request_usage_lines` (snapshot); trả riêng
+      `pricedCostUsd` và `estimatedUnpricedCostUsd`
+- [ ] `GET /usage-logs?filters&page=` — danh sách parent, có cờ `hasFailover`
+- [ ] `GET /usage-logs/{id}` — parent + lines + query (user message) + answer và
+      `citations` (assistant message); message null → field null, không lỗi
+- [ ] `GET /internal/budgets/snapshot` — budget enabled + `configVersion`
+- [ ] `GET /internal/usage-logs/period-totals?period=&periodKey=` — committed
+      theo SYSTEM/PURPOSE/PROVIDER cho kỳ đó, trả **micro-USD integer** (line
+      PRICED lấy `costUsd`, UNPRICED lấy `estimatedCostUsd`, FREE bỏ qua — khớp
+      quy tắc settle ở Python; làm tròn half-up từng line trước khi cộng)
+- [ ] Mốc kỳ: tính đầu/cuối kỳ ở `app.timezone` rồi đổi sang UTC `LocalDateTime`
+      để lọc `started_at`/`occurred_at`; group theo ngày bằng
+      `(col AT TIME ZONE 'UTC') AT TIME ZONE :tz`
+- [ ] Query dùng index đã tạo, không full scan theo khoảng thời gian
 
 **Verification:**
-- [ ] Tests pass: `./mvnw test`
-- [ ] Manual check: insert vài trăm record giả lập, xác nhận response time hợp
-      lý (< 1s) cho query theo tháng
+- [ ] `./mvnw test`, gồm test biên timezone: record 23:59:59 và 00:00:01
+      (Asia/Ho_Chi_Minh) nằm ở 2 ngày khác nhau trong `groupBy=day`
+- [ ] Manual: seed ~100k line, summary theo tháng < 1s; `EXPLAIN` dùng index
 
-**Dependencies:** Task 1, Task 2
+**Dependencies:** Task 1, Task 3
 
 **Files likely touched:**
-- `unisage-backend/src/main/java/com/unisage/backend/controller/RequestUsageLogController.java`
-- `unisage-backend/src/main/java/com/unisage/backend/repository/RequestUsageLogRepository.java`
-- `unisage-backend/src/main/java/com/unisage/backend/dto/response/UsageSummaryResponse.java`
+- `backend-java/src/main/java/com/unisage/backend/controller/{RequestUsageLogController,InternalUsageLogController,InternalBudgetController}.java`
+- `backend-java/src/main/java/com/unisage/backend/repository/{RequestUsageLogRepository,RequestUsageLineRepository}.java`
+- `backend-java/src/main/java/com/unisage/backend/dto/response/Usage*.java`
 
-**Estimated scope:** M (3-4 files)
+**Estimated scope:** M
 
 ---
 
 ## Checkpoint: Phase 1
 - [ ] `./mvnw test` pass
-- [ ] Insert usage log giả lập + tạo budget qua Postman → API summary trả đúng
-      số liệu tổng hợp
+- [ ] Postman: gửi payload usage (có 2 line failover) 2 lần → 1 record; summary
+      theo provider tách đúng 2 provider
 - [ ] Review với human trước khi đụng Python
 
 ---
 
-## Phase 2: Python — Tính cost & ghi log
+## Phase 2: Python — Đo usage & outbox
 
-### Task 5: Tích hợp `litellm.completion_cost()`
-
-**Description:** Sau mỗi lần gọi model qua LiteLLM (đã tích hợp ở phase Model
-Registry, Task 5/12 của plan kia) cho CLOUD_API, tính cost bằng
-`litellm.completion_cost(completion_response=response)`. Xử lý case model không
-có trong bảng giá nội bộ LiteLLM (trả None/raise) — không mặc định thành 0.
+### Task 5: `cost_calculator` (actual + estimate)
 
 **Acceptance criteria:**
-- [ ] Hàm wrapper `calculate_cost(response, chat_model) -> Decimal | None` — trả
-      `None` rõ ràng nếu LiteLLM không tính được (log warning kèm tên model)
-- [ ] `SELF_HOSTED` model luôn trả cost = `Decimal("0")` ngay từ đầu, không gọi
-      `completion_cost()` (không có ý nghĩa với model tự host)
-- [ ] Test case: model có giá trong LiteLLM, model không có giá, model SELF_HOSTED
+- [ ] `calculate_actual(response, model_info) -> CostResult` (`cost_usd`,
+      `estimated_cost_usd`, `cost_status`); LiteLLM không có giá → `UNPRICED`,
+      `cost_usd=None`, log warning kèm tên model
+- [ ] `estimate(model_info, input_tokens, max_output_tokens) -> Decimal` dùng
+      `litellm.cost_per_token`; không có giá → `BUDGET_RESERVATION_FALLBACK_USD`
+- [ ] SELF_HOSTED → `FREE`, cost 0, không gọi LiteLLM
 
 **Verification:**
-- [ ] Tests pass: pytest cho `calculate_cost` với response giả lập
+- [ ] pytest: model có giá, không có giá, SELF_HOSTED, embedding
 
-**Dependencies:** Phase Model Registry hoàn tất (LiteLLM đã tích hợp)
+**Dependencies:** Task 0
 
 **Files likely touched:**
 - `unisage-agent/app/core/cost_calculator.py`
+- `unisage-agent/app/core/config.py`
 - `unisage-agent/tests/core/test_cost_calculator.py`
 
-**Estimated scope:** S (2 files)
+**Estimated scope:** S
 
 ---
 
-### Task 6: Tổng hợp cost nhiều node → 1 `RequestUsageLog`, gửi Java bất đồng bộ
+### Task 6: `UsageRecorder` theo request, ghi line cho mọi call Chat
 
-**Description:** 1 request Chat chạy qua nhiều node LLM (classification,
-direct_llm, query_transformation, generation). Tổng hợp cost/token của tất cả
-node trong 1 lần xử lý thành 1 record duy nhất, gửi về Java qua API Task 2 —
-**bất đồng bộ, không chặn response trả cho user** (fire-and-forget hoặc qua
-background task, chấp nhận mất 1 vài log nếu Java tạm thời down thay vì làm
-chậm/lỗi trải nghiệm Chat).
+**Description:** Mỗi request Chat có 1 `UsageRecorder` gắn vào state của graph
+(không global mutable state). Hook "sau mỗi attempt" của `model_router` (Task
+0) append 1 line — cả attempt lỗi trước khi failover.
 
 **Acceptance criteria:**
-- [ ] 1 object tích luỹ cost/token qua toàn bộ graph execution của 1 request
-      (gắn vào state hiện có của graph, không tạo global mutable state)
-- [ ] Sau khi graph hoàn tất (thành công hoặc lỗi), gửi 1 lần duy nhất tới Java
-      qua `POST /internal/usage-logs`, không block response
-- [ ] Gửi thất bại (Java down) → log lỗi, không raise lên làm fail request của
-      user
-- [ ] `requestId` sinh ở đầu request, giữ nhất quán xuyên suốt graph để
-      correlate log khi cần debug
+- [ ] `requestId` sinh ở đầu `chat.py`, truyền xuyên graph
+- [ ] `chat.py` giữ lại id của USER message (hiện đang bỏ qua kết quả
+      `create_message` role USER) + `assistant_message_id` đã có → đưa vào payload
+- [ ] Mỗi line: `seq`, `nodeName` (tên node, vd `GenerationSynthesisNode`),
+      `attempt`, `chatModelId`, snapshot provider/model/sourceType, tokens, cost,
+      latency, status, `errorCode`
+- [ ] Kết thúc graph (thành công, lỗi, client huỷ stream) → đóng recorder đúng 1
+      lần: settle budget (Task 9) rồi đẩy payload vào outbox (Task 7)
+- [ ] Không có line nào (request không gọi provider) → chỉ settle để trả
+      reservation, **không** đẩy payload
+- [ ] Thời gian trong payload là ISO-8601 UTC (`...Z`)
+- [ ] Parent `status`: SUCCESS / ERROR / PARTIAL (có line lỗi nhưng request vẫn
+      trả lời được)
 
 **Verification:**
-- [ ] Tests pass: pytest xác nhận tổng cost = tổng cost từng node, và response
-      trả về user không bị trễ bởi việc gửi log
+- [ ] pytest: request có classification + transformation + generation → 3 line;
+      failover generation → 4 line, line lỗi `attempt=0`, line thành công `attempt=1`
+      khác provider
+- [ ] pytest: client disconnect giữa stream → payload vẫn được đẩy vào outbox
 
 **Dependencies:** Task 5
 
 **Files likely touched:**
-- `unisage-agent/app/graph/streaming_state.py`
-- `unisage-agent/app/integrations/backend_java_client.py`
-- `unisage-agent/tests/graph/test_streaming_state.py`
+- `unisage-agent/app/core/usage_recorder.py`
+- `unisage-agent/app/core/model_router.py`
+- `unisage-agent/app/api/v1/chat.py`
+- `unisage-agent/tests/core/test_usage_recorder.py`
 
-**Estimated scope:** M (3 files)
+**Estimated scope:** M
 
 ---
 
-### Task 7: Áp dụng cho Extraction và Embedding
-
-**Description:** Extraction (`multi_representation.py`) và Embedding
-(`openai_embedder.py`) cũng ghi `RequestUsageLog`, nhưng đơn giản hơn Chat (1
-lần gọi = 1 record, không cần tổng hợp nhiều node).
+### Task 7: Outbox Redis + worker drain về Java
 
 **Acceptance criteria:**
-- [ ] `multi_representation.py` ghi log sau mỗi lần gọi, `purpose = EXTRACTION`
-- [ ] `openai_embedder.py` ghi log sau mỗi lần gọi, `purpose = EMBEDDING`,
-      `messageId = null` (không gắn với 1 message chat cụ thể)
+- [ ] `enqueue(payload)` = `LPUSH usage:outbox` — không gọi HTTP trong request
+- [ ] Celery task `drain_usage_outbox` (beat mỗi 5s) giữ lock
+      `usage:outbox:lock` (`SET NX EX 60`) → chỉ 1 drainer; đầu lượt đưa toàn bộ
+      `usage:outbox:processing` về outbox (reclaim item kẹt do worker chết)
+- [ ] Mỗi item: `LMOVE usage:outbox → usage:outbox:processing`, gửi
+      `POST /internal/usage-logs` kèm `X-Internal-Secret`; 2xx → `LREM` khỏi
+      processing; lỗi mạng/5xx → trả lại outbox, dừng lượt (thử lại ở nhịp beat
+      sau); 4xx → `usage:outbox:dead` + log error; gửi lại an toàn nhờ
+      idempotency `requestId`
+- [ ] Metric/log: độ dài outbox, số dead
 
 **Verification:**
-- [ ] Tests pass: pytest cho cả 2 file xác nhận log được gửi đúng `purpose`
+- [ ] pytest: Java down → Chat trả lời bình thường, outbox tăng; Java lên lại →
+      outbox rỗng, Java nhận đủ; gửi trùng không sinh record trùng
 
-**Dependencies:** Task 6
+**Dependencies:** Task 2, Task 6
+
+**Files likely touched:**
+- `unisage-agent/app/core/usage_outbox.py`
+- `unisage-agent/app/worker/tasks/usage_outbox.py`
+- `unisage-agent/app/integrations/backend_java_client.py`
+- `unisage-agent/tests/core/test_usage_outbox.py`
+
+**Estimated scope:** M
+
+---
+
+### Task 8: Extraction + Embedding ghi usage
+
+**Acceptance criteria:**
+- [ ] Extraction: 1 request nghiệp vụ = 1 lần enrich 1 chunk/batch, `purpose =
+      EXTRACTION`, line theo từng attempt (có failover)
+- [ ] Embedding: 1 request = 1 batch embed, `purpose = EMBEDDING`, message id null
+- [ ] Hook tại điểm đã chốt ở Task 0 (sau khi 2 file đã chuyển sang registry/LiteLLM)
+
+**Verification:**
+- [ ] pytest cho cả 2 luồng: đúng purpose, đúng token từ usage của response
+
+**Dependencies:** Task 7
 
 **Files likely touched:**
 - `unisage-agent/app/rag/enrichment/multi_representation.py`
-- `unisage-agent/app/rag/embeddings/openai_embedder.py`
+- `unisage-agent/app/rag/embeddings/openai_embedder.py` (hoặc embedder mới của Model Registry)
 
-**Estimated scope:** S (2 files)
+**Estimated scope:** S
 
 ---
 
 ## Checkpoint: Phase 2
-- [ ] Gửi 1 request chat thật → 1 record `RequestUsageLog` xuất hiện đúng ở Java
-      với cost/token khớp thực tế (đối chiếu thủ công với usage trả về từ provider)
+- [ ] 1 request chat thật → 1 parent + N line ở Java, token khớp usage provider
+      trả về (đối chiếu thủ công)
+- [ ] Tắt Java 2 phút trong lúc chat → không mất record sau khi Java lên lại
 - [ ] Review với human trước khi làm Phase 3
 
 ---
 
-## Phase 3: Python — Budget enforcement real-time
+## Phase 3: Python — Budget enforcement (soft limit + reservation)
 
-### Task 8: Running-total budget trong Redis
+### Task 9: Lua reserve/settle request + acquire/release provider + snapshot
 
-**Description:** Mỗi khi ghi 1 `RequestUsageLog` (Task 6/7), cộng dồn cost vào 1
-key Redis theo scope (system-wide, theo provider, theo purpose) và theo kỳ hiện
-tại (ngày/tháng — dùng key có suffix ngày/tháng để tự "reset" khi sang kỳ mới,
-không cần job dọn dẹp riêng).
+**Description:** Hiện thực đúng mục "Budget semantics" trong plan.
 
 **Acceptance criteria:**
-- [ ] Key Redis dạng `budget:running:{scope}:{scopeRefId}:{period}:{periodKey}`
-      (vd `budget:running:SYSTEM:*:MONTHLY:2026-09`), tăng bằng `INCRBYFLOAT`
-      ngay sau khi ghi usage log thành công
-- [ ] TTL hợp lý cho mỗi key (vd hết kỳ + vài ngày buffer) để tự dọn, không tích
-      luỹ key vô hạn
+- [ ] `BudgetSnapshot` load từ `GET /internal/budgets/snapshot`, refresh theo
+      `BUDGET_SNAPSHOT_REFRESH_SECONDS` và khi nhận `config_version` mới; lỗi load
+      → giữ snapshot cũ (fail-open, vì soft limit)
+- [ ] `Settings` thêm `APP_TIMEZONE` và các biến `BUDGET_*` (placeholder đã có
+      trong `.env.example`)
+- [ ] Mọi số tiền trong Redis là **micro-USD integer** (`INCRBY`/`DECRBY`),
+      helper `to_micro_usd(Decimal)` làm tròn half-up
+- [ ] `reserve_request.lua`: atomic check BLOCK/THROTTLE cho SYSTEM + PURPOSE,
+      cộng `reserved`/`inflight`, ghi field `req` vào `budget:resv:{requestId}` +
+      ZSET expiry; trả `OK` / `REJECT_EXCEEDED` / `REJECT_THROTTLED`
+- [ ] `acquire_provider.lua(requestId, seq, provider, estimate)`: atomic check
+      BLOCK/THROTTLE của PROVIDER, cộng `reserved`/`inflight` provider, ghi field
+      `p:{seq}` (ghi cả khi không có budget PROVIDER, số 0); trả `OK` /
+      `DENY_EXCEEDED` / `DENY_THROTTLED`
+- [ ] `release_provider.lua(requestId, seq, actual)`: trừ đúng số trong `p:{seq}`,
+      cộng `committed` provider bằng cost thực, xoá field; field không còn → no-op
+- [ ] `settle_request.lua`: release mọi `p:*` còn sót, trừ field `req`, cộng
+      `committed` SYSTEM/PURPOSE; UNPRICED cộng estimate; marker
+      `budget:settled:{requestId}` → gọi lại no-op
+- [ ] `periodKey` sinh theo `Settings.APP_TIMEZONE`; TTL key = hết kỳ + 3 ngày
+- [ ] Lỗi Redis → fail-open (cho qua, log error), không chặn Chat
 
 **Verification:**
-- [ ] Tests pass: pytest với Redis giả lập, xác nhận cộng dồn đúng qua nhiều
-      request liên tiếp
+- [ ] pytest với Redis thật (container test): 50 request đồng thời SYSTEM BLOCK
+      đủ ~10 estimate → ≤ 10 `OK`; 50 acquire đồng thời PROVIDER BLOCK đủ ~10 →
+      ≤ 10 `OK`; PROVIDER THROTTLE cap 3 → `inflight` không bao giờ > 3 và về 0
+      khi xong; release/settle 2 lần không cộng đôi; biên 23:59:59/00:00:01 giờ
+      VN ra 2 `periodKey`; cộng 10.000 lần $0.0000015 không drift
 
-**Dependencies:** Task 6
+**Dependencies:** Task 4, Task 5
 
 **Files likely touched:**
-- `unisage-agent/app/core/budget_tracker.py`
-- `unisage-agent/tests/core/test_budget_tracker.py`
+- `unisage-agent/app/core/budget/{snapshot.py,tracker.py}`
+- `unisage-agent/app/core/budget/lua/{reserve_request,settle_request,acquire_provider,release_provider}.lua`
+- `unisage-agent/app/core/config.py`
+- `unisage-agent/tests/core/budget/test_tracker.py`
 
-**Estimated scope:** S (2 files)
+**Estimated scope:** M
 
 ---
 
-### Task 9: Kiểm tra budget trước khi gọi provider
-
-**Description:** Trước khi `model_router` (phase Model Registry) gọi provider,
-kiểm tra running-total so với `limitUsd` của budget SYSTEM đang active (đọc từ
-snapshot config, đồng bộ cùng cơ chế hot-reload Model Registry). Nếu vượt →
-`action = BLOCK` cho SYSTEM luôn nghĩa là từ chối (theo quyết định đã chốt: hết
-ngân sách hệ thống → từ chối, không fallback). Budget scope hẹp hơn (provider/
-purpose) áp đúng `action` đã cấu hình cho scope đó.
+### Task 10: Gắn reservation vào luồng + acquire/release trong router
 
 **Acceptance criteria:**
-- [ ] Check chạy trong fast-path (đọc Redis + snapshot in-memory, không gọi Java
-      đồng bộ)
-- [ ] Budget SYSTEM vượt ngưỡng với `action=BLOCK` → raise lỗi ngay, 0 lệnh gọi
-      provider nào được thực hiện
-- [ ] Budget scope PROVIDER vượt ngưỡng → áp đúng `action` cấu hình cho scope đó
-      (ALERT: vẫn cho qua + trigger Task 12; THROTTLE: delay/giảm rate — định
-      nghĩa cụ thể "throttle" khi bắt đầu code, ví dụ giới hạn concurrent request
-      cho scope đó; BLOCK: loại credential thuộc scope đó khỏi routing, để
-      `model_router` tự fallback sang scope khác nếu có)
-- [ ] Test riêng cho từng combination scope × action
+- [ ] Chat: reserve trước node LLM đầu tiên với estimate × multiplier Chat;
+      `REJECT_EXCEEDED` → lỗi `BUDGET_EXCEEDED`, `REJECT_THROTTLED` →
+      `BUDGET_THROTTLED` (429), **0** call provider; message lỗi thân thiện
+      cho user
+- [ ] Extraction/Embedding: reserve mỗi call/batch; bị từ chối → job ingest đánh
+      dấu lỗi retry được, không retry ngay
+- [ ] `model_router` gọi `acquire_provider` trước mỗi candidate; `DENY_*` → bỏ
+      credential, thử candidate kế tiếp; hết candidate → lỗi budget tương ứng
+- [ ] Mỗi attempt kết thúc (thành công, lỗi, huỷ stream) → `release_provider`
+      với cost thực của line đó, **trước** khi failover acquire provider mới
+- [ ] Mọi nhánh kết thúc (kể cả exception) đều gọi settle — dùng
+      `try/finally` trong `UsageRecorder`
 
 **Verification:**
-- [ ] Tests pass: pytest cho từng scope × action
+- [ ] pytest đủ ma trận scope × action trong plan (9 ô)
+- [ ] pytest: budget PROVIDER openai BLOCK, SYSTEM còn → request đi Anthropic
+- [ ] pytest: failover openai → anthropic giữa chừng → `reserved`/`inflight`
+      openai về 0 ngay sau attempt lỗi, anthropic được acquire
 
-**Dependencies:** Task 8, Model Registry `model_router` đã có (phase trước)
+**Dependencies:** Task 6, Task 8, Task 9
 
 **Files likely touched:**
 - `unisage-agent/app/core/model_router.py`
-- `unisage-agent/app/core/budget_tracker.py`
+- `unisage-agent/app/core/usage_recorder.py`
 - `unisage-agent/app/api/exceptions.py`
+- `unisage-agent/app/api/v1/chat.py`
 
-**Estimated scope:** M (3 files)
+**Estimated scope:** M
 
 ---
 
-### Task 10: Đối soát định kỳ running-total với Java
-
-**Description:** Vì running-total Redis có thể lệch (crash giữa chừng, mất
-update), định kỳ (vd mỗi giờ) tính lại tổng thật từ `RequestUsageLog` (qua API
-summary Task 4) và ghi đè lại giá trị Redis — tương tự pattern version-check của
-Model Registry hot-reload.
+### Task 11: Đối soát + release reservation treo
 
 **Acceptance criteria:**
-- [ ] Background job (Celery beat hoặc tương đương đã có sẵn cho ingestion) gọi
-      API summary định kỳ, cập nhật lại key Redis cho scope SYSTEM tối thiểu
-- [ ] Log rõ khi phát hiện lệch đáng kể giữa running-total và tổng thật (để phát
-      hiện bug sớm)
+- [ ] `release_expired_reservations` (beat mỗi 1 phút): release reservation có
+      score ZSET quá hạn — trả `reserved`/`inflight` của `req` và mọi `p:*`, không
+      cộng `committed`, xoá hash
+- [ ] `reconcile_budget_committed` (beat mỗi 1 giờ): Lua đọc atomic độ dài
+      outbox/processing + `committed` (`C0`); còn item → bỏ lượt; lấy `dbTotal` từ
+      `period-totals`; `INCRBY committed (dbTotal − C0)` (không `SET`); lệch > 5%
+      → log warning
 
 **Verification:**
-- [ ] Tests pass: pytest giả lập lệch running-total → xác nhận job sửa lại đúng
+- [ ] pytest: reservation treo được release; outbox còn item → không ghi đè
 
-**Dependencies:** Task 9, Task 4
+**Dependencies:** Task 9, Task 7
 
 **Files likely touched:**
-- `unisage-agent/app/worker/budget_reconciliation.py`
+- `unisage-agent/app/worker/tasks/budget_reconciliation.py`
+- `unisage-agent/tests/worker/test_budget_reconciliation.py`
 
-**Estimated scope:** S (1-2 files)
+**Estimated scope:** S
+
+---
+
+### Task 11b: Deploy Celery worker/beat, Redis AOF, health outbox, replay dead-letter
+
+**Description:** Agent hiện chỉ có `celery_app.py` và hướng dẫn chạy worker
+trong README, chưa có beat, chưa có task định kỳ nào, Redis devcontainer không
+bật persistence.
+
+**Acceptance criteria:**
+- [ ] `celery_app.py` cấu hình `beat_schedule` cho `drain_usage_outbox` (5s),
+      `release_expired_reservations` (1 phút), `reconcile_budget_committed` (1 giờ)
+- [ ] Taskfile thêm `worker` và `beat`; README cập nhật lệnh chạy (Windows +
+      Linux)
+- [ ] `.devcontainer/docker-compose.yml`: service `celery-worker`, `celery-beat`;
+      Redis `command: redis-server --appendonly yes --appendfsync everysec` +
+      volume `redis_data`
+- [ ] `GET /api/v1/health` trả `usageOutbox.pending`/`usageOutbox.dead`;
+      `dead > 0` → `status = degraded`
+- [ ] Lệnh `task usage:replay-dead` (script) chuyển toàn bộ
+      `usage:outbox:dead` về outbox, in số item đã chuyển
+
+**Verification:**
+- [ ] `docker compose restart redis` → outbox, dead-letter, counter còn nguyên
+- [ ] Tắt beat → outbox tăng; bật lại → drain hết
+- [ ] Đẩy 1 payload sai schema → vào dead, health `degraded`; replay sau khi sửa
+      → Java nhận
+
+**Dependencies:** Task 7, Task 11
+
+**Files likely touched:**
+- `unisage-agent/app/worker/celery_app.py`
+- `unisage-agent/Taskfile.yml`, `unisage-agent/taskfiles/*.yml`
+- `unisage-agent/README.md`
+- `unisage-agent/.devcontainer/docker-compose.yml`
+- `unisage-agent/app/api/v1/health.py`
+- `unisage-agent/scripts/replay_usage_dead_letter.py`
+
+**Estimated scope:** M
 
 ---
 
 ## Checkpoint: Phase 3
-- [ ] Set budget SYSTEM = $0 → request Chat mới bị từ chối ngay, không gọi provider
-- [ ] Set budget 1 provider cụ thể = $0, budget SYSTEM còn → request vẫn thành
-      công qua provider khác (nếu có fallback khả dụng ở Model Registry)
+- [ ] Budget SYSTEM BLOCK = $0 → request Chat bị từ chối ngay, không call provider
+- [ ] Budget PROVIDER = $0 BLOCK, SYSTEM còn → request thành công qua provider khác
+- [ ] Kill process giữa request → sau TTL, `reserved`/`inflight` về đúng
+- [ ] Restart Redis → không mất outbox/counter
 - [ ] Review với human trước khi làm Phase 4
 
 ---
 
-## Phase 4: Cảnh báo
+## Phase 4: Cảnh báo (Java)
 
-### Task 11: Job kiểm tra ngưỡng + spike detection
-
-**Description:** Định kỳ (hoặc ngay sau mỗi lần cộng running-total ở Task 8) so
-% đã dùng với các ngưỡng 50/80/100% đã cấu hình, và so chi phí ngày hiện tại với
-trung bình 7 ngày trước để phát hiện tăng đột biến.
+### Task 12: Job phát hiện ngưỡng + spike, claim atomic
 
 **Acceptance criteria:**
-- [ ] Kiểm tra ngưỡng chạy sau mỗi lần `INCRBYFLOAT` (Task 8) thay vì poll định
-      kỳ riêng — phát hiện ngay khi vừa vượt ngưỡng
-- [ ] Spike detection: job định kỳ hàng ngày so sánh, không chạy mỗi request
-- [ ] Kết quả (ngưỡng nào vừa đạt, budget nào) đưa vào hàng đợi để Task 12 xử lý
-      gửi alert, tách biệt việc "phát hiện" và "gửi"
+- [ ] `@Scheduled` (cron env `BUDGET_ALERT_CHECK_CRON`, mặc định mỗi 2 phút): mỗi
+      budget enabled, tính spend kỳ hiện tại từ DB (cùng quy tắc period-totals),
+      mỗi ngưỡng trong `BudgetAlertSetting` đã đạt × mỗi kênh đang bật → claim
+- [ ] Spike (chạy 1 lần/ngày sau 00:05 giờ VN): spend hôm qua so trung bình 7
+      ngày trước đó, vượt `spikeThresholdPercent` → claim `SPIKE:{date}:{channel}`
+- [ ] Claim = `INSERT ... ON CONFLICT (dedupe_key) DO NOTHING` với status
+      `PENDING`, `attemptCount = 0`, `nextAttemptAt = now`
+- [ ] Bước gửi lấy dòng `PENDING`/`FAILED` có `next_attempt_at <= now` bằng
+      `SELECT ... FOR UPDATE SKIP LOCKED LIMIT n` → 2 instance không gửi trùng
+- [ ] Thêm ngưỡng mới giữa kỳ → chỉ gửi ngưỡng mới, không gửi lại ngưỡng cũ
 
 **Verification:**
-- [ ] Tests pass: pytest cho cả 2 loại kiểm tra với dữ liệu giả lập
+- [ ] `./mvnw test` (Testcontainers): 2 thread chạy job cùng lúc → mỗi
+      `dedupeKey` 1 dòng và gửi đúng 1 lần; qua kỳ mới → gửi lại được
 
-**Dependencies:** Task 8
+**Dependencies:** Task 3, Task 4
 
 **Files likely touched:**
-- `unisage-agent/app/core/budget_tracker.py`
-- `unisage-agent/app/worker/budget_reconciliation.py`
+- `backend-java/src/main/java/com/unisage/backend/scheduler/BudgetAlertJob.java`
+- `backend-java/src/main/java/com/unisage/backend/service/budget/BudgetAlertServiceImpl.java`
+- `backend-java/src/main/java/com/unisage/backend/repository/BudgetAlertLogRepository.java`
 
-**Estimated scope:** S (2 files)
+**Estimated scope:** M
 
 ---
 
-### Task 12: Gửi alert qua kênh cấu hình + ghi `BudgetAlertLog`
-
-**Description:** Nhận kết quả từ Task 11, gửi qua kênh SA đã cấu hình (in-app/
-email/Slack — reuse `slack_notifier` đã dựng ở phase Model Registry), ghi
-`BudgetAlertLog` qua Java để debounce (không gửi lại cùng ngưỡng trong cùng kỳ).
+### Task 13: Gửi In-app/Email/Slack
 
 **Acceptance criteria:**
-- [ ] Trước khi gửi, check `BudgetAlertLog` (qua Java) xem ngưỡng này đã gửi
-      trong kỳ hiện tại chưa — có thì bỏ qua
-- [ ] Gửi xong, ghi lại `BudgetAlertLog` (thành công/thất bại)
-- [ ] Slack message tái sử dụng `slack_notifier.send` (Task 14 ở phase Model
-      Registry), không viết client Slack mới
+- [ ] IN_APP: bản ghi claim chính là alert, status `SENT` ngay
+- [ ] EMAIL: dùng `spring-boot-starter-mail` (đã có trong pom, chưa dùng) —
+      `application.properties` map `spring.mail.*` từ `SPRING_MAIL_HOST`,
+      `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` và
+      `app.budget-alert.mail.from` từ `BUDGET_ALERT_MAIL_FROM` (placeholder đã có
+      trong `.env.example`/`.ENV`)
+- [ ] Host hoặc from trống → dispatcher không gọi `JavaMailSender`, đánh `SKIPPED`
+      (lấy sender qua `ObjectProvider`, kiểm `StringUtils.hasText`)
+- [ ] `management.health.mail.enabled=false` — không để SMTP trống/lỗi kéo
+      `/actuator/health` (public, System Health đang dùng) sang DOWN
+- [ ] SLACK: `SlackWebhookClient` đọc `app.budget-alert.slack.*` ←
+      `BUDGET_ALERT_SLACK_ENABLED`, `BUDGET_ALERT_SLACK_WEBHOOK_URL`,
+      `BUDGET_ALERT_SLACK_CHANNEL_LABEL`, `BUDGET_ALERT_SLACK_TIMEOUT_MS` (placeholder
+      đã có trong `.env.example`/`.ENV`); disabled hoặc URL trống → `SKIPPED`;
+      không log URL
+- [ ] Gửi lỗi → `FAILED`, `attemptCount += 1`, `lastAttemptAt`, `nextAttemptAt =
+      now + 2^attemptCount phút`, `errorMessage`; `attemptCount = 3` vẫn lỗi →
+      `GAVE_UP`, không retry nữa
+- [ ] Nội dung: budget/scope, kỳ, spend/limit, %, link tới trang Cost Management
 
 **Verification:**
-- [ ] Tests pass: pytest xác nhận không gửi trùng ngưỡng trong cùng kỳ
-
-**Dependencies:** Task 11, Slack notifier (phase Model Registry)
-
-**Files likely touched:**
-- `unisage-agent/app/core/budget_alerting.py`
-- `unisage-agent/tests/core/test_budget_alerting.py`
-
-**Estimated scope:** S (2 files)
-
----
-
-### Task 13: unisage-web hiển thị in-app alert
-
-**Description:** Banner/notification trong khu admin khi có budget vượt ngưỡng,
-đọc từ `BudgetAlertLog`/API mới nếu cần polling.
-
-**Acceptance criteria:**
-- [ ] Banner hiển thị ở trang admin (không chỉ trong trang Cost Management) khi
-      có alert `IN_APP` chưa đọc, dismiss được
-
-**Verification:**
-- [ ] Manual check trong browser
+- [ ] `./mvnw test` với mock mail sender/mock HTTP: env trống → `SKIPPED` và
+      health UP; lỗi 3 lần → `GAVE_UP`
+- [ ] Manual: điền webhook thật vào `.ENV`, hạ limit → thấy đúng 1 message Slack
 
 **Dependencies:** Task 12
 
 **Files likely touched:**
-- `unisage-web/src/features/cost-management/` (mới)
+- `backend-java/src/main/java/com/unisage/backend/integration/SlackWebhookClient.java`
+- `backend-java/src/main/java/com/unisage/backend/service/budget/BudgetAlertDispatcher.java`
+- `backend-java/src/main/resources/application.properties`
 
-**Estimated scope:** S (1-2 files)
+**Estimated scope:** M
 
 ---
 
 ## Checkpoint: Phase 4
-- [ ] Chi phí vượt 80% ngân sách → alert xuất hiện đúng kênh đã cấu hình, đúng 1
-      lần (không lặp lại liên tục)
+- [ ] Spend vượt 80% → alert đúng các kênh bật, đúng 1 lần/kênh/kỳ
 - [ ] Review với human trước khi làm Phase 5
 
 ---
 
 ## Phase 5: unisage-web — Trang AI Cost Management
 
-### Task 14: Tab Tổng quan (KPI + charts)
-
-**Description:** Theo thiết kế ở `plan.md` mục "Tab 1 — Tổng quan": 4 KPI card,
-donut chart theo purpose, bar chart theo provider/model, line chart xu hướng
-theo ngày, bảng top user/API key.
+### Task 14: Wiring
 
 **Acceptance criteria:**
-- [ ] 4 KPI card đúng số liệu từ API summary (Task 4), progress bar đổi màu theo
-      ngưỡng 50/80%
-- [ ] Donut/bar/line chart render đúng dữ liệu, có filter thời gian/purpose/provider
+- [ ] `ROUTE_SEGMENTS.costManagement = "cost-management"`
+- [ ] Entry `FEATURE_REGISTRY` workspace `system-admin`, label "Chi phí AI",
+      icon `Wallet`, `requiredPermissions: PERMISSION_POLICIES.costManagement`,
+      fallback `AccessDeniedPage`
+- [ ] `PERMISSION_POLICIES.costManagement` và `costManagementBudgets`
+- [ ] `features/cost-management/`: `api/` (client theo pattern feature khác),
+      `query-keys.ts`, `schemas.ts` (zod cho summary, usage list/detail, budget,
+      alert setting, alert log), trang có 5 tab (tab lưu trên URL search param)
 
 **Verification:**
-- [ ] Manual check trong browser với dữ liệu thật/seed
+- [ ] `npm run typecheck` + `npm run lint`; user thiếu permission không thấy menu
 
-**Dependencies:** Task 4
+**Dependencies:** Task 3, Task 4
 
 **Files likely touched:**
-- `unisage-web/src/features/cost-management/overview/`
+- `unisage-web/src/routes/feature-registry.tsx`
+- `unisage-web/src/constants/paths.ts`
+- `unisage-web/src/features/auth/utils/permission-policies.ts`
+- `unisage-web/src/features/cost-management/{api,query-keys.ts,schemas.ts}`
+- `unisage-web/src/pages/system-admin/cost-management-page.tsx`
 
-**Estimated scope:** M (3-5 files)
+**Estimated scope:** M
 
 ---
 
-### Task 15: Tab Ngân sách & Giới hạn
-
-**Description:** CRUD UI cho `Budget` — bảng danh sách + form thêm/sửa theo thiết
-kế "Tab 2" trong `plan.md`.
+### Task 15: Tab Tổng quan
 
 **Acceptance criteria:**
-- [ ] Form đủ 4 field: Scope, Period, Limit, Action, validate scope SYSTEM
-      trùng lặp theo rule Task 3
-- [ ] Bảng danh sách hiển thị % đã dùng trực quan (progress bar) cho mỗi budget
+- [ ] 4 KPI card + card "Chưa định giá"; progress đổi màu 50/80%
+- [ ] Donut purpose, bar provider/model, line theo ngày, top 10 user/IP; filter
+      thời gian/purpose/provider
 
-**Verification:**
-- [ ] Manual check: tạo/sửa/xoá 1 budget qua UI, xác nhận đồng bộ với Java
+**Verification:** Manual trong browser với dữ liệu seed
 
-**Dependencies:** Task 3
+**Dependencies:** Task 14
 
-**Files likely touched:**
-- `unisage-web/src/features/cost-management/budgets/`
+**Files likely touched:** `unisage-web/src/features/cost-management/overview/`
 
-**Estimated scope:** M (3-4 files)
+**Estimated scope:** M
 
 ---
 
-### Task 16: Tab Cảnh báo
-
-**Description:** Cấu hình ngưỡng/kênh + bảng lịch sử alert, theo "Tab 3" trong
-`plan.md`.
+### Task 16: Tab Ngân sách & Giới hạn
 
 **Acceptance criteria:**
-- [ ] Form cấu hình ngưỡng (50/80/100 + custom), toggle kênh in-app/email/Slack
-- [ ] Bảng lịch sử alert từ `BudgetAlertLog`
+- [ ] Bảng budget có % đã dùng; form Scope → hiện dropdown provider (từ Model
+      Registry) hoặc purpose; Action THROTTLE → hiện input concurrency
+- [ ] Hiển thị lỗi validate từ Java (trùng budget enabled)
+- [ ] Ghi chú "giới hạn mềm" và hành vi fallback/từ chối theo scope
 
-**Verification:**
-- [ ] Manual check trong browser
+**Verification:** Manual tạo/sửa/xoá budget, đối chiếu DB
 
-**Dependencies:** Task 3, Task 12
+**Dependencies:** Task 14
+
+**Files likely touched:** `unisage-web/src/features/cost-management/budgets/`
+
+**Estimated scope:** M
+
+---
+
+### Task 17: Tab Cảnh báo + `BudgetAlertBanner`
+
+**Acceptance criteria:**
+- [ ] Form `BudgetAlertSetting`: ngưỡng (thêm/xoá custom), spike, in-app, email
+      recipients, Slack toggle (disabled + tooltip nếu `slackConfigured=false`,
+      hiển thị `slackChannelLabel` nếu có)
+- [ ] Bảng lịch sử alert có filter + phân trang
+- [ ] `BudgetAlertBanner` trong layout system-admin, poll `GET /budget-alerts/active`
+      60s, dismiss được
+
+**Verification:** Manual trong browser
+
+**Dependencies:** Task 13, Task 14
 
 **Files likely touched:**
 - `unisage-web/src/features/cost-management/alerts/`
+- `unisage-web/src/features/cost-management/components/budget-alert-banner.tsx`
+- layout system-admin
 
-**Estimated scope:** S (2-3 files)
+**Estimated scope:** M
 
 ---
 
-### Task 17: Tab Bảng giá (tĩnh, chỉ đọc)
-
-**Description:** Bảng giá hardcode ở FE theo "Tab 4" trong `plan.md` — dữ liệu
-tĩnh trong code FE, không gọi API.
+### Task 18: Tab Bảng giá
 
 **Acceptance criteria:**
-- [ ] Danh sách giá cho các model đang thực sự dùng trong Model Registry (không
-      cần liệt kê toàn bộ model LiteLLM hỗ trợ, chỉ các model SA đã đăng ký)
-- [ ] Ghi chú "chỉ tham khảo" hiển thị rõ đầu bảng
-- [ ] Model SELF_HOSTED hiển thị "Không tính phí"
+- [ ] Bảng tĩnh các model đang đăng ký trong Model Registry; SELF_HOSTED "Không
+      tính phí"; ghi chú "chỉ tham khảo"
 
-**Verification:**
-- [ ] Manual check trong browser
+**Verification:** Manual
 
-**Dependencies:** None
+**Dependencies:** Task 14
 
 **Files likely touched:**
 - `unisage-web/src/features/cost-management/pricing/`
-- `unisage-web/src/constants/` (dữ liệu giá tĩnh)
 
-**Estimated scope:** S (2 files)
+**Estimated scope:** S
 
 ---
 
-### Task 18: Tab Lịch sử sử dụng + drawer chi tiết request
-
-**Description:** Bảng lịch sử với filter + drawer chi tiết theo "Tab 5" trong
-`plan.md`.
+### Task 19: Tab Lịch sử sử dụng + drawer
 
 **Acceptance criteria:**
-- [ ] Bảng có filter (thời gian/purpose/provider/model/user/status), phân trang
-- [ ] Click 1 dòng mở drawer hiển thị đủ: Query, Answer, Chunks đã dùng (từ
-      `Message.citations`), Model đã dùng, Token breakdown, Cost, IP/user,
-      Request ID
+- [ ] Bảng parent có filter + phân trang, badge failover
+- [ ] Drawer: query, answer, chunks trích dẫn, bảng line (node, provider/model,
+      attempt, tokens, cost/costStatus, latency, lỗi), tổng cost, user/IP,
+      Request ID; message đã xoá → "Nội dung đã bị xoá"
 
-**Verification:**
-- [ ] Manual check trong browser: 1 request chat thật → mở drawer thấy đúng nội
-      dung khớp với conversation thật
+**Verification:** Manual: 1 request chat có failover → drawer thấy 2 line đúng
 
-**Dependencies:** Task 4
+**Dependencies:** Task 14
 
-**Files likely touched:**
-- `unisage-web/src/features/cost-management/usage-history/`
+**Files likely touched:** `unisage-web/src/features/cost-management/usage-history/`
 
-**Estimated scope:** L (5+ files — cân nhắc tách bảng và drawer thành 2 task nếu
-quá lớn cho 1 session)
+**Estimated scope:** L — tách bảng và drawer nếu quá lớn
 
 ---
 
-## Checkpoint: Phase 5 (checkpoint cuối)
-- [ ] Toàn bộ 5 tab render đúng dữ liệu thật từ API Phase 1/4
-- [ ] Drawer chi tiết request hiển thị đúng query/answer/chunks/model/cost
+## Checkpoint: Phase 5
+- [ ] 5 tab render dữ liệu thật; banner xuất hiện khi có alert IN_APP chưa dismiss
 
 ---
 
-## Đã bỏ: "/profile — Usage section"
-
-Ban đầu dự kiến 1 Task 19 thêm section "Mức sử dụng" (token tuần/tháng) vào
-`/profile`. Sau khi kiểm tra code, **tính năng này đã tồn tại**:
-`unisage-web/src/features/usage-limits/components/usage-limit-card.tsx` render
-sẵn trong `user-profile.tsx`, đọc từ `GET /usage-limits/me`
-(`UsageLimitController` → `UsageLimitServiceImpl`, Java), hiển thị 2 window
-DAILY/WEEKLY dựa trên token **ước lượng từ độ dài text** (`checkAndConsumeQuestion`/
-`consumeAnswer`) — phục vụ rate-limit theo gói (plan), khác nguồn dữ liệu với
-`RequestUsageLog` (token thật, dùng để tính cost $) mà phase này xây.
-
-**Quyết định: để 2 hệ thống độc lập, không làm task gộp trong phase này** — xem
-"Open Questions" trong `plan.md` để biết lý do (quota check cần chạy đồng bộ,
-nhanh, không thể phụ thuộc Python báo cost về). Không có task nào thay thế Task
-19; nếu sau này cần đổi, mở 1 task riêng khi có yêu cầu cụ thể.
+## Ngoài scope (đã chốt)
+- **USER_GROUP budget** — code chưa có khái niệm nhóm người dùng.
+- **Notification center** — `features/notifications` vẫn là placeholder; chỉ làm
+  banner budget.
+- **`/profile`** — giữ `UsageLimitCard` hiện có, không gộp với `RequestUsageLog`.
 
 ---
 
 ## Checkpoint: Hoàn chỉnh
-- [ ] Toàn bộ acceptance criteria ở mục Success trong intent đã xác nhận đều pass
-- [ ] SA xem được dashboard, set budget, nhận cảnh báo, xem chi tiết từng request
-      — toàn bộ qua UI, không cần dev can thiệp
+- [ ] Toàn bộ bảng "Test bắt buộc" trong `plan.md` pass
+- [ ] SA xem dashboard, set budget, nhận cảnh báo, xem chi tiết request qua UI
 - [ ] Ready for review
