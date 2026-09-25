@@ -1,5 +1,4 @@
 {
-  "$comment": "Hand-maintained until Task 4/6/13 land; see plan.md 'Internal API contract'.",
   "basePath": "/api/v1/internal/model-registry",
   "endpoints": [
     { "method": "GET", "path": "/snapshot", "returnsSecret": true, "implemented": false },
