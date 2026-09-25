@@ -82,7 +82,12 @@ public class InternalSecretFilter extends OncePerRequestFilter {
     }
 
     private boolean isValidSecret(String headerValue) {
-        return internalSecretKey != null && internalSecretKey.equals(headerValue);
+        if (internalSecretKey == null || headerValue == null) {
+            return false;
+        }
+        return java.security.MessageDigest.isEqual(
+                internalSecretKey.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                headerValue.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private String normalize(String requestUri) {
