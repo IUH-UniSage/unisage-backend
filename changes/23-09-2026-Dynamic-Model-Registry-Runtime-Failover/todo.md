@@ -192,24 +192,24 @@ plan.md), chưa implement endpoint nghiệp vụ.
       - Case nào Netty từ chối request line trước khi tới filter (vd `\` thô) thì
         chấp nhận 400 thay cho 404, nhưng phải liệt kê tường minh trong test kèm lý
         do; điều kiện "backend giả nhận 0 request" không có ngoại lệ
-- [ ] Tests pass: `InternalPathBlockControlTest` (class riêng, `controlBackend`
+- [x] Tests pass: `InternalPathBlockControlTest` (class riêng, `controlBackend`
       riêng) — `/api/v1/master/chat-models` và `/api/v1/master/internal-docs` (tên
       gần giống nhưng không phải `/internal/`) với JWT hợp lệ vẫn tới backend giả
       đúng 1 request (đảm bảo filter không chặn quá tay)
-- [ ] Tests pass: pytest `test_config.py` — `prod` + secret mặc định → lỗi khởi
+- [x] Tests pass: pytest `test_config.py` — `prod` + secret mặc định → lỗi khởi
       tạo; `prod` + `http://` không cờ mạng mã hoá → lỗi khởi tạo; `prod` +
       `BACKEND_JAVA_BASE_URL` host `host.docker.internal`/`localhost` → lỗi khởi tạo;
       `test_internal_secret.py` vẫn pass sau khi đổi sang `compare_digest`
-- [ ] Tests pass: `./mvnw test` — `InternalNoStoreTest` tham số hoá theo
+- [x] Tests pass: `./mvnw test` — `InternalNoStoreTest` tham số hoá theo
       `contracts/internal-endpoints.json`: mọi endpoint (đặc biệt #1 snapshot và #4
       **claim** — 2 endpoint trả key plaintext) và 1 response lỗi 403 trên
       `/internal/**` đều có `Cache-Control: no-store` + `Pragma: no-cache`. Endpoint
       chưa implement ở task này được đánh dấu pending trong file và bật khi task
       tương ứng xong (Task 1/2/4/6); tới "Checkpoint: Registry lifecycle" không
       còn endpoint nào pending
-- [ ] Tests pass: gateway profile `prod` với
+- [x] Tests pass: gateway profile `prod` với
       `JAVA_BACKEND_URI=http://host.docker.internal:8401` → context fail
-- [ ] Tests pass: pytest `test_backend_java_client.py` — `httpx.MockTransport` giả
+- [x] Tests pass: pytest `test_backend_java_client.py` — `httpx.MockTransport` giả
       Java trả `302 Location: https://evil.test/steal` (và 301/307/308) → client
       raise `BackendJavaRedirectError`; transport ghi nhận đúng **1** request (tới
       Java), **0** request tới `evil.test`, nên `X-Internal-Secret` và key không bị
