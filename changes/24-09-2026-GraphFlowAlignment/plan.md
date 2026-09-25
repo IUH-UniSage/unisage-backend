@@ -41,7 +41,7 @@ Hiện trạng còn lệch so với design:
   {"tasks": [{"intent": "<nhãn>", "query": "<câu hỏi của task>", "routing_mode": "SINGLE" | "MULTI" | null}],
    "confidence": 0.9}
   ```
-  - Có **hai kiểu "multi", mỗi kiểu một node lo**: node 03 tách tin nhắn thành nhiều task khi có **2+ câu hỏi thật sự khác nhau**; câu **so sánh** nhiều thực thể vẫn là **1 task** gắn `routing_mode = MULTI`, việc tách theo thực thể vẫn là của decomposer ở node 06 như design.
+  - Có **hai kiểu "multi", mỗi kiểu một node lo** (sửa lại theo AD15, 2026-09-25): node 03 tách tin nhắn thành nhiều task **chỉ khi các câu hỏi khác NHÃN** (đi khác đích: 06 hay 07); 2+ câu hỏi cùng nhãn `academic_advisory` — dù là câu **so sánh** nhiều thực thể hay 2+ câu hỏi độc lập không liên quan — luôn là **1 task** gắn `routing_mode = MULTI`, việc bẻ nhỏ thành sub-query là của decomposer ở node 06, không phải node 03.
   - Tin nhắn chỉ có 1 câu hỏi → 1 task, `query` chép **nguyên văn** tin nhắn (để HyDE Bước 1 và `resolved_query` hoạt động y như cũ).
   - Bỏ `primary_intent`/`secondary_intents` của design: `secondary_intents` là mảng nhãn không ai đọc, và không định tuyến được — không có cơ chế nào chạy "nhãn phụ". `tasks` thay cho cả hai, còn mang câu hỏi con cụ thể để định tuyến thật. `confidence` giữ (ghi trace/log, chưa dùng để rẽ nhánh).
   - Chuẩn hoá khi parse: JSON hỏng/không có task nào → 1 task `academic_advisory` + `SINGLE`, `query` = tin nhắn gốc (hành vi an toàn hiện tại). Nhãn lạ trong một task → `academic_advisory`. `query` rỗng → tin nhắn gốc. `routing_mode` ép về `null` cho `social_chat`/`off_topic`/`academic_calculation`/`greeting`, về `SINGLE` nếu thiếu ở nhãn còn lại; `MULTI` chỉ giữ cho `academic_advisory`. Tối đa **3 task**, task thứ 4 trở đi bị bỏ (ghi log).
@@ -87,6 +87,11 @@ Hiện trạng còn lệch so với design:
   - TicketFallback (11) thay cho 10 khi nhánh 06 không có chunk nào vượt ngưỡng — tính trên **toàn bộ** chunk đã gộp của mọi task; nếu chỉ một phần thiếu văn bản, node 10 vẫn chạy và `task_1` đã buộc nói rõ phần nào chưa có quy định.
   - Hỏi lại thuộc tính (`ask_user_form`) phase này chỉ phát sinh từ nhánh 06 (node 07 là placeholder, không hỏi lại). `PendingClarification` chỉ có một `origin_node` — khi 07 làm thật mà cả hai nhánh cùng cần hỏi lại thì chưa xử lý được: ghi known-gap.
   - Trace một lượt ghép có cả `07_CalculationNode` lẫn chuỗi `06 → 08 → 09 → 10`.
+- **AD15. Node 03 chỉ tách task theo NHÃN, không theo nội dung câu hỏi (chốt 2026-09-25, theo yêu cầu người dùng "không muốn 2 node trùng nhiệm vụ").** Trước AD15, node 03 tự tách một tin nhắn có "2+ câu hỏi thật sự khác nhau" thành nhiều task **dù cùng nhãn** `academic_advisory` (VD "Học phí CNTT bao nhiêu, với lại điều kiện học bổng là gì?" → 2 task `SINGLE`), trong khi decomposer ở node 06 cũng làm một việc tương tự cho câu so sánh (`routing_mode = MULTI`) — hai node cùng đảm nhiệm việc "bẻ một tin nhắn thành nhiều câu hỏi con", chỉ khác input.
+  - Quy tắc mới: node 03 chỉ tách task khi các câu hỏi có **nhãn khác nhau** (đi khác node: 06 vs 07, hoặc dừng sớm ở 05). 2+ câu hỏi cùng nhãn `academic_advisory` — không phân biệt so sánh hay độc lập — luôn gộp thành **1 task duy nhất** với `routing_mode = MULTI`, `query` giữ nguyên văn phần học vụ của tin nhắn.
+  - Node 06 (decomposer) là nơi DUY NHẤT bẻ một task `MULTI` thành sub-query, bất kể task đó là câu so sánh hay nhiều câu hỏi độc lập gộp lại — `agents/multi_query_decomposer.yaml` được mở rộng phần Objective + thêm ví dụ cho dạng "nhiều câu hỏi độc lập" (trước đó chỉ có ví dụ so sánh).
+  - Không đổi contract JSON (`{"tasks": [...], "confidence"}`), không đổi code parse ở `message_classification.py`/`query_transformation.py`/`streaming_graph.py` — cả ba đều đã tổng quát theo số task/mode, chỉ có PROMPT của node 03 và node 06 thay đổi hướng dẫn. Test hiện có ở mức parse/graph-wiring không phụ thuộc nội dung prompt nên không cần sửa; thêm 1 test graph-wiring mới mô phỏng đúng hình dạng output mới (1 task MULTI → decomposer → khung `chat_multi_intent_synthesis`), giữ test cũ (2 task SINGLE riêng biệt) làm bài test phòng thủ cho trường hợp model vẫn lỡ trả về hình dạng cũ.
+  - Kiểm tay với model thật (gpt-4o-mini) cho ví dụ "Học phí CNTT bao nhiêu, với lại điều kiện học bổng là gì?" chưa được thực hiện lại sau thay đổi này — cần làm trước khi coi là xong hoàn toàn (xem Task 10 mục kiểm tay cũ, cùng dạng).
 
 ## Task List
 
@@ -115,7 +120,8 @@ Hiện trạng còn lệch so với design:
 ### Phase 3: Query Transformation + Fallback
 
 - [x] Task 9: Node 06 chạy từng task (HyDE), trả `transformed_queries`
-- [ ] Task 10: Decomposer cho task MULTI + node 08 fan-out + khung `chat_multi_intent_synthesis` + `origin_tasks`
+- [x] Task 10: Decomposer cho task MULTI + node 08 fan-out + khung `chat_multi_intent_synthesis` + `origin_tasks`
+- [x] Task 10c: Node 03 chỉ tách task theo nhãn, không theo nội dung câu hỏi (AD15)
 - [ ] Task 11: Node 11 TicketFallback gọi LLM, xoá `ui_buttons`
 
 ### Checkpoint: Complete

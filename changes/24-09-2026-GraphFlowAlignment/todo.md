@@ -251,24 +251,45 @@ Rồi bỏ `_SECURITY_ACCESS_CONTROL_DEFERRED` trong `app/rag/prompting/__init__
 **Acceptance criteria:**
 - [x] Câu so sánh 2 ngành → 2-3 sub-query → context có chunk của **mỗi** ngành, không trùng chunk
 - [x] 2 task advisory khác chủ đề → context có chunk của **mỗi** task
-- [ ] Prompt multi có `SQ1. ...`, `SQ2. ...`
-- [ ] Prompt SINGLE giống trước khi refactor builder, **ngoại trừ** khối `security_access_control` đã được bật ở Task 5 (test so chuỗi với snapshot lấy sau Task 5)
+- [x] Prompt multi có `SQ1. ...`, `SQ2. ...`
+- [x] Prompt SINGLE giống trước khi refactor builder, **ngoại trừ** khối `security_access_control` đã được bật ở Task 5 (test so chuỗi với snapshot lấy sau Task 5)
 - [x] Decomposer trả rác hoặc 1 sub-query → task đó trả lời qua HyDE như SINGLE
-- [ ] `pending_sub_query_id`:
+- [x] `pending_sub_query_id`:
   - form có 2 sub-query và `sub_query_id: "SQ2"` → `pending_sub_query_id == "SQ2"`, lưu qua `clarification_state` repository rồi đọc lại vẫn là `"SQ2"`
   - `"SQ5"` (ngoài `SQ1..SQ2`), `"abc"`, hoặc không có khoá → `None`
   - lượt chỉ có 1 sub-query có `sub_query_id` trong form → vẫn `None`
-- [ ] `origin_tasks` của lượt nhiều task được lưu và đọc lại đúng; resume chạy lại đúng các task đó, đúng mode
-- [ ] Hàng JSONB cũ (không có `origin_tasks`, `pending_sub_query_id: null`) vẫn `model_validate` được, resume chạy 1 task `SINGLE` như trước
+- [x] `origin_tasks` của lượt nhiều task được lưu và đọc lại đúng; resume chạy lại đúng các task đó, đúng mode
+- [x] Hàng JSONB cũ (không có `origin_tasks`, `pending_sub_query_id: null`) vẫn `model_validate` được, resume chạy 1 task `SINGLE` như trước
 
 **Verification:**
-- [ ] `pytest tests/graph tests/rag tests/e2e tests/database`
+- [x] `pytest tests/graph tests/rag tests/e2e tests/database`
 
 **Dependencies:** Task 5, Task 9
 
 **Files likely touched:** `app/graph/nodes/query_transformation.py`, `app/graph/nodes/retrieval_filtering.py`, `app/rag/prompting/{__init__,builder}.py`, `app/graph/nodes/generation_synthesis.py`, `app/schemas/clarification.py`, `app/graph/streaming_graph.py`, tests
 
 **Estimated scope:** Large → tách khi làm: **10a** decomposer + fan-out node 08 (3 file); **10b** builder + khung multi + `origin_tasks` (4-5 file)
+
+---
+
+### Task 10c: Node 03 chỉ tách task theo nhãn (AD15)
+
+**Description:** Theo AD15 (chốt 2026-09-25, người dùng không muốn 2 node cùng làm việc tách câu hỏi): sửa `agents/message_classification.yaml` — node 03 chỉ tách nhiều task khi các câu hỏi **khác nhãn**; 2+ câu hỏi cùng nhãn `academic_advisory` (so sánh nhiều thực thể HOẶC 2+ câu hỏi độc lập không liên quan) luôn gộp thành **1 task** `routing_mode = MULTI`, `query` giữ nguyên văn phần học vụ của tin nhắn. Mở rộng `agents/multi_query_decomposer.yaml` (Objective + thêm ví dụ) để decomposer xử lý được cả dạng "nhiều câu hỏi độc lập", không chỉ dạng so sánh. Không đổi code (`message_classification.py`, `query_transformation.py`, `streaming_graph.py` đã tổng quát theo số task/mode từ Task 6-10) — chỉ đổi 2 file prompt.
+
+**Acceptance criteria:**
+- [x] `message_classification.yaml`: Decision Rules + Output + Examples nói rõ chỉ tách theo nhãn; ví dụ "Học phí CNTT bao nhiêu, với lại điều kiện học bổng là gì?" đổi thành 1 task `MULTI` (trước là 2 task `SINGLE`)
+- [x] `multi_query_decomposer.yaml`: Objective nói rõ 2 dạng input (so sánh / nhiều câu hỏi độc lập), thêm ví dụ dạng độc lập
+- [x] Test hiện có không cần sửa vì parse/graph-wiring tổng quát theo hình dạng JSON, không phụ thuộc nội dung prompt; thêm 1 test graph-wiring mới mô phỏng hình dạng output mới (1 task `MULTI` → decomposer → khung multi-intent), giữ test cũ (2 task `SINGLE` riêng biệt) làm bài test phòng thủ
+
+**Verification:**
+- [x] Bộ lệnh kiểm tra chung pass
+- [ ] Kiểm tay lại với model thật (gpt-4o-mini) ví dụ "Học phí CNTT bao nhiêu, với lại điều kiện học bổng là gì?" → phải ra đúng 1 task `MULTI`
+
+**Dependencies:** Task 10
+
+**Files likely touched:** `app/rag/prompting/prompt_templates/agents/message_classification.yaml`, `app/rag/prompting/prompt_templates/agents/multi_query_decomposer.yaml`, `tests/graph/test_graph_wiring.py`
+
+**Estimated scope:** XS
 
 ---
 
