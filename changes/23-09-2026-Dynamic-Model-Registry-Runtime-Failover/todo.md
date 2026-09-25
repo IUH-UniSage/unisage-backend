@@ -52,34 +52,34 @@ dựng đường ống bảo mật cho cả namespace (theo mục "Internal API 
 plan.md), chưa implement endpoint nghiệp vụ.
 
 **Acceptance criteria:**
-- [ ] `InternalSecretFilter.INTERNAL_ONLY_PATHS` thêm `("*", "/internal/**")`
-- [ ] `DynamicAuthorizationManager`: path `/internal/**` + attribute `TRUE` →
+- [x] `InternalSecretFilter.INTERNAL_ONLY_PATHS` thêm `("*", "/internal/**")`
+- [x] `DynamicAuthorizationManager`: path `/internal/**` + attribute `TRUE` →
       grant, không cần `Authentication`; path `/internal/**` thiếu attribute →
       deny, kể cả khi có JWT SA hợp lệ
-- [ ] `/internal/**` **không** được thêm vào `PredefinedPublicPaths` hay
+- [x] `/internal/**` **không** được thêm vào `PredefinedPublicPaths` hay
       `PredefinedPermissions`
-- [ ] 1 endpoint ping `GET /internal/model-registry/version` (trả version từ Task
+- [x] 1 endpoint ping `GET /internal/model-registry/version` (trả version từ Task
       0.4, tạm trả `0` nếu Task 0.4 chưa xong) để test end-to-end
-- [ ] `InternalCallerCidrFilter` kiểm `/internal/**` bằng **chỉ**
+- [x] `InternalCallerCidrFilter` kiểm `/internal/**` bằng **chỉ**
       `request.getRemoteAddr()` với `INTERNAL_ALLOWED_CIDRS`, **fail-closed**: danh
       sách rỗng hoặc parse lỗi → từ chối mọi request `/internal/**` (log error 1 lần
       lúc startup); dev đặt giá trị tường minh trong `.env`/`.ENV` example
-- [ ] Filter **không đọc** `X-Forwarded-For`, `Forwarded`, `X-Real-IP` hay header
+- [x] Filter **không đọc** `X-Forwarded-For`, `Forwarded`, `X-Real-IP` hay header
       forward nào, không gọi lại `MessageController#extractClientIp`; thêm
       `server.forward-headers-strategy=NONE` tường minh làm lớp thứ 2
-- [ ] So sánh secret constant-time: `MessageDigest.isEqual` (Java,
+- [x] So sánh secret constant-time: `MessageDigest.isEqual` (Java,
       `InternalSecretFilter.isValidSecret`), `hmac.compare_digest` (Python — thay `!=`
       ở `app/core/security.py` và `app/api/v1/ingestion.py`)
-- [ ] Java, Python **và api-gateway** fail startup ở profile `prod` nếu
+- [x] Java, Python **và api-gateway** fail startup ở profile `prod` nếu
       `INTERNAL_SECRET_KEY` bằng giá trị mặc định hardcode hoặc < 32 ký tự
-- [ ] Python fail startup ở profile `prod` nếu `BACKEND_JAVA_URL` là `http://` và
+- [x] Python fail startup ở profile `prod` nếu `BACKEND_JAVA_URL` là `http://` và
       `INTERNAL_NETWORK_ENCRYPTED` khác `true`; tài liệu deploy nêu rõ yêu cầu TLS/
       mTLS hoặc private network mã hoá cho đường Python ↔ Java
-- [ ] `api-gateway`: `InternalPathBlockFilter` (`GlobalFilter`, order
+- [x] `api-gateway`: `InternalPathBlockFilter` (`GlobalFilter`, order
       `Ordered.HIGHEST_PRECEDENCE`, chạy trước `AuthenticationFilter` order `-1`)
       trả 404 cho `/api/v1/master/internal/**` và `/api/v1/ai/internal/**`. Không
       dùng route chặn (route chạy sau auth → trả 401 khi thiếu JWT)
-- [ ] Filter đọc `getURI().getRawPath()`, không chỉ `getPath()`: raw path dưới
+- [x] Filter đọc `getURI().getRawPath()`, không chỉ `getPath()`: raw path dưới
       `/api/v1/master/` hoặc `/api/v1/ai/` chứa `%2F`, `%5C`, `%2E`, `%25`, `\`, `;`
       → 404 ngay; phần còn lại decode lặp tới ổn định (≤ 3 lần), gộp `//`, resolve
       `.`/`..`, lowercase rồi mới match (plan.md, Security flow bước 3)
@@ -91,7 +91,7 @@ plan.md), chưa implement endpoint nghiệp vụ.
       `api-gateway/docker-compose.yml`): `JAVA_BACKEND_URI=http://backend-java:8401`,
       `PYTHON_AI_URI=http://unisage-agent:8402`, agent
       `BACKEND_JAVA_BASE_URL=http://backend-java:8401/api/v1` (hoặc `https://`)
-- [ ] Gateway và agent fail startup ở profile `prod` nếu URI upstream có host
+- [x] Gateway và agent fail startup ở profile `prod` nếu URI upstream có host
       `host.docker.internal`/`localhost`/`127.0.0.1`
 - [ ] `dev-onboard.md` mục production có tiểu mục Kubernetes (repo chưa có
       manifest K8s — áp dụng khi thêm): Service Java `ClusterIP`, không Ingress tới
@@ -112,10 +112,10 @@ plan.md), chưa implement endpoint nghiệp vụ.
       bằng service account khác → 403. Script exit ≠ 0 khi bất kỳ bước nào sai
 - [ ] Log 1 dòng INFO `remoteAddr` cho request `/internal/**` (không header, không
       body), bật/tắt bằng `INTERNAL_LOG_REMOTE_ADDR` để dùng cho bước đo trên staging
-- [ ] Filter `InternalResponseHeadersFilter` gắn `Cache-Control: no-store` +
+- [x] Filter `InternalResponseHeadersFilter` gắn `Cache-Control: no-store` +
       `Pragma: no-cache` cho **mọi** response `/internal/**` (gồm cả lỗi 4xx/5xx),
       không gắn ở từng controller
-- [ ] `BackendJavaClient._client()` truyền **tường minh** `follow_redirects=False`
+- [x] `BackendJavaClient._client()` truyền **tường minh** `follow_redirects=False`
       (hiện chỉ dựa vào mặc định của httpx); mọi 3xx từ Java → raise
       `BackendJavaRedirectError`, không đọc body, không gọi `Location`
 - [ ] Contract **7 endpoint** (bảng "Internal API contract" trong plan.md — danh
@@ -123,7 +123,7 @@ plan.md), chưa implement endpoint nghiệp vụ.
       review; DTO nội bộ của cả 7 đặt ở `dto/request/internal/`,
       `dto/response/internal/` — không controller SA nào import package này (thêm
       ArchUnit test hoặc test grep đơn giản)
-- [ ] Test "contract coverage" `InternalEndpointCoverageTest` đọc **route mapping
+- [x] Test "contract coverage" `InternalEndpointCoverageTest` đọc **route mapping
       thực tế** trong `ApplicationContext` đã khởi động (`@SpringBootTest`), không
       quét source code:
       - Backend có cả `spring-boot-starter-web` và `spring-boot-starter-webflux`
