@@ -403,7 +403,7 @@ class ChatModelRotationTest {
 
         verify(applicationEventPublisher, org.mockito.Mockito.times(1))
                 .publishEvent(org.mockito.ArgumentMatchers.any(
-                        com.unisage.backend.service.modelregistry.VerificationRequestedEvent.class));
+                        com.unisage.backend.event.VerificationRequestedEvent.class));
     }
 
     @Test
@@ -416,7 +416,7 @@ class ChatModelRotationTest {
 
         verify(applicationEventPublisher, org.mockito.Mockito.times(1))
                 .publishEvent(org.mockito.ArgumentMatchers.any(
-                        com.unisage.backend.service.modelregistry.VerificationRequestedEvent.class));
+                        com.unisage.backend.event.VerificationRequestedEvent.class));
     }
 
     @Test
@@ -429,7 +429,7 @@ class ChatModelRotationTest {
 
         verify(applicationEventPublisher, never()).publishEvent(
                 org.mockito.ArgumentMatchers.any(
-                        com.unisage.backend.service.modelregistry.VerificationRequestedEvent.class));
+                        com.unisage.backend.event.VerificationRequestedEvent.class));
     }
 
     @Test
@@ -441,6 +441,6 @@ class ChatModelRotationTest {
 
         verify(applicationEventPublisher, org.mockito.Mockito.times(1))
                 .publishEvent(org.mockito.ArgumentMatchers.any(
-                        com.unisage.backend.service.modelregistry.VerificationRequestedEvent.class));
+                        com.unisage.backend.event.VerificationRequestedEvent.class));
     }
 }

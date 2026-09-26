@@ -1,5 +1,7 @@
 package com.unisage.backend.service.modelregistry;
 
+import com.unisage.backend.event.consumer.ModelRegistryEventPublisher;
+
 import java.time.Duration;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;

@@ -1,5 +1,7 @@
 package com.unisage.backend.service.modelregistry;
 
+import com.unisage.backend.event.ModelRegistryChangedEvent;
+
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;

@@ -26,6 +26,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
+import com.unisage.backend.event.consumer.ModelRegistryEventPublisher;
+
 import com.unisage.backend.dto.request.internal.CredentialHealthReportRequest;
 import com.unisage.backend.dto.request.internal.InternalVerificationResultRequest;
 import com.unisage.backend.dto.response.internal.CredentialHealthReportResponse;

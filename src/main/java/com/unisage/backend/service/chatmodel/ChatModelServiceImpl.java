@@ -18,7 +18,7 @@ import com.unisage.backend.repository.ChatModelRepository;
 import com.unisage.backend.repository.ChatModelVerificationRepository;
 import com.unisage.backend.service.modelregistry.EmbeddingIndexIdentityService;
 import com.unisage.backend.service.modelregistry.ModelRegistryVersionService;
-import com.unisage.backend.service.modelregistry.VerificationRequestedEvent;
+import com.unisage.backend.event.VerificationRequestedEvent;
 import com.unisage.backend.utils.EmbeddingFingerprintMatcher;
 import com.unisage.backend.utils.SsrfGuard;
 import lombok.RequiredArgsConstructor;
