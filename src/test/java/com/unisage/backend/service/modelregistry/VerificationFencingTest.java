@@ -303,6 +303,7 @@ class VerificationFencingTest {
             return ((ChatModelCandidatePromotionService) realPromotionService).promote(j);
         };
         org.springframework.test.util.ReflectionTestUtils.setField(resultService, "promotionService", throwOnceWrapper);
+        int publishesBefore = countPublishInvocations();
         try {
             assertThatThrownBy(() -> resultService.submitResult(job.getId(), request))
                     .isInstanceOf(RuntimeException.class)
@@ -313,11 +314,13 @@ class VerificationFencingTest {
             assertThat(afterFailure.getStatus()).isEqualTo(ChatModelVerificationStatus.RUNNING);
             assertThat(afterFailure.getLastResultLeaseToken()).isNull();
             assertThat(chatModelRepository.findById(model.getId()).orElseThrow().getRevision()).isEqualTo(1);
+            assertThat(countPublishInvocations() - publishesBefore).isEqualTo(0);
 
             InternalVerificationResultResponse retried = resultService.submitResult(job.getId(), request);
             assertThat(retried.applied()).isTrue();
             assertThat(retried.duplicate()).isFalse();
             assertThat(chatModelRepository.findById(model.getId()).orElseThrow().getRevision()).isEqualTo(2);
+            assertThat(countPublishInvocations() - publishesBefore).isEqualTo(1);
         } finally {
             org.springframework.test.util.ReflectionTestUtils.setField(resultService, "promotionService", realPromotionService);
         }
