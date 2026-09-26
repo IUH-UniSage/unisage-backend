@@ -37,4 +37,17 @@ public interface ChatModelRepository extends JpaRepository<ChatModel, UUID> {
             @Param("occurredAt") LocalDateTime occurredAt,
             @Param("errorCode") String errorCode,
             @Param("message") String message);
+
+    /**
+     * Compare-and-set circuit breaker: only disables the row if it is still {@code ACTIVE} at the
+     * moment this runs — same pattern as every other state-machine transition (plan.md "State
+     * machine"). A credential already {@code DISABLED}/{@code INACTIVE} simply doesn't match, so
+     * this is a safe no-op (0 rows) rather than an error.
+     *
+     * @return 1 if the row was ACTIVE and is now DISABLED, 0 otherwise.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE ChatModel c SET c.status = com.unisage.backend.entity.enums.ChatModelStatus.DISABLED "
+            + "WHERE c.id = :id AND c.status = com.unisage.backend.entity.enums.ChatModelStatus.ACTIVE")
+    int disableIfActive(@Param("id") UUID id);
 }

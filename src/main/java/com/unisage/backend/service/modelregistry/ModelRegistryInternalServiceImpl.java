@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.unisage.backend.dto.request.internal.CredentialHealthReportRequest;
 import com.unisage.backend.dto.response.internal.CredentialHealthReportResponse;
+import com.unisage.backend.entity.enums.CredentialHealthErrorType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
@@ -21,13 +22,16 @@ import lombok.RequiredArgsConstructor;
 public class ModelRegistryInternalServiceImpl implements ModelRegistryInternalService {
 
     private final ChatModelRepository chatModelRepository;
+    private final ModelRegistryVersionService modelRegistryVersionService;
 
     /**
      * Backs plan.md "Internal API contract" endpoint #3. The revision check and the
      * counter/last-error write happen in one {@code UPDATE ... WHERE revision = :rev} (see
      * {@link ChatModelRepository#recordHealthError}) — a stale {@code credentialRevision} updates 0
      * rows and the whole report is ignored (no counter, no status change), same transaction, no
-     * separate read first.
+     * separate read first. Only once that succeeds does a {@code PERMANENT} report attempt the
+     * {@code ACTIVE -> DISABLED} compare-and-set and, only if that actually flips the row, bump the
+     * registry version in the same transaction.
      */
     @Override
     @Transactional
@@ -46,6 +50,17 @@ public class ModelRegistryInternalServiceImpl implements ModelRegistryInternalSe
         if (applied == 0) {
             // Stale revision — report ignored entirely, per plan.md R2.6.
             return new CredentialHealthReportResponse(false);
+        }
+
+        if (request.errorType() == CredentialHealthErrorType.PERMANENT) {
+            // Already DISABLED/INACTIVE just no-ops here (0 rows) — still applied: true, still 200,
+            // idempotent rather than an error. TRANSIENT never reaches this branch at all.
+            int disabled = chatModelRepository.disableIfActive(chatModelId);
+            if (disabled == 1) {
+                // Only bump the registry version when the status actually flipped, so Python isn't
+                // told to reload the snapshot on every TRANSIENT/duplicate report.
+                modelRegistryVersionService.bump();
+            }
         }
 
         return new CredentialHealthReportResponse(true);
