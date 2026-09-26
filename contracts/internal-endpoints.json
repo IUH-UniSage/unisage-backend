@@ -6,7 +6,7 @@
     { "method": "POST", "path": "/credentials/{id}/health", "returnsSecret": false, "implemented": false },
     { "method": "POST", "path": "/verifications/claim", "returnsSecret": true, "implemented": false },
     { "method": "POST", "path": "/verifications/{jobId}/result", "returnsSecret": false, "implemented": false },
-    { "method": "GET", "path": "/embedding-index/{collection}/identity", "returnsSecret": false, "implemented": false },
-    { "method": "PUT", "path": "/embedding-index/{collection}/identity", "returnsSecret": false, "implemented": false }
+    { "method": "GET", "path": "/embedding-index/{collection}/identity", "returnsSecret": false, "implemented": true },
+    { "method": "PUT", "path": "/embedding-index/{collection}/identity", "returnsSecret": false, "implemented": true }
   ]
 }
