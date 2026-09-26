@@ -219,7 +219,7 @@ class ChatModelRotationTest {
         ChatModel model = activeCloudRow();
         when(chatModelRepository.findByIdForUpdate(model.getId())).thenReturn(Optional.of(model));
 
-        ChatModelUpdateRequest request = baseUpdateFrom(model).apiBaseUrl("https://api.anthropic.com/v1").build();
+        ChatModelUpdateRequest request = baseUpdateFrom(model).apiBaseUrl("https://generativelanguage.googleapis.com/v1").build();
 
         assertThatThrownBy(() -> chatModelService.update(model.getId(), request))
                 .isInstanceOf(AppException.class)
@@ -233,9 +233,9 @@ class ChatModelRotationTest {
         when(chatModelRepository.findByIdForUpdate(model.getId())).thenReturn(Optional.of(model));
 
         ChatModelUpdateRequest request = baseUpdateFrom(model)
-                .apiBaseUrl("https://api.anthropic.com/v1")
-                .llmProvider("anthropic")
-                .apiKey(JsonNullable.of("sk-ant-new"))
+                .apiBaseUrl("https://generativelanguage.googleapis.com/v1")
+                .llmProvider("google")
+                .apiKey(JsonNullable.of("google-key-new"))
                 .build();
 
         ChatModelResponse response = chatModelService.update(model.getId(), request);
@@ -243,7 +243,7 @@ class ChatModelRotationTest {
         assertThat(response).isNotNull();
         assertThat(model.getApiBaseUrl()).isEqualTo("https://api.openai.com/v1"); // row untouched — staged
         verify(chatModelVerificationRepository).save(argThat(job ->
-                "https://api.anthropic.com/v1".equals(job.getCandidateApiBaseUrl())));
+                "https://generativelanguage.googleapis.com/v1".equals(job.getCandidateApiBaseUrl())));
     }
 
     @Test

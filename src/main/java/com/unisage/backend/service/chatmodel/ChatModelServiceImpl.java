@@ -44,8 +44,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ChatModelServiceImpl implements ChatModelService {
 
-    /** Providers proven (ADR 0005 spike) to accept an injected http_client for SSRF pinning. */
-    public static final Set<String> SUPPORTED_LLM_PROVIDERS = Set.of("openai", "anthropic");
+    /**
+     * Providers Python's provider factory has empirically proven accept an injected,
+     * SSRF-pinned http_client (see {@code app/core/llm/provider_models.py} in unisage-agent).
+     * "anthropic" is deliberately excluded: its SDK now requires an httpx2 client, which this
+     * codebase has no SSRF-pinned equivalent for — allowing it here would let an SA create a
+     * credential Python can never actually use. Revisit if/when that gap is closed.
+     */
+    public static final Set<String> SUPPORTED_LLM_PROVIDERS = Set.of("openai", "google", "groq", "mistral");
 
     /** Default {@code maxAttempts} for a freshly-created verification job (plan.md "Verification lifecycle"). */
     private static final int DEFAULT_MAX_ATTEMPTS = 3;
