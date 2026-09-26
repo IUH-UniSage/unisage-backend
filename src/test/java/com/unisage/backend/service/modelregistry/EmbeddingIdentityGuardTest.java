@@ -224,6 +224,8 @@ class EmbeddingIdentityGuardTest {
 
         assertThat(promotionService.promote(job)).isEqualTo(ChatModelCandidatePromotionService.Outcome.PROMOTED);
         verify(embeddingIndexIdentityService, never()).getIdentity(any());
+        // Row lands at INACTIVE (not ACTIVE) -- not in the snapshot, so no bump.
+        verify(modelRegistryVersionService, never()).bump();
     }
 
     @Test

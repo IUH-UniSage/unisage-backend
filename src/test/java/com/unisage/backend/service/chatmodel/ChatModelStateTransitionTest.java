@@ -185,6 +185,8 @@ class ChatModelStateTransitionTest {
         ChatModelCandidatePromotionService.Outcome outcome = promotionService.promote(job);
 
         assertThat(outcome).isEqualTo(ChatModelCandidatePromotionService.Outcome.PROMOTED);
+        // EMBEDDING lands at INACTIVE here, never in the snapshot -- no reason to bump.
+        verify(modelRegistryVersionService, never()).bump();
     }
 
     @Test
@@ -199,6 +201,7 @@ class ChatModelStateTransitionTest {
         ChatModelCandidatePromotionService.Outcome outcome = promotionService.promote(job);
 
         assertThat(outcome).isEqualTo(ChatModelCandidatePromotionService.Outcome.PROMOTED);
+        verify(modelRegistryVersionService).bump();
     }
 
     @Test
@@ -275,6 +278,40 @@ class ChatModelStateTransitionTest {
     }
 
     @Test
+    void active_healthTransient_recordsErrorButNeverBumpsOrDisables() {
+        UUID id = UUID.randomUUID();
+        when(chatModelRepository.existsById(id)).thenReturn(true);
+        when(chatModelRepository.recordHealthError(eq(id), eq(1), any(), any(), any())).thenReturn(1);
+
+        CredentialHealthReportRequest request = new CredentialHealthReportRequest(
+                1, 10L, CredentialHealthErrorType.TRANSIENT, "rate_limited", "429 too many requests", OffsetDateTime.now());
+
+        CredentialHealthReportResponse response = modelRegistryInternalService.reportHealth(id, request);
+
+        assertThat(response.applied()).isTrue();
+        verify(chatModelRepository).recordHealthError(eq(id), eq(1), any(), eq("rate_limited"), any());
+        verify(chatModelRepository, never()).disableIfActive(any());
+        verify(modelRegistryVersionService, never()).bump();
+    }
+
+    @Test
+    void permanent_alreadyDisabled_appliedTrue_butNoBump_idempotent() {
+        UUID id = UUID.randomUUID();
+        when(chatModelRepository.existsById(id)).thenReturn(true);
+        when(chatModelRepository.recordHealthError(eq(id), eq(2), any(), any(), any())).thenReturn(1);
+        // Row was already DISABLED -- the ACTIVE -> DISABLED compare-and-set is a no-op (0 rows).
+        when(chatModelRepository.disableIfActive(id)).thenReturn(0);
+
+        CredentialHealthReportRequest request = new CredentialHealthReportRequest(
+                2, 10L, CredentialHealthErrorType.PERMANENT, "invalid_api_key", "key revoked", OffsetDateTime.now());
+
+        CredentialHealthReportResponse response = modelRegistryInternalService.reportHealth(id, request);
+
+        assertThat(response.applied()).isTrue();
+        verify(modelRegistryVersionService, never()).bump();
+    }
+
+    @Test
     void active_healthPermanent_staleRevision_ignored() {
         UUID id = UUID.randomUUID();
         when(chatModelRepository.existsById(id)).thenReturn(true);
@@ -327,9 +364,9 @@ class ChatModelStateTransitionTest {
     }
 
     @Test
-    void delete_anyStatus_becomesInactiveIsActiveFalse() {
+    void delete_nonActiveStatus_becomesInactiveIsActiveFalse_noBump() {
         for (ChatModelStatus status : Set.of(
-                ChatModelStatus.PENDING, ChatModelStatus.ACTIVE, ChatModelStatus.INACTIVE, ChatModelStatus.DISABLED)) {
+                ChatModelStatus.PENDING, ChatModelStatus.INACTIVE, ChatModelStatus.DISABLED)) {
             ChatModel model = modelWith(status, true);
             when(chatModelRepository.findById(model.getId())).thenReturn(Optional.of(model));
             when(chatModelVerificationRepository.findByChatModelIdAndStatusIn(eq(model.getId()), any()))
@@ -340,6 +377,22 @@ class ChatModelStateTransitionTest {
             assertThat(model.getStatus()).isEqualTo(ChatModelStatus.INACTIVE);
             assertThat(model.getIsActive()).isFalse();
         }
+        // None of the deleted rows were ACTIVE -- the snapshot never contained them.
+        verify(modelRegistryVersionService, never()).bump();
+    }
+
+    @Test
+    void delete_activeRow_becomesInactiveIsActiveFalse_bumpsExactlyOnce() {
+        ChatModel model = modelWith(ChatModelStatus.ACTIVE, true);
+        when(chatModelRepository.findById(model.getId())).thenReturn(Optional.of(model));
+        when(chatModelVerificationRepository.findByChatModelIdAndStatusIn(eq(model.getId()), any()))
+                .thenReturn(java.util.List.of());
+
+        chatModelService.delete(model.getId());
+
+        assertThat(model.getStatus()).isEqualTo(ChatModelStatus.INACTIVE);
+        assertThat(model.getIsActive()).isFalse();
+        verify(modelRegistryVersionService, org.mockito.Mockito.times(1)).bump();
     }
 
     @Test
@@ -351,6 +404,9 @@ class ChatModelStateTransitionTest {
 
         assertThat(model.getIsActive()).isTrue();
         assertThat(model.getStatus()).isEqualTo(ChatModelStatus.INACTIVE);
+        // Recover never puts a row back into the snapshot by itself (status stays INACTIVE) --
+        // it can never be the row that was previously ACTIVE while soft-deleted.
+        verify(modelRegistryVersionService, never()).bump();
     }
 
     @Test
