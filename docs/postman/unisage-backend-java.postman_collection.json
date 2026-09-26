@@ -26,6 +26,11 @@
   ],
   "variable": [
     { "key": "gateway_url", "value": "http://localhost:8400" },
+    {
+      "key": "backend_java_url",
+      "value": "http://localhost:8401",
+      "description": "Direct backend-java port, bypassing the gateway. /internal/** is blocked by InternalPathBlockFilter at the gateway (returns 404), so these requests must go straight to backend-java, same as unisage-agent does."
+    },
     { "key": "accessToken", "value": "" },
     { "key": "userId", "value": "" },
     { "key": "roleId", "value": "" },
@@ -1021,6 +1026,93 @@
               "host": ["{{gateway_url}}"],
               "path": ["api", "v1", "master", "chat-models", "{{chatModelId}}"]
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Model Registry - Internal",
+      "auth": { "type": "noauth" },
+      "item": [
+        {
+          "name": "Report Credential Health - PERMANENT (disables + bumps version)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "X-Internal-Secret",
+                "value": "{{internalSecret}}",
+                "description": "Required - this whole namespace goes through InternalSecretFilter, not JWT."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"credentialRevision\": 1,\n  \"snapshotVersion\": 1,\n  \"errorType\": \"PERMANENT\",\n  \"errorCode\": \"invalid_api_key\",\n  \"message\": \"Error: sk-abc123-should-be-redacted is invalid\",\n  \"occurredAt\": \"2026-09-25T03:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{backend_java_url}}/api/v1/internal/model-registry/credentials/{{chatModelId}}/health",
+              "host": ["{{backend_java_url}}"],
+              "path": ["api", "v1", "internal", "model-registry", "credentials", "{{chatModelId}}", "health"]
+            },
+            "description": "credentialRevision must match the row's current `revision` (see 'Get Chat Model By Id' response) - run this against a row you just created/updated so revision=1. If ACTIVE, this compare-and-sets it to DISABLED and bumps model_registry_version in the same transaction. `message` is redacted server-side before storage (SecretRedactor), so the fake key above should never show up in last_error_message. Expected: 200 { \"applied\": true }."
+          }
+        },
+        {
+          "name": "Report Credential Health - TRANSIENT (counter only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Internal-Secret", "value": "{{internalSecret}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"credentialRevision\": 1,\n  \"snapshotVersion\": 1,\n  \"errorType\": \"TRANSIENT\",\n  \"errorCode\": \"rate_limited\",\n  \"message\": \"429 Too Many Requests\",\n  \"occurredAt\": \"2026-09-25T03:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{backend_java_url}}/api/v1/internal/model-registry/credentials/{{chatModelId}}/health",
+              "host": ["{{backend_java_url}}"],
+              "path": ["api", "v1", "internal", "model-registry", "credentials", "{{chatModelId}}", "health"]
+            },
+            "description": "TRANSIENT never disables the row and never bumps model_registry_version - only errorCount/lastErrorAt/lastErrorCode/lastErrorMessage change. Expected: 200 { \"applied\": true }."
+          }
+        },
+        {
+          "name": "Report Credential Health - Stale Revision (ignored)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Internal-Secret", "value": "{{internalSecret}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"credentialRevision\": 999,\n  \"snapshotVersion\": 1,\n  \"errorType\": \"PERMANENT\",\n  \"errorCode\": \"invalid_api_key\",\n  \"message\": \"should be ignored entirely\",\n  \"occurredAt\": \"2026-09-25T03:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{backend_java_url}}/api/v1/internal/model-registry/credentials/{{chatModelId}}/health",
+              "host": ["{{backend_java_url}}"],
+              "path": ["api", "v1", "internal", "model-registry", "credentials", "{{chatModelId}}", "health"]
+            },
+            "description": "credentialRevision=999 will never match a real row's revision, so this is ignored entirely - no counter bump, no status change. Expected: 200 { \"applied\": false }."
+          }
+        },
+        {
+          "name": "Report Credential Health - Invalid (Missing X-Internal-Secret)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"credentialRevision\": 1,\n  \"snapshotVersion\": 1,\n  \"errorType\": \"TRANSIENT\",\n  \"errorCode\": \"rate_limited\",\n  \"message\": \"429\",\n  \"occurredAt\": \"2026-09-25T03:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{backend_java_url}}/api/v1/internal/model-registry/credentials/{{chatModelId}}/health",
+              "host": ["{{backend_java_url}}"],
+              "path": ["api", "v1", "internal", "model-registry", "credentials", "{{chatModelId}}", "health"]
+            },
+            "description": "Expected: 403, InternalSecretFilter rejects before the request reaches the controller."
           }
         }
       ]
