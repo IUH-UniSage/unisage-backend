@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
     // System errors (9xxx)
     SYS_UNCATEGORIZED(HttpStatus.INTERNAL_SERVER_ERROR, 9999, "Hệ thống có lỗi chưa xác định. Vui lòng thử lại sau."),
+    ROUTE_NOT_FOUND(HttpStatus.NOT_FOUND, 9998, "Không tìm thấy endpoint này."),
 
     // Authentication errors (1xxx)
     AUTH_UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, 1001, "Bạn cần đăng nhập để thực hiện thao tác này."),

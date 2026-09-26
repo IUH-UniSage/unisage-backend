@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -27,6 +28,24 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
                 .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage(), exception.getErrors()));
+    }
+
+    /**
+     * A path with no matching handler mapping (e.g. a profile-gated controller, such as
+     * {@code /internal/test/registry/reset}, absent from this profile's context) falls through to
+     * Spring's static-resource handler, which throws this instead of Spring MVC's older
+     * "no handler found" 404 — without this handler it would otherwise hit the generic
+     * {@link #handleUncategorizedException} below and wrongly answer 500.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleNoResourceFound(
+            NoResourceFoundException exception) {
+
+        ErrorCode errorCode = ErrorCode.ROUTE_NOT_FOUND;
+
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage(), null));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
