@@ -35,6 +35,18 @@ public interface ChatModelVerificationRepository extends JpaRepository<ChatModel
             """, nativeQuery = true)
     List<UUID> findClaimableIds(@Param("limit") int limit);
 
+    /**
+     * Scalar-only lookup of the owning {@code ChatModel} id — used by the result endpoint (Task 6)
+     * to discover which model row to lock first, WITHOUT loading a {@code ChatModelVerification}
+     * entity into the persistence context. Loading the entity here (even unlocked) would leave a
+     * stale managed instance behind: a later {@code SELECT ... FOR UPDATE} on the same id acquires
+     * the correct row lock at the database, but Hibernate returns the already-cached Java object
+     * rather than refreshing its fields from the new result set, so the caller would evaluate the
+     * lease/CAS checks against pre-lock data. A projection query sidesteps this entirely.
+     */
+    @Query("SELECT v.chatModel.id FROM ChatModelVerification v WHERE v.id = :id")
+    Optional<UUID> findChatModelIdById(@Param("id") UUID id);
+
     /** Open jobs (QUEUED/RUNNING) for a credential — used by Task 3/6 to supersede/cancel on edit/delete. */
     List<ChatModelVerification> findByChatModelIdAndStatusIn(UUID chatModelId, List<ChatModelVerificationStatus> statuses);
 

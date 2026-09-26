@@ -45,11 +45,13 @@ public class ChatModelVerificationResultServiceImpl implements ChatModelVerifica
     @Override
     @Transactional
     public InternalVerificationResultResponse submitResult(UUID jobId, InternalVerificationResultRequest request) {
-        // Unlocked peek only to discover which ChatModel row to lock first — never used for any
-        // decision below (plan.md step 4.1: "Đọc chat_model_id của job (không khoá)").
-        ChatModelVerification peek = chatModelVerificationRepository.findById(jobId)
+        // Scalar-only lookup to discover which ChatModel row to lock first (plan.md step 4.1:
+        // "Đọc chat_model_id của job (không khoá)") — deliberately NOT an entity read: loading a
+        // ChatModelVerification here would leave a stale managed instance in the persistence
+        // context that a later locked re-read would not refresh (Hibernate returns the cached
+        // instance for an already-loaded id instead of re-hydrating it from the new locked SELECT).
+        UUID chatModelId = chatModelVerificationRepository.findChatModelIdById(jobId)
                 .orElseThrow(() -> new AppException(ErrorCode.VERIFICATION_JOB_NOT_FOUND));
-        UUID chatModelId = peek.getChatModel().getId();
 
         // Fixed lock order — model, THEN job — matching ChatModelServiceImpl#update/#verify
         // (staged rotation) so the two paths can never deadlock on each other.
