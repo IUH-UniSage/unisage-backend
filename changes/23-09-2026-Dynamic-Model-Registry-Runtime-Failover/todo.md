@@ -519,12 +519,15 @@ Java, Python (≥2 worker), Celery, Redis chạy cùng nhau. Dựng khung chạy
       `rebind.test` trả IP fake provider ở lần hỏi đầu, IP của 1 service "nội bộ"
       mồi (đếm kết nối) ở các lần sau, TTL 0; container agent/worker đặt `dns:` trỏ
       vào nó để test dùng resolver thật của OS (dùng ở Task 0.6)
-- [ ] Seed dữ liệu: `ModelRegistryIntegrationSeeder` (`@Profile("integration")`,
+- [x] Seed dữ liệu: `ModelRegistryIntegrationSeeder` (`@Profile("integration")`,
       không bao giờ chạy ở profile khác) tạo qua service (để key được mã hoá bằng
-      `ApiKeyConverter`, không insert SQL thô), idempotent khi restart. Ở task này
-      seed bằng schema **hiện tại**: 2 ChatModel `isActive = true` trỏ fake provider
-      (priority 1 và 2). Task 1 mở rộng seeder: `modelPurpose`/`status = ACTIVE`/
-      `verified_at`/`revision = 1` cho đủ CHAT (×2), EMBEDDING, EXTRACTION
+      `ApiKeyConverter`, không insert SQL thô), idempotent khi restart (check-before-
+      insert; endpoint reset dưới đây luôn xoá trước khi gọi lại seed). Bản seeder này
+      được viết thẳng theo schema **hiện tại** (đã có Task 1) thay vì bản 2-ChatModel
+      cũ rồi mở rộng sau — không còn cần bước trung gian: `modelPurpose`/
+      `status = ACTIVE`/`verifiedAt`/`revision = 1` cho đủ CHAT (×2, priority 1 và 2),
+      EMBEDDING, EXTRACTION, đều trỏ base URL cấu hình được (mặc định
+      `http://localhost:8000/v1`)
 - [ ] Thứ tự khởi động: agent/worker/beat `depends_on` backend-java
       `condition: service_healthy` (healthcheck xác nhận seed xong) — từ Task 4
       Python fail startup khi không có CHAT ACTIVE. Trước Task 4 chạy với
@@ -546,15 +549,19 @@ Java, Python (≥2 worker), Celery, Redis chạy cùng nhau. Dựng khung chạy
          Beat tắt và gọi task verify trực tiếp để kết quả tất định)
       Scope fixture theo module để không trả giá stop/start Beat cho từng test
 - [ ] Endpoint reset không bao giờ tồn tại ngoài harness:
-      - Path `POST /internal/test/registry/reset` — nằm dưới `/internal/**` nên vẫn
-        qua secret + CIDR (fail-closed) + bị gateway chặn.
-      - Controller + seeder chỉ đăng ký bean với `@Profile("integration")`.
-      - Java fail startup nếu `integration` bật cùng `prod` (hoặc cùng bất kỳ
-        profile nào ngoài `integration`/`test`).
-      - Test: context profile mặc định và `prod` → không có bean seeder/controller
-        reset, `POST /internal/test/registry/reset` (có secret, IP hợp lệ) → 404
-      - Chỉ bind trong network harness: Java không publish port, CIDR = subnet
-        harness
+      - [x] Path `POST /internal/test/registry/reset` — nằm dưới `/internal/**` nên
+        tự động qua secret + CIDR (fail-closed) + no-store hiện có (path-pattern-based,
+        không cần khai báo riêng); chặn ở gateway là việc của api-gateway repo, chưa
+        làm ở đây.
+      - [x] Controller + seeder chỉ đăng ký bean với `@Profile("integration")`.
+      - [x] Java fail startup nếu `integration` bật cùng `prod` (hoặc cùng bất kỳ
+        profile nào ngoài `integration`/`test`) — `ModelRegistryIntegrationProfileStartupCheck`.
+      - [x] Test: context profile mặc định và `prod` → không có bean seeder/controller
+        reset, `POST /internal/test/registry/reset` (có secret, IP hợp lệ) → 404 (đã
+        phải sửa `GlobalExceptionHandler` — catch-all cũ nuốt `NoResourceFoundException`
+        thành 500 thay vì để lọt 404 mặc định của Spring).
+      - [ ] Chỉ bind trong network harness: Java không publish port, CIDR = subnet
+        harness — thuộc phần docker-compose/deploy của Task 0.5, chưa làm ở đây.
 - [ ] Fake provider (FastAPI nhỏ) điều khiển được qua API admin: trả OK / 401
       invalid key / 429 + `Retry-After` / 402 hết credit / lỗi giữa stream sau N
       chunk / `echo_secrets` (trả lỗi chứa nguyên `Authorization` + body, dùng cho
@@ -901,9 +908,16 @@ vì plan Cost Tracking tham chiếu; file chứa toàn bộ schema registry.
       index embedding, unique partial index 1 job dở/credential, bảng
       `chat_model_verifications`, bảng `model_registry_version` (seed
       `version = 1`), backfill row cũ theo plan.md
-- [ ] Mở rộng `ModelRegistryIntegrationSeeder` (Task 0.5) theo schema mới — **chưa
-      làm được: seeder này chưa tồn tại**, Task 0.5's checklist cho phần Java seeder
-      vẫn chưa có ai làm; không có gì để mở rộng cho tới khi seeder được tạo trước
+- [x] `ModelRegistryIntegrationSeeder` (`@Profile("integration")`) đã được tạo, seed
+      đúng theo schema hiện tại (`modelPurpose`/`status = ACTIVE`/`verifiedAt`/
+      `revision = 1`): 2 CHAT (priority 1, 2) + 1 EMBEDDING + 1 EXTRACTION, tất cả qua
+      `ChatModelService`/`ChatModelCandidatePromotionService` thật (không insert SQL
+      thô). `POST /internal/test/registry/reset` (cùng profile) xoá job xác minh +
+      reseed trong 1 transaction, 409 nếu còn job `RUNNING` với lease chưa hết hạn.
+      Startup fail nếu profile `integration` bật cùng bất kỳ profile nào khác ngoài
+      `test`. Test: bean/route vắng mặt + 404 (không phải 403) ở profile mặc định và
+      `prod`; integration test seed đúng 4 credential, reset 2 lần không lỗi/không
+      trùng, job RUNNING chặn reset bằng 409
 - [x] `delete`/`recover` hiện có tuân state machine (delete → `INACTIVE` +
       `is_active=false`; recover → `is_active=true`, status giữ `INACTIVE`) — đã
       đúng từ trước, không cần sửa code
