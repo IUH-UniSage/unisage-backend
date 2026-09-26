@@ -1,4 +1,4 @@
-package com.unisage.backend.service.modelregistry;
+package com.unisage.backend.service.modelregistryversion;
 
 import com.unisage.backend.event.ModelRegistryChangedEvent;
 
@@ -22,7 +22,7 @@ class ModelRegistryVersionServiceUnitTest {
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
         when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class))).thenReturn(42L);
 
-        ModelRegistryVersionService service = new ModelRegistryVersionService(jdbcTemplate, eventPublisher);
+        ModelRegistryVersionServiceImpl service = new ModelRegistryVersionServiceImpl(jdbcTemplate, eventPublisher);
         long result = service.bump();
 
         assertThat(result).isEqualTo(42L);
@@ -35,7 +35,7 @@ class ModelRegistryVersionServiceUnitTest {
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
         when(jdbcTemplate.queryForObject(any(String.class), eq(Long.class))).thenReturn(7L);
 
-        ModelRegistryVersionService service = new ModelRegistryVersionService(jdbcTemplate, eventPublisher);
+        ModelRegistryVersionServiceImpl service = new ModelRegistryVersionServiceImpl(jdbcTemplate, eventPublisher);
 
         assertThat(service.currentVersion()).isEqualTo(7L);
     }

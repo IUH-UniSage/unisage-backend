@@ -1,4 +1,4 @@
-package com.unisage.backend.service.modelregistry;
+package com.unisage.backend.service.modelregistryversion;
 
 import com.unisage.backend.event.consumer.ModelRegistryEventPublisher;
 

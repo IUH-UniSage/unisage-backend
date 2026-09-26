@@ -1,6 +1,7 @@
-package com.unisage.backend.service.modelregistry;
+package com.unisage.backend.service.modelregistryversion;
 
 import com.unisage.backend.event.ModelRegistryChangedEvent;
+import com.unisage.backend.event.consumer.ModelRegistryEventPublisher;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -16,7 +17,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Service
 @RequiredArgsConstructor
-public class ModelRegistryVersionService {
+public class ModelRegistryVersionServiceImpl implements ModelRegistryVersionService {
 
     private final JdbcTemplate jdbcTemplate;
     private final ApplicationEventPublisher eventPublisher;
@@ -25,6 +26,7 @@ public class ModelRegistryVersionService {
      * Must run inside an existing transaction — the version bump has to commit or roll back with
      * whatever registry change caused it, never on its own.
      */
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public long bump() {
         Long version = jdbcTemplate.queryForObject(
@@ -35,6 +37,7 @@ public class ModelRegistryVersionService {
         return version;
     }
 
+    @Override
     public long currentVersion() {
         Long version = jdbcTemplate.queryForObject(
                 "SELECT version FROM model_registry_version WHERE id = 1", Long.class);
