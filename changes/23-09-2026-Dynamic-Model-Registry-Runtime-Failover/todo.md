@@ -942,22 +942,22 @@ vì plan Cost Tracking tham chiếu; file chứa toàn bộ schema registry.
 dựng ở Task 0.1, không đụng `ChatModelController` SA-facing.
 
 **Acceptance criteria:**
-- [ ] Body `{ credentialRevision, snapshotVersion, errorType: TRANSIENT|PERMANENT, errorCode, message, occurredAt }`
-- [ ] `credentialRevision` khác `revision` hiện tại của row → bỏ qua toàn bộ
+- [x] Body `{ credentialRevision, snapshotVersion, errorType: TRANSIENT|PERMANENT, errorCode, message, occurredAt }`
+- [x] `credentialRevision` khác `revision` hiện tại của row → bỏ qua toàn bộ
       (không counter, không status), trả `200 { applied: false }`; so sánh
       revision và cập nhật trong cùng 1 câu `UPDATE ... WHERE id = :id AND revision = :rev`
-- [ ] Tăng `errorCount`, set `lastErrorAt`; lưu `lastErrorCode`/`lastErrorMessage`
+- [x] Tăng `errorCount`, set `lastErrorAt`; lưu `lastErrorCode`/`lastErrorMessage`
       để UI giải thích — `message` đi qua `SecretRedactor` (Task 0.7) rồi mới cắt
       500 ký tự và lưu, dù Python đã redact
-- [ ] PERMANENT + `status = ACTIVE` → `DISABLED` qua compare-and-set, bump version
+- [x] PERMANENT + `status = ACTIVE` → `DISABLED` qua compare-and-set, bump version
       (Task 0.4) trong cùng transaction; TRANSIENT không bump version
-- [ ] Credential đã DISABLED/INACTIVE nhận thêm báo lỗi → chỉ cập nhật counter,
+- [x] Credential đã DISABLED/INACTIVE nhận thêm báo lỗi → chỉ cập nhật counter,
       không đổi status, trả 200 (idempotent)
-- [ ] PERMANENT được ghi nhận để Task 15 lấy dữ liệu alert
+- [x] PERMANENT được ghi nhận để Task 15 lấy dữ liệu alert
 
 **Verification:**
-- [ ] Tests pass: `./mvnw test` — gồm bật test skeleton stale report của Task 0.3
-- [ ] Manual check: Postman collection (`docs/postman/`) với header secret
+- [x] Tests pass: `./mvnw test` — gồm bật test skeleton stale report của Task 0.3
+- [x] Manual check: Postman collection (`docs/postman/`) với header secret
 
 **Dependencies:** Task 1, Task 0.1, Task 0.7
 
