@@ -1,14 +1,25 @@
 package com.unisage.backend.service.modelregistry;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.unisage.backend.dto.request.internal.CredentialHealthReportRequest;
 import com.unisage.backend.dto.response.internal.CredentialHealthReportResponse;
+import com.unisage.backend.dto.response.internal.InternalEmbeddingIndexIdentityResponse;
+import com.unisage.backend.dto.response.internal.InternalModelRegistrySnapshotResponse;
+import com.unisage.backend.dto.response.internal.InternalModelRegistrySnapshotResponse.CredentialEntry;
+import com.unisage.backend.entity.ChatModel;
+import com.unisage.backend.entity.enums.ChatModelPurpose;
 import com.unisage.backend.entity.enums.CredentialHealthErrorType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
@@ -23,6 +34,11 @@ public class ModelRegistryInternalServiceImpl implements ModelRegistryInternalSe
 
     private final ChatModelRepository chatModelRepository;
     private final ModelRegistryVersionService modelRegistryVersionService;
+    private final EmbeddingIndexIdentityService embeddingIndexIdentityService;
+
+    /** Collection Python is configured against — same property key ChatModelServiceImpl uses. */
+    @Value("${model-registry.embedding-collection-name:unisage_chunks}")
+    private String embeddingCollectionName;
 
     /**
      * Backs plan.md "Internal API contract" endpoint #3. The revision check and the
@@ -64,5 +80,47 @@ public class ModelRegistryInternalServiceImpl implements ModelRegistryInternalSe
         }
 
         return new CredentialHealthReportResponse(true);
+    }
+
+    /**
+     * Version and rows are read in the same read-only {@code REPEATABLE_READ} transaction (plan.md
+     * "Internal API contract") so a concurrent write can never be observed as "new version, old
+     * data" or vice versa. Reading straight off {@link ChatModel}'s own columns — never a
+     * verification job's {@code candidate_*} columns — is what makes acceptance criterion #7
+     * (a row with a pending rotation candidate still reports its old, currently-active values)
+     * automatic rather than something this method has to special-case.
+     */
+    @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public InternalModelRegistrySnapshotResponse getSnapshot() {
+        long version = modelRegistryVersionService.currentVersion();
+        List<ChatModel> activeModels = chatModelRepository.findAllActiveForSnapshot();
+
+        Map<ChatModelPurpose, List<CredentialEntry>> purposes = new EnumMap<>(ChatModelPurpose.class);
+        for (ChatModelPurpose purpose : ChatModelPurpose.values()) {
+            purposes.put(purpose, new java.util.ArrayList<>());
+        }
+        for (ChatModel model : activeModels) {
+            purposes.get(model.getModelPurpose()).add(toCredentialEntry(model));
+        }
+
+        InternalEmbeddingIndexIdentityResponse embeddingIndexIdentity =
+                embeddingIndexIdentityService.getIdentity(embeddingCollectionName).orElse(null);
+
+        return new InternalModelRegistrySnapshotResponse(
+                version, OffsetDateTime.now(ZoneOffset.UTC), purposes, embeddingIndexIdentity);
+    }
+
+    private CredentialEntry toCredentialEntry(ChatModel model) {
+        return new CredentialEntry(
+                model.getId(),
+                model.getRevision(),
+                model.getSourceType(),
+                model.getLlmProvider(),
+                model.getLlmModelName(),
+                model.getApiBaseUrl(),
+                model.getApiKeyEncrypted(),
+                model.getPriority(),
+                model.getMaxRpm());
     }
 }

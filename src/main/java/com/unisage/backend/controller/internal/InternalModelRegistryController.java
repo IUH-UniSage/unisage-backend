@@ -16,9 +16,11 @@ import com.unisage.backend.dto.request.internal.CredentialHealthReportRequest;
 import com.unisage.backend.dto.request.internal.InternalEmbeddingIndexIdentityRequest;
 import com.unisage.backend.dto.response.internal.CredentialHealthReportResponse;
 import com.unisage.backend.dto.response.internal.InternalEmbeddingIndexIdentityResponse;
+import com.unisage.backend.dto.response.internal.InternalModelRegistrySnapshotResponse;
 import com.unisage.backend.dto.response.internal.InternalModelRegistryVersionResponse;
 import com.unisage.backend.service.modelregistry.EmbeddingIndexIdentityService;
 import com.unisage.backend.service.modelregistry.ModelRegistryInternalService;
+import com.unisage.backend.service.modelregistry.ModelRegistryVersionService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,11 +33,17 @@ public class InternalModelRegistryController {
 
     private final EmbeddingIndexIdentityService embeddingIndexIdentityService;
     private final ModelRegistryInternalService modelRegistryInternalService;
+    private final ModelRegistryVersionService modelRegistryVersionService;
 
-    // TODO: wire to ModelRegistryVersionService (Redis + DB version counter) once it exists.
     @GetMapping("/version")
     public InternalModelRegistryVersionResponse version() {
-        return new InternalModelRegistryVersionResponse(0L);
+        return new InternalModelRegistryVersionResponse(modelRegistryVersionService.currentVersion());
+    }
+
+    /** Endpoint #1 — the only source of provider credentials for {@code unisage-agent} (plan.md "Cutover"). */
+    @GetMapping("/snapshot")
+    public InternalModelRegistrySnapshotResponse snapshot() {
+        return modelRegistryInternalService.getSnapshot();
     }
 
     /**

@@ -76,7 +76,9 @@ class ChatModelStateTransitionTest {
         when(chatModelVerificationRepository.save(any(ChatModelVerification.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        modelRegistryInternalService = new ModelRegistryInternalServiceImpl(chatModelRepository, modelRegistryVersionService);
+        modelRegistryInternalService = new ModelRegistryInternalServiceImpl(
+                chatModelRepository, modelRegistryVersionService, embeddingIndexIdentityService);
+        ReflectionTestUtils.setField(modelRegistryInternalService, "embeddingCollectionName", "unisage_chunks");
         promotionService = new ChatModelCandidatePromotionServiceImpl(
                 chatModelRepository, chatModelVerificationRepository, embeddingIndexIdentityService, modelRegistryVersionService);
         ReflectionTestUtils.setField(promotionService, "embeddingCollectionName", "unisage_chunks");
