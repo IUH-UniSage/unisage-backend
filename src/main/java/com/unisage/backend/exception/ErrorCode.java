@@ -88,6 +88,8 @@ public enum ErrorCode {
             "Model embedding này khác danh tính với dữ liệu đã index, cần re-index trước khi dùng."),
     EMBEDDING_INDEX_IDENTITY_EXISTS(HttpStatus.CONFLICT, 2518, "Danh tính index của collection này đã được xác lập."),
     VERIFICATION_JOB_NOT_FOUND(HttpStatus.NOT_FOUND, 2519, "Job xác minh không tồn tại."),
+    REGISTRY_RESET_JOB_RUNNING(HttpStatus.CONFLICT, 2520,
+            "Còn job xác minh đang chạy với lease chưa hết hạn, thử lại sau."),
 
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),

@@ -91,4 +91,18 @@ public interface ChatModelVerificationRepository extends JpaRepository<ChatModel
             WHERE id = :id
             """, nativeQuery = true)
     boolean isLeaseCurrentlyValid(@Param("id") UUID id, @Param("token") UUID token);
+
+    /**
+     * Backs {@code POST /internal/test/registry/reset} (todo.md Task 0.5): the reset must never
+     * run out from under a verifier that's mid-attempt, so it checks the DB clock (not the
+     * caller's), same as {@link #isLeaseCurrentlyValid}. The harness fixture — not this
+     * endpoint — is responsible for waiting this out and retrying the reset.
+     */
+    @Query(value = """
+            SELECT EXISTS (
+                SELECT 1 FROM chat_model_verifications
+                WHERE status = 'RUNNING' AND lease_until > now()
+            )
+            """, nativeQuery = true)
+    boolean existsRunningWithUnexpiredLease();
 }
