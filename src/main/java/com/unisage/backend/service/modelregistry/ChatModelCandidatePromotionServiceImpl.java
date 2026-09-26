@@ -52,7 +52,12 @@ public class ChatModelCandidatePromotionServiceImpl implements ChatModelCandidat
         if (isEmbedding && rowCurrentlyActive && wouldChangeEmbeddingIdentity(row, job)) {
             job.setStatus(ChatModelVerificationStatus.REINDEX_REQUIRED);
             job.setFinishedAt(LocalDateTime.now());
-            chatModelVerificationRepository.save(job);
+            // saveAndFlush, not save: a caller composing this with another
+            // clearAutomatically bulk update in the SAME transaction (e.g.
+            // ModelRegistryIntegrationSeeder promoting then activating) would
+            // otherwise silently lose this merge when that later query clears
+            // the persistence context before this pending change is flushed.
+            chatModelVerificationRepository.saveAndFlush(job);
             // Row untouched, no version bump, no event — plan.md "Embedding identity guard".
             return Outcome.REINDEX_REQUIRED;
         }
@@ -78,13 +83,18 @@ public class ChatModelCandidatePromotionServiceImpl implements ChatModelCandidat
         if (updated == 0) {
             job.setStatus(ChatModelVerificationStatus.SUPERSEDED);
             job.setFinishedAt(LocalDateTime.now());
-            chatModelVerificationRepository.save(job);
+            // saveAndFlush - see the REINDEX_REQUIRED branch's comment above;
+            // promoteCandidate() already cleared the persistence context, so
+            // this merge needs to be flushed explicitly rather than left
+            // pending for a commit (or a later clearAutomatically query) that
+            // may or may not still be ahead of it.
+            chatModelVerificationRepository.saveAndFlush(job);
             return Outcome.SUPERSEDED;
         }
 
         job.setStatus(ChatModelVerificationStatus.SUCCEEDED);
         job.setFinishedAt(LocalDateTime.now());
-        chatModelVerificationRepository.save(job);
+        chatModelVerificationRepository.saveAndFlush(job);
         // Only bump when the row is (or becomes) part of the snapshot — an EMBEDDING row promoted
         // onto PENDING/DISABLED lands at INACTIVE (never in the snapshot), and INACTIVE -> INACTIVE
         // stays out of it too. ACTIVE -> ACTIVE (key/candidate applied to an already-live row) and
