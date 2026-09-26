@@ -69,14 +69,24 @@ class InternalNoStoreTest {
     @MethodSource("implementedEndpoints")
     void implementedEndpoint_hasNoStore(JsonNode endpoint) {
         String basePath = "/api/v1/internal/model-registry";
-        String path = endpoint.get("path").asText().replace("{collection}", "unisage_chunks");
+        String path = endpoint.get("path").asText()
+                .replace("{collection}", "unisage_chunks")
+                .replace("{id}", "00000000-0000-0000-0000-000000000000")
+                .replace("{jobId}", "00000000-0000-0000-0000-000000000000");
         String url = "http://localhost:" + port + basePath + path;
         HttpMethod method = HttpMethod.valueOf(endpoint.get("method").asText());
 
         var headers = new org.springframework.http.HttpHeaders();
         headers.add("X-Internal-Secret", "unisage-internal-secret-key-2026");
+        // Body only for methods that can carry one — enough for POST/PUT endpoints to reach
+        // validation/handling and produce a response (even a 4xx one), which still must carry
+        // no-store; this test only checks headers, never the status code.
+        Object body = (method == HttpMethod.POST || method == HttpMethod.PUT) ? "{}" : null;
+        if (body != null) {
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+        }
         ResponseEntity<String> response = restTemplate.exchange(
-                url, method, new org.springframework.http.HttpEntity<>(headers), String.class);
+                url, method, new org.springframework.http.HttpEntity<>(body, headers), String.class);
 
         assertThat(response.getHeaders().getCacheControl()).contains("no-store");
         assertThat(response.getHeaders().getPragma()).isEqualTo("no-cache");
