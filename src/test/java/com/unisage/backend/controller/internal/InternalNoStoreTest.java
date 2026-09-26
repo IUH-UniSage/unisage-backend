@@ -8,6 +8,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -21,6 +22,13 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.unisage.backend.entity.ChatModel;
+import com.unisage.backend.entity.ChatModelVerification;
+import com.unisage.backend.entity.enums.ChatModelPurpose;
+import com.unisage.backend.entity.enums.ChatModelStatus;
+import com.unisage.backend.entity.enums.ChatModelVerificationStatus;
+import com.unisage.backend.repository.ChatModelRepository;
+import com.unisage.backend.repository.ChatModelVerificationRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -51,6 +59,11 @@ class InternalNoStoreTest {
     private int port;
 
     private final TestRestTemplate restTemplate = new TestRestTemplate();
+
+    @Autowired
+    private ChatModelRepository chatModelRepository;
+    @Autowired
+    private ChatModelVerificationRepository chatModelVerificationRepository;
 
     static List<JsonNode> implementedEndpoints() throws IOException {
         try (InputStream in = new java.io.FileInputStream("contracts/internal-endpoints.json")) {
@@ -88,6 +101,50 @@ class InternalNoStoreTest {
         ResponseEntity<String> response = restTemplate.exchange(
                 url, method, new org.springframework.http.HttpEntity<>(body, headers), String.class);
 
+        assertThat(response.getHeaders().getCacheControl()).contains("no-store");
+        assertThat(response.getHeaders().getPragma()).isEqualTo("no-cache");
+    }
+
+    /**
+     * R6.1/R8.5: claim is the endpoint most likely to regress on this, since it's the one where a
+     * naive implementation might forget the header on the "actually has a body" path after only
+     * testing against an empty queue — the parameterized test above hits claim with nothing to
+     * claim (empty `[]` array), so this seeds a real QUEUED job first.
+     */
+    @Test
+    void claimResponse_withActualJob_stillHasNoStore() {
+        ChatModel model = ChatModel.builder()
+                .modelPurpose(ChatModelPurpose.CHAT)
+                .status(ChatModelStatus.ACTIVE)
+                .revision(1)
+                .candidateGeneration(1)
+                .llmProvider("openai")
+                .llmModelName("gpt-4o-mini")
+                .apiBaseUrl("https://api.openai.com/v1")
+                .build();
+        model.setIsActive(true);
+        model = chatModelRepository.save(model);
+        chatModelVerificationRepository.save(ChatModelVerification.builder()
+                .chatModel(model)
+                .status(ChatModelVerificationStatus.QUEUED)
+                .candidateGeneration(1)
+                .baseRevision(1)
+                .candidateApiKeyEncrypted("sk-candidate")
+                .attempt(0)
+                .maxAttempts(3)
+                .build());
+
+        String url = "http://localhost:" + port + "/api/v1/internal/model-registry/verifications/claim?limit=5";
+        var headers = new org.springframework.http.HttpHeaders();
+        headers.add("X-Internal-Secret", "unisage-internal-secret-key-2026");
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                url, HttpMethod.POST, new org.springframework.http.HttpEntity<>("{}", headers), String.class);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getBody()).isNotEqualTo("[]"); // sanity: this run actually returned a job
+        assertThat(response.getBody()).contains("sk-candidate");
         assertThat(response.getHeaders().getCacheControl()).contains("no-store");
         assertThat(response.getHeaders().getPragma()).isEqualTo("no-cache");
     }
