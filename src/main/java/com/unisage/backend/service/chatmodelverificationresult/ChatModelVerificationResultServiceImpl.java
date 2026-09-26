@@ -1,4 +1,4 @@
-package com.unisage.backend.service.modelregistry;
+package com.unisage.backend.service.chatmodelverificationresult;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -17,7 +17,8 @@ import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
 import com.unisage.backend.repository.ChatModelVerificationRepository;
-import com.unisage.backend.service.modelregistry.ChatModelCandidatePromotionService.Outcome;
+import com.unisage.backend.service.chatmodelcandidatepromotion.ChatModelCandidatePromotionService;
+import com.unisage.backend.service.chatmodelcandidatepromotion.ChatModelCandidatePromotionService.Outcome;
 import com.unisage.backend.utils.SecretRedactor;
 
 import lombok.RequiredArgsConstructor;
