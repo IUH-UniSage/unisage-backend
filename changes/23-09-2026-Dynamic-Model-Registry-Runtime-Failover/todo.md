@@ -1279,16 +1279,35 @@ down thì job nằm chờ, không mất.
 hưởng snapshot đều bump version và phát event.
 
 **Acceptance criteria:**
-- [ ] Danh sách đường ghi được liệt kê và có test: status (SA + health PERMANENT +
+- [x] Danh sách đường ghi được liệt kê và có test: status (SA + health PERMANENT +
       verify OK áp ứng viên), priority, delete/recover. Tạo job ứng viên
-      (create/update credential) **không** bump version vì snapshot chưa đổi
-- [ ] Health TRANSIENT, thay đổi `maxRpm`... không ảnh hưởng routing thì không bump
-      (nếu `maxRpm` được Python dùng thì bump — chốt khi viết)
-- [ ] Event `verification-requested` phát sau commit khi có job mới (Task 6)
+      (create/update credential) **không** bump version vì snapshot chưa đổi.
+      Audit tìm thêm 1 bug: `ChatModelCandidatePromotionServiceImpl.promote()` bump
+      không điều kiện trên mọi `PROMOTED`, kể cả khi row promote xong vẫn ở ngoài
+      snapshot (EMBEDDING → INACTIVE, INACTIVE → INACTIVE) — đã sửa: chỉ bump khi
+      `newStatus == ACTIVE`
+- [x] Health TRANSIENT, thay đổi `maxRpm` không bump — đã kiểm
+      `unisage-agent/app/core/model_registry.py` parse `maxRpm` vào dataclass nhưng
+      không route/model_router nào đọc lại field này (chưa có Task 9/10) → **chốt:
+      không bump trên maxRpm-only edit**, chỉ `priority` (Python sort theo priority
+      trong purpose). `ChatModelServiceImpl.update()` trước đây bump cả trên
+      maxRpm-only — đã sửa
+- [x] Event `verification-requested` phát sau commit khi có job mới (Task 6) — Task 6
+      chưa wire; thêm `VerificationRequestedEvent` +
+      `VerificationRequestedEventPublisher` (kênh riêng
+      `model-registry:verification-requested`), publish ở `create`/`update`
+      (khi `credentialChanged`)/`verify`
 
 **Verification:**
-- [ ] Tests pass: `./mvnw test` — mỗi đường ghi bump đúng 1 lần, rollback không publish
-- [ ] Manual check: `redis-cli SUBSCRIBE model-registry:updates` khi đổi priority
+- [x] Tests pass: `./mvnw test` — mỗi đường ghi bump đúng 1 lần, rollback không publish
+      (`ChatModelWritePathVersionBumpTest` mới — Testcontainers Postgres thật, không
+      mock — cho updatePriority/updateStatus activate+deactivate/delete; các đường
+      còn lại kiểm bằng Mockito trong `ChatModelStateTransitionTest`/
+      `ChatModelRotationTest`/`EmbeddingIdentityGuardTest`/`VerificationFencingTest`)
+- [ ] Manual check: `redis-cli SUBSCRIBE model-registry:updates` khi đổi priority —
+      chưa làm thủ công (môi trường agent không có Redis chạy sẵn để verify tay);
+      cơ chế đã được chứng minh tự động qua `ModelRegistryVersionServiceTest` (Task
+      0.4) + `ChatModelWritePathVersionBumpTest` (spy publisher, real Postgres tx)
 
 **Dependencies:** Task 0.4, Task 3, Task 6
 
