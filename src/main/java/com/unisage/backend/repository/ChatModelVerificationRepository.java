@@ -4,7 +4,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -51,4 +53,30 @@ public interface ChatModelVerificationRepository extends JpaRepository<ChatModel
             + "com.unisage.backend.entity.enums.ChatModelVerificationStatus.QUEUED, "
             + "com.unisage.backend.entity.enums.ChatModelVerificationStatus.RUNNING)")
     int supersedeOpenJobs(@Param("chatModelId") UUID chatModelId);
+
+    /**
+     * Locks a single job row for the duration of the transaction — used by the result endpoint
+     * (Task 6), always called AFTER the corresponding {@code ChatModel} row has already been
+     * locked via {@link ChatModelRepository#findByIdForUpdate} (plan.md "Verification lifecycle"
+     * step 4.1 — model, then job, fixed order to avoid deadlock with staged rotation).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT v FROM ChatModelVerification v WHERE v.id = :id")
+    Optional<ChatModelVerification> findByIdForUpdate(@Param("id") UUID id);
+
+    /**
+     * The DB-clock half of the result endpoint's lease check (plan.md R3.1: "Lease phải kiểm cả
+     * thời hạn" using {@code now()}, never the JVM/Python clock). Read against the row already
+     * locked by {@link #findByIdForUpdate} in the same transaction — this does not re-lock, it
+     * only evaluates {@code lease_until > now()} at the database.
+     *
+     * @return {@code true} if the job is still {@code RUNNING} with this exact lease token and an
+     *         unexpired lease — the full condition from plan.md step 4.2, evaluated in one round trip.
+     */
+    @Query(value = """
+            SELECT status = 'RUNNING' AND lease_token = :token AND lease_until > now()
+            FROM chat_model_verifications
+            WHERE id = :id
+            """, nativeQuery = true)
+    boolean isLeaseCurrentlyValid(@Param("id") UUID id, @Param("token") UUID token);
 }
