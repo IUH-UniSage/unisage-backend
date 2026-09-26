@@ -191,7 +191,15 @@ public class ChatModelServiceImpl implements ChatModelService {
             applicationEventPublisher.publishEvent(new VerificationRequestedEvent(savedJob.getId()));
         }
 
-        chatModelRepository.save(model);
+        // Reassign to save()'s return value, not the pre-existing `model` reference: when
+        // credentialChanged, supersedeOpenJobs() above (@Modifying(clearAutomatically = true))
+        // already cleared the persistence context, so `model` is now detached. save() on a
+        // detached entity with an id merges it into a NEW managed instance instead of updating
+        // `model` in place - mapToResponse() below lazy-loads model.getUpdatedBy().getFullName(),
+        // which throws LazyInitializationException on the stale detached reference once
+        // updatedBy is non-null (i.e. from this row's second update onward - the very first
+        // update was masked because updatedBy still read null from the pre-detach load).
+        model = chatModelRepository.save(model);
         if (snapshotAffectingChange) {
             modelRegistryVersionService.bump();
         }
