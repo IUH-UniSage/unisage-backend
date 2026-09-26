@@ -1,7 +1,7 @@
 {
   "basePath": "/api/v1/internal/model-registry",
   "endpoints": [
-    { "method": "GET", "path": "/snapshot", "returnsSecret": true, "implemented": false },
+    { "method": "GET", "path": "/snapshot", "returnsSecret": true, "implemented": true },
     { "method": "GET", "path": "/version", "returnsSecret": false, "implemented": true },
     { "method": "POST", "path": "/credentials/{id}/health", "returnsSecret": false, "implemented": true },
     { "method": "POST", "path": "/verifications/claim", "returnsSecret": true, "implemented": false },
