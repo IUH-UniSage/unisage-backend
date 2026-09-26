@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.unisage.backend.service.modelregistry.ModelRegistryTestResetService;
+import com.unisage.backend.service.modelregistrytestreset.ModelRegistryTestResetService;
 
 import lombok.RequiredArgsConstructor;
 

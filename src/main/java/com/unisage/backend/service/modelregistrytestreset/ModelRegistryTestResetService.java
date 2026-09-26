@@ -1,4 +1,4 @@
-package com.unisage.backend.service.modelregistry;
+package com.unisage.backend.service.modelregistrytestreset;
 
 /**
  * Backs {@code POST /internal/test/registry/reset} (todo.md Task 0.5) — only ever registered

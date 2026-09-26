@@ -19,7 +19,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import com.unisage.backend.config.ModelRegistryIntegrationSeeder;
-import com.unisage.backend.service.modelregistry.ModelRegistryTestResetService;
+import com.unisage.backend.service.modelregistrytestreset.ModelRegistryTestResetService;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

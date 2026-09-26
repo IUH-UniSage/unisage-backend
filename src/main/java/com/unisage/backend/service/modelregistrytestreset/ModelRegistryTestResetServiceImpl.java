@@ -1,4 +1,4 @@
-package com.unisage.backend.service.modelregistry;
+package com.unisage.backend.service.modelregistrytestreset;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
