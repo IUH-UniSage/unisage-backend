@@ -1,6 +1,7 @@
 package com.unisage.backend.repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import java.util.Optional;
@@ -136,6 +137,16 @@ public interface ChatModelRepository extends JpaRepository<ChatModel, UUID> {
             @Param("occurredAt") LocalDateTime occurredAt,
             @Param("errorCode") String errorCode,
             @Param("message") String message);
+
+    /**
+     * Backs the internal snapshot endpoint (plan.md "Internal API contract" endpoint #1): only rows
+     * routing actually uses ({@code is_active = true AND status = 'ACTIVE'}), ordered so the service
+     * layer can group by purpose and keep priority order within each group without re-sorting.
+     */
+    @Query("SELECT c FROM ChatModel c WHERE c.isActive = true "
+            + "AND c.status = com.unisage.backend.entity.enums.ChatModelStatus.ACTIVE "
+            + "ORDER BY c.modelPurpose ASC, c.priority ASC")
+    List<ChatModel> findAllActiveForSnapshot();
 
     /**
      * Compare-and-set circuit breaker: only disables the row if it is still {@code ACTIVE} at the
