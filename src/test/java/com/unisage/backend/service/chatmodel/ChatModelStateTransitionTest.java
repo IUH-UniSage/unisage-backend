@@ -56,6 +56,7 @@ class ChatModelStateTransitionTest {
     private EmbeddingIndexIdentityService embeddingIndexIdentityService;
     private ChatModelServiceImpl chatModelService;
     private ModelRegistryVersionService modelRegistryVersionService;
+    private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
     private ModelRegistryInternalServiceImpl modelRegistryInternalService;
 
     @BeforeEach
@@ -64,6 +65,7 @@ class ChatModelStateTransitionTest {
         chatModelVerificationRepository = mock(ChatModelVerificationRepository.class);
         embeddingIndexIdentityService = mock(EmbeddingIndexIdentityService.class);
         modelRegistryVersionService = mock(ModelRegistryVersionService.class);
+        applicationEventPublisher = mock(org.springframework.context.ApplicationEventPublisher.class);
         SsrfGuard ssrfGuard = new SsrfGuard();
         ReflectionTestUtils.setField(ssrfGuard, "allowlistRaw", "localhost");
         ReflectionTestUtils.setField(ssrfGuard, "dnsResolver", (SsrfGuard.DnsResolver) host -> {
@@ -74,7 +76,7 @@ class ChatModelStateTransitionTest {
         });
         chatModelService = new ChatModelServiceImpl(
                 chatModelRepository, chatModelVerificationRepository, ssrfGuard,
-                embeddingIndexIdentityService, modelRegistryVersionService);
+                embeddingIndexIdentityService, modelRegistryVersionService, applicationEventPublisher);
         // @Value fields aren't populated outside a Spring context — match the property's own default.
         ReflectionTestUtils.setField(chatModelService, "embeddingCollectionName", "unisage_chunks");
         when(chatModelRepository.save(any(ChatModel.class))).thenAnswer(invocation -> invocation.getArgument(0));

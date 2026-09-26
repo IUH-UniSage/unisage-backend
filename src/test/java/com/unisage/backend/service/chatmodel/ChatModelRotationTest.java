@@ -55,6 +55,7 @@ class ChatModelRotationTest {
     private ChatModelRepository chatModelRepository;
     private ChatModelVerificationRepository chatModelVerificationRepository;
     private ModelRegistryVersionService modelRegistryVersionService;
+    private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
     private ChatModelServiceImpl chatModelService;
     private ChatModelCandidatePromotionService promotionService;
     private ChatModelVerificationResultService resultService;
@@ -64,9 +65,11 @@ class ChatModelRotationTest {
         chatModelRepository = mock(ChatModelRepository.class);
         chatModelVerificationRepository = mock(ChatModelVerificationRepository.class);
         modelRegistryVersionService = mock(ModelRegistryVersionService.class);
+        applicationEventPublisher = mock(org.springframework.context.ApplicationEventPublisher.class);
         chatModelService = new ChatModelServiceImpl(
                 chatModelRepository, chatModelVerificationRepository, new SsrfGuard(),
-                mock(EmbeddingIndexIdentityService.class), modelRegistryVersionService);
+                mock(EmbeddingIndexIdentityService.class), modelRegistryVersionService,
+                applicationEventPublisher);
         promotionService = new ChatModelCandidatePromotionServiceImpl(
                 chatModelRepository, chatModelVerificationRepository,
                 mock(EmbeddingIndexIdentityService.class), modelRegistryVersionService);

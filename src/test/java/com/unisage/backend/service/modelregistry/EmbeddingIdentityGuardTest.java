@@ -50,6 +50,7 @@ class EmbeddingIdentityGuardTest {
     private ChatModelVerificationRepository chatModelVerificationRepository;
     private EmbeddingIndexIdentityService embeddingIndexIdentityService;
     private ModelRegistryVersionService modelRegistryVersionService;
+    private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
     private ChatModelServiceImpl chatModelService;
     private ChatModelCandidatePromotionService promotionService;
 
@@ -59,9 +60,10 @@ class EmbeddingIdentityGuardTest {
         chatModelVerificationRepository = mock(ChatModelVerificationRepository.class);
         embeddingIndexIdentityService = mock(EmbeddingIndexIdentityService.class);
         modelRegistryVersionService = mock(ModelRegistryVersionService.class);
+        applicationEventPublisher = mock(org.springframework.context.ApplicationEventPublisher.class);
         chatModelService = new ChatModelServiceImpl(
                 chatModelRepository, chatModelVerificationRepository, new SsrfGuard(),
-                embeddingIndexIdentityService, modelRegistryVersionService);
+                embeddingIndexIdentityService, modelRegistryVersionService, applicationEventPublisher);
         promotionService = new ChatModelCandidatePromotionServiceImpl(
                 chatModelRepository, chatModelVerificationRepository,
                 embeddingIndexIdentityService, modelRegistryVersionService);

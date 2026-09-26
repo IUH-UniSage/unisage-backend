@@ -56,7 +56,8 @@ class ChatModelServiceImplTest {
                 chatModelVerificationRepository,
                 testSsrfGuard(allowlist),
                 mock(EmbeddingIndexIdentityService.class),
-                mock(ModelRegistryVersionService.class));
+                mock(ModelRegistryVersionService.class),
+                mock(org.springframework.context.ApplicationEventPublisher.class));
     }
 
     @BeforeEach

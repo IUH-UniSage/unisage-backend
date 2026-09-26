@@ -18,10 +18,12 @@ import com.unisage.backend.repository.ChatModelRepository;
 import com.unisage.backend.repository.ChatModelVerificationRepository;
 import com.unisage.backend.service.modelregistry.EmbeddingIndexIdentityService;
 import com.unisage.backend.service.modelregistry.ModelRegistryVersionService;
+import com.unisage.backend.service.modelregistry.VerificationRequestedEvent;
 import com.unisage.backend.utils.EmbeddingFingerprintMatcher;
 import com.unisage.backend.utils.SsrfGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -53,6 +55,7 @@ public class ChatModelServiceImpl implements ChatModelService {
     private final SsrfGuard ssrfGuard;
     private final EmbeddingIndexIdentityService embeddingIndexIdentityService;
     private final ModelRegistryVersionService modelRegistryVersionService;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     /** Single-collection reality of the current system (plan.md "Embedding identity guard"). */
     @Value("${model-registry.embedding-collection-name:unisage_chunks}")
@@ -83,7 +86,8 @@ public class ChatModelServiceImpl implements ChatModelService {
         // plan.md "Credential rotation": a freshly-created row always starts with a QUEUED job
         // for its own (candidateGeneration=1, baseRevision=0) values — promote is what first
         // takes it out of PENDING.
-        chatModelVerificationRepository.save(candidateJobFor(chatModel, 1, 0));
+        ChatModelVerification job = chatModelVerificationRepository.save(candidateJobFor(chatModel, 1, 0));
+        applicationEventPublisher.publishEvent(new VerificationRequestedEvent(job.getId()));
 
         return mapToResponse(chatModel);
     }
@@ -130,8 +134,12 @@ public class ChatModelServiceImpl implements ChatModelService {
 
         // ── Non-credential fields apply immediately, no verify needed (plan.md footnote: only
         // apiKey/apiBaseUrl/llmModelName/llmProvider/modelSourceRef are staged). ────────────────
-        boolean snapshotAffectingChange = !Objects.equals(model.getPriority(), request.priority())
-                || !Objects.equals(model.getMaxRpm(), request.maxRpm());
+        // Only `priority` bumps the registry version here: Python sorts credentials by priority
+        // within a purpose, so a priority change can change routing order. `maxRpm` is parsed by
+        // unisage-agent (app/core/model_registry.py) but nothing there reads it yet for
+        // routing/rate-limiting (Task 9/10 territory, not built) — bumping on it today would only
+        // be reload churn with no behavioral effect. Revisit this once Task 9/10 lands.
+        boolean snapshotAffectingChange = !Objects.equals(model.getPriority(), request.priority());
         model.setSourceType(request.sourceType());
         model.setMaxRpm(request.maxRpm());
         model.setPriority(request.priority());
@@ -173,7 +181,8 @@ public class ChatModelServiceImpl implements ChatModelService {
                     .attempt(0)
                     .maxAttempts(DEFAULT_MAX_ATTEMPTS)
                     .build();
-            chatModelVerificationRepository.save(job);
+            ChatModelVerification savedJob = chatModelVerificationRepository.save(job);
+            applicationEventPublisher.publishEvent(new VerificationRequestedEvent(savedJob.getId()));
         }
 
         chatModelRepository.save(model);
@@ -426,7 +435,9 @@ public class ChatModelServiceImpl implements ChatModelService {
         model.setCandidateGeneration(newGeneration);
         chatModelRepository.save(model);
 
-        chatModelVerificationRepository.save(candidateJobFor(model, newGeneration, model.getRevision()));
+        ChatModelVerification job = chatModelVerificationRepository.save(
+                candidateJobFor(model, newGeneration, model.getRevision()));
+        applicationEventPublisher.publishEvent(new VerificationRequestedEvent(job.getId()));
 
         return mapToResponse(model);
     }
