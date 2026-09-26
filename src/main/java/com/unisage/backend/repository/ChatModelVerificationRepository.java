@@ -1,9 +1,11 @@
 package com.unisage.backend.repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -31,6 +33,22 @@ public interface ChatModelVerificationRepository extends JpaRepository<ChatModel
             """, nativeQuery = true)
     List<UUID> findClaimableIds(@Param("limit") int limit);
 
-    /** Open jobs (QUEUED/RUNNING) for a credential — used by Task 6 to supersede/cancel on edit/delete. */
+    /** Open jobs (QUEUED/RUNNING) for a credential — used by Task 3/6 to supersede/cancel on edit/delete. */
     List<ChatModelVerification> findByChatModelIdAndStatusIn(UUID chatModelId, List<ChatModelVerificationStatus> statuses);
+
+    /** Most recent job for a credential, regardless of status — backs the SA response's {@code latestVerification}. */
+    Optional<ChatModelVerification> findFirstByChatModelIdOrderByCreatedAtDesc(UUID chatModelId);
+
+    /**
+     * Supersedes every still-open job for a credential in one statement (plan.md "Credential
+     * rotation" — editing/re-verifying while a candidate is pending must not leave the old job
+     * claimable). Called immediately before a new {@code QUEUED} job is inserted, same transaction.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE ChatModelVerification v SET v.status = com.unisage.backend.entity.enums.ChatModelVerificationStatus.SUPERSEDED, "
+            + "v.finishedAt = CURRENT_TIMESTAMP "
+            + "WHERE v.chatModel.id = :chatModelId AND v.status IN ("
+            + "com.unisage.backend.entity.enums.ChatModelVerificationStatus.QUEUED, "
+            + "com.unisage.backend.entity.enums.ChatModelVerificationStatus.RUNNING)")
+    int supersedeOpenJobs(@Param("chatModelId") UUID chatModelId);
 }
