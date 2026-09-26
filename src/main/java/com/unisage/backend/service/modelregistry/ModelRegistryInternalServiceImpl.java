@@ -12,6 +12,7 @@ import com.unisage.backend.dto.response.internal.CredentialHealthReportResponse;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
+import com.unisage.backend.utils.SecretRedactor;
 
 import lombok.RequiredArgsConstructor;
 
@@ -36,9 +37,12 @@ public class ModelRegistryInternalServiceImpl implements ModelRegistryInternalSe
         }
 
         LocalDateTime occurredAt = request.occurredAt().withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
+        // Redact even though unisage-agent already redacts its side — defense in depth, plan.md
+        // "Secret redaction". SecretRedactor.redact also truncates to 500 chars, matching the column.
+        String redactedMessage = request.message() != null ? SecretRedactor.redact(request.message()) : null;
 
         int applied = chatModelRepository.recordHealthError(
-                chatModelId, request.credentialRevision(), occurredAt, request.errorCode(), request.message());
+                chatModelId, request.credentialRevision(), occurredAt, request.errorCode(), redactedMessage);
         if (applied == 0) {
             // Stale revision — report ignored entirely, per plan.md R2.6.
             return new CredentialHealthReportResponse(false);
