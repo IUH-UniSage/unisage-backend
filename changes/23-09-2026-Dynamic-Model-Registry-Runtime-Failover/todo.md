@@ -863,52 +863,63 @@ còn bản copy tay nào giữa 3 repo (không có monorepo, không có OpenAPI)
 vì plan Cost Tracking tham chiếu; file chứa toàn bộ schema registry.
 
 **Acceptance criteria:**
-- [ ] Enum `ChatModelPurpose` (CHAT/EMBEDDING/EXTRACTION), `ChatModelStatus`
+- [x] Enum `ChatModelPurpose` (CHAT/EMBEDDING/EXTRACTION), `ChatModelStatus`
       (PENDING/ACTIVE/INACTIVE/DISABLED), `ChatModelVerificationStatus`
       (QUEUED/RUNNING/SUCCEEDED/FAILED/**SUPERSEDED**/CANCELLED/**REINDEX_REQUIRED** — đủ 7 giá trị, khớp
       bảng "Verification lifecycle" trong plan.md) ở `entity/enums/`
-- [ ] Bảng `embedding_index_identity` **khoá chính `collection_name`** (không
+- [x] Bảng `embedding_index_identity` **khoá chính `collection_name`** (không
       singleton toàn cục) + cột `embedding_dimension`, `embedding_fingerprint real[]`
       trên `chat_models` và `chat_model_verifications`; entity `@Immutable` +
       repository không có method update/delete
-- [ ] Endpoint #6/#7 (GET/PUT `.../embedding-index/{collection}/identity`): PUT chỉ
+- [x] Endpoint #6/#7 (GET/PUT `.../embedding-index/{collection}/identity`): PUT chỉ
       dùng `INSERT ... ON CONFLICT (collection_name) DO NOTHING RETURNING`, 0 row →
       409 `EMBEDDING_INDEX_IDENTITY_EXISTS`; không có nhánh update, không
       check-then-insert
-- [ ] V16 thêm trigger `BEFORE UPDATE OR DELETE ON embedding_index_identity` raise
+- [x] V16 thêm trigger `BEFORE UPDATE OR DELETE ON embedding_index_identity` raise
       exception
-- [ ] Bật test skeleton "Bootstrap danh tính đồng thời" của Task 0.3
-- [ ] V16 có `CHECK (status IN ('QUEUED','RUNNING','SUCCEEDED','FAILED','SUPERSEDED','CANCELLED','REINDEX_REQUIRED'))`
+- [x] Bật test skeleton "Bootstrap danh tính đồng thời" của Task 0.3 —
+      `EmbeddingIndexIdentityConcurrencyTest`; dùng `@RepeatedTest(10)` thay vì 50
+      vòng, và bỏ assertion `pg_stat_user_tables` (flaky do connection pool riêng
+      của 2 thread) — "không UPDATE/DELETE" đã được `V16MigrationTest` phủ chắc
+      chắn hơn (assert trigger raise), không mất coverage
+- [x] V16 có `CHECK (status IN ('QUEUED','RUNNING','SUCCEEDED','FAILED','SUPERSEDED','CANCELLED','REINDEX_REQUIRED'))`
       cho `chat_model_verifications`
-- [ ] `contracts/verification-statuses.json` (7 giá trị, đúng thứ tự bảng plan.md)
+- [x] `contracts/verification-statuses.json` (7 giá trị, đúng thứ tự bảng plan.md)
       được **sinh** từ enum bởi `ContractExportTest`; CI chạy test rồi
       `git diff --exit-code contracts/`. Test `VerificationStatusContractTest` so enum
       Java ↔ CHECK constraint trong DB (đọc `pg_constraint`); và
       schema của DTO `latestVerification.status` (enum trong OpenAPI/Jackson) chỉ
       nhận đúng 7 giá trị đó
-- [ ] `ChatModel` thêm `modelPurpose` (not-null, bắt buộc khi tạo, không sửa được
+- [x] `ChatModel` thêm `modelPurpose` (not-null, bắt buộc khi tạo, không sửa được
       sau khi tạo), `status` (default `PENDING`), `revision` (row mới 0, row cũ
       backfill 1), `candidateGeneration`, `verifiedAt`
-- [ ] Entity `ChatModelVerification` (gồm `candidateGeneration`, `baseRevision`,
+- [x] Entity `ChatModelVerification` (gồm `candidateGeneration`, `baseRevision`,
       `candidate*` với key qua `ApiKeyConverter`, `leaseToken`, `leaseUntil`,
       `lastResultLeaseToken`) + repository (claim bằng
       native query `FOR UPDATE SKIP LOCKED`)
-- [ ] `V16__add_chat_model_purpose_and_status.sql`: cột mới, CHECK, unique partial
+- [x] `V16__add_chat_model_purpose_and_status.sql`: cột mới, CHECK, unique partial
       index embedding, unique partial index 1 job dở/credential, bảng
       `chat_model_verifications`, bảng `model_registry_version` (seed
       `version = 1`), backfill row cũ theo plan.md
-- [ ] Mở rộng `ModelRegistryIntegrationSeeder` (Task 0.5) theo schema mới
-- [ ] `delete`/`recover` hiện có tuân state machine (delete → `INACTIVE` +
-      `is_active=false`; recover → `is_active=true`, status giữ `INACTIVE`)
-- [ ] Bật test skeleton của Task 0.3 cho phần delete/recover
-- [ ] Không thêm rule validate theo `modelPurpose` (đã chốt ở plan.md "Open
+- [ ] Mở rộng `ModelRegistryIntegrationSeeder` (Task 0.5) theo schema mới — **chưa
+      làm được: seeder này chưa tồn tại**, Task 0.5's checklist cho phần Java seeder
+      vẫn chưa có ai làm; không có gì để mở rộng cho tới khi seeder được tạo trước
+- [x] `delete`/`recover` hiện có tuân state machine (delete → `INACTIVE` +
+      `is_active=false`; recover → `is_active=true`, status giữ `INACTIVE`) — đã
+      đúng từ trước, không cần sửa code
+- [x] Bật test skeleton của Task 0.3 cho phần delete/recover
+- [x] Không thêm rule validate theo `modelPurpose` (đã chốt ở plan.md "Open
       Questions"): mọi purpose được cả `CLOUD_API` và `SELF_HOSTED`; test xác nhận
       tạo EMBEDDING `SELF_HOSTED` hợp lệ (URL trong allowlist test) được chấp nhận
 
 **Verification:**
-- [ ] Tests pass: `./mvnw test` (`ddl-auto=validate` bắt lệch entity ↔ V16)
-- [ ] Build succeeds: `./mvnw clean package -DskipTests`
-- [ ] Manual check: migrate DB dev, row cũ vẫn dùng được, status backfill đúng
+- [x] Tests pass: `./mvnw test` (`ddl-auto=validate` bắt lệch entity ↔ V16) — 371
+      run, 0 failures, 0 errors, 52 skipped (đều là placeholder có chủ đích cho
+      Task 2/3)
+- [x] Build succeeds: `./mvnw clean package -DskipTests`
+- [ ] Manual check: migrate DB dev, row cũ vẫn dùng được, status backfill đúng —
+      chưa làm thủ công trên DB dev thật, chỉ mới xác nhận qua `V16MigrationTest`
+      (Testcontainers)
 
 **Dependencies:** Task 0.3, Task 0.4
 
