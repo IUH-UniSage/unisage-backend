@@ -69,7 +69,8 @@ class InternalNoStoreTest {
     @MethodSource("implementedEndpoints")
     void implementedEndpoint_hasNoStore(JsonNode endpoint) {
         String basePath = "/api/v1/internal/model-registry";
-        String url = "http://localhost:" + port + basePath + endpoint.get("path").asText();
+        String path = endpoint.get("path").asText().replace("{collection}", "unisage_chunks");
+        String url = "http://localhost:" + port + basePath + path;
         HttpMethod method = HttpMethod.valueOf(endpoint.get("method").asText());
 
         var headers = new org.springframework.http.HttpHeaders();
