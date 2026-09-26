@@ -1,13 +1,19 @@
 package com.unisage.backend.controller;
 
+import com.unisage.backend.dto.request.ChatModelPriorityUpdateRequest;
 import com.unisage.backend.dto.request.ChatModelRequest;
+import com.unisage.backend.dto.request.ChatModelStatusUpdateRequest;
+import com.unisage.backend.dto.request.ChatModelUpdateRequest;
 import com.unisage.backend.dto.response.ApiResponse;
 import com.unisage.backend.dto.response.ChatModelResponse;
 import com.unisage.backend.dto.response.PageResponse;
+import com.unisage.backend.entity.enums.ChatModelPurpose;
+import com.unisage.backend.entity.enums.ChatModelStatus;
 import com.unisage.backend.service.chatmodel.ChatModelService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -35,14 +41,36 @@ public class ChatModelController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<PageResponse<List<ChatModelResponse>>>> getAll(Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(chatModelService.getAll(pageable)));
+    public ResponseEntity<ApiResponse<PageResponse<List<ChatModelResponse>>>> getAll(
+            @RequestParam(required = false) ChatModelPurpose modelPurpose,
+            @RequestParam(required = false) ChatModelStatus status,
+            @PageableDefault(sort = "priority") Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(chatModelService.getAll(modelPurpose, status, pageable)));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<ChatModelResponse>> update(
-            @PathVariable UUID id, @Valid @RequestBody ChatModelRequest request) {
+            @PathVariable UUID id, @Valid @RequestBody ChatModelUpdateRequest request) {
         return ResponseEntity.ok(ApiResponse.success(chatModelService.update(id, request)));
+    }
+
+    /** plan.md "State machine" — only ACTIVE/INACTIVE are SA-triggerable; every other transition happens via verify/promote. */
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<ApiResponse<ChatModelResponse>> updateStatus(
+            @PathVariable UUID id, @Valid @RequestBody ChatModelStatusUpdateRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(chatModelService.updateStatus(id, request.status())));
+    }
+
+    @PatchMapping("/{id}/priority")
+    public ResponseEntity<ApiResponse<ChatModelResponse>> updatePriority(
+            @PathVariable UUID id, @Valid @RequestBody ChatModelPriorityUpdateRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(chatModelService.updatePriority(id, request.priority())));
+    }
+
+    /** Creates a new verification job for the row's current candidate; supersedes any job still in flight. */
+    @PostMapping("/{id}/verify")
+    public ResponseEntity<ApiResponse<ChatModelResponse>> verify(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success(chatModelService.verify(id)));
     }
 
     @DeleteMapping("/{id}")
