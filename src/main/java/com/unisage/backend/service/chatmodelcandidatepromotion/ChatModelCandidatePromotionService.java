@@ -1,4 +1,4 @@
-package com.unisage.backend.service.modelregistry;
+package com.unisage.backend.service.chatmodelcandidatepromotion;
 
 import com.unisage.backend.entity.ChatModelVerification;
 

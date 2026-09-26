@@ -1,4 +1,4 @@
-package com.unisage.backend.service.modelregistry;
+package com.unisage.backend.service.chatmodelcandidatepromotion;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -10,6 +10,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.unisage.backend.dto.response.internal.InternalEmbeddingIndexIdentityResponse;
+import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityService;
+import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
 import com.unisage.backend.entity.ChatModel;
 import com.unisage.backend.entity.ChatModelVerification;
 import com.unisage.backend.entity.enums.ChatModelPurpose;
