@@ -85,7 +85,13 @@ public class ChatModelCandidatePromotionServiceImpl implements ChatModelCandidat
         job.setStatus(ChatModelVerificationStatus.SUCCEEDED);
         job.setFinishedAt(LocalDateTime.now());
         chatModelVerificationRepository.save(job);
-        modelRegistryVersionService.bump();
+        // Only bump when the row is (or becomes) part of the snapshot — an EMBEDDING row promoted
+        // onto PENDING/DISABLED lands at INACTIVE (never in the snapshot), and INACTIVE -> INACTIVE
+        // stays out of it too. ACTIVE -> ACTIVE (key/candidate applied to an already-live row) and
+        // PENDING/DISABLED -> ACTIVE (CHAT/EXTRACTION) both change what Python would read, so bump.
+        if (newStatus == ChatModelStatus.ACTIVE) {
+            modelRegistryVersionService.bump();
+        }
         return Outcome.PROMOTED;
     }
 
