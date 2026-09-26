@@ -124,4 +124,16 @@ public class ChatModel extends BaseEntity {
 
     @Column(name = "last_error_at")
     private LocalDateTime lastErrorAt;
+
+    /** Provider/verifier-supplied error code from the last health report, if any. */
+    @Column(name = "last_error_code")
+    private String lastErrorCode;
+
+    /**
+     * Human-readable detail from the last health report — always redacted (see
+     * {@link com.unisage.backend.utils.SecretRedactor}) and truncated to 500 chars before it is
+     * stored, even though {@code unisage-agent} already redacts its side (defense in depth).
+     */
+    @Column(name = "last_error_message", length = 500)
+    private String lastErrorMessage;
 }
