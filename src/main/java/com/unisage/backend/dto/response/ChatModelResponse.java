@@ -25,6 +25,10 @@ public record ChatModelResponse(
     Integer priority,
     Integer errorCount,
     LocalDateTime lastErrorAt,
+    String lastErrorCode,
+    /** True when there's a candidate awaiting verification/promotion (an open QUEUED/RUNNING job). */
+    Boolean hasPendingChange,
+    ChatModelVerificationSummary latestVerification,
     Boolean isActive,
     LocalDateTime createdAt,
     String createdBy,
