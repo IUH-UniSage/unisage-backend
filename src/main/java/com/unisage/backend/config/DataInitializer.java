@@ -318,6 +318,12 @@ public class DataInitializer implements CommandLineRunner {
             def(PredefinedPermissions.CHAT_MODEL_DELETE,
                 "/chat-models/**", PermissionMethod.DELETE, ResourceType.CHAT_MODEL,
                 "Xóa mô hình chat"),
+            def(PredefinedPermissions.CHAT_MODEL_ACTIVATE,
+                "/chat-models/**", PermissionMethod.PATCH, ResourceType.CHAT_MODEL,
+                "Kích hoạt/tạm dừng, đổi độ ưu tiên mô hình chat"),
+            def(PredefinedPermissions.CHAT_MODEL_VERIFY,
+                "/chat-models/*/verify", PermissionMethod.POST, ResourceType.CHAT_MODEL,
+                "Xác minh lại mô hình chat"),
 
             // ── Conversation ─────────────────────────────────────────────
             def(PredefinedPermissions.CONVERSATION_ALL,
@@ -426,7 +432,11 @@ public class DataInitializer implements CommandLineRunner {
         List<String> explicit = List.of(
             permKey(PredefinedPermissions.SYSTEM_CONFIG_READ),
             permKey(PredefinedPermissions.SYSTEM_CONFIG_UPDATE),
-            permKey(PredefinedPermissions.SYSTEM_HEALTH_READ)
+            permKey(PredefinedPermissions.SYSTEM_HEALTH_READ),
+            // Covered functionally by CHAT_MODEL_ALL already (method ALL matches PATCH/POST too),
+            // but seeded explicitly so the permission exists as its own row for role granularity.
+            permKey(PredefinedPermissions.CHAT_MODEL_ACTIVATE),
+            permKey(PredefinedPermissions.CHAT_MODEL_VERIFY)
         );
         assign(role, perms, explicit);
         count += explicit.size();
