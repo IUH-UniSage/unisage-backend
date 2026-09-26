@@ -1,4 +1,4 @@
-package com.unisage.backend.service.modelregistry;
+package com.unisage.backend.service.modelregistryinternal;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -8,6 +8,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityService;
+import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
 
 import com.unisage.backend.dto.response.internal.InternalEmbeddingIndexIdentityResponse;
 import com.unisage.backend.dto.response.internal.InternalModelRegistrySnapshotResponse;

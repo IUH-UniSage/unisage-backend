@@ -1,4 +1,4 @@
-package com.unisage.backend.service.modelregistry;
+package com.unisage.backend.service.modelregistryinternal;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -24,6 +24,8 @@ import com.unisage.backend.entity.enums.CredentialHealthErrorType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
+import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityService;
+import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
 import com.unisage.backend.utils.SecretRedactor;
 
 import lombok.RequiredArgsConstructor;
