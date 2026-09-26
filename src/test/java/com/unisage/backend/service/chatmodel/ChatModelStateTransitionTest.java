@@ -10,20 +10,25 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.unisage.backend.dto.request.internal.CredentialHealthReportRequest;
+import com.unisage.backend.dto.request.internal.InternalVerificationResultRequest;
 import com.unisage.backend.dto.response.ChatModelResponse;
 import com.unisage.backend.dto.response.internal.CredentialHealthReportResponse;
+import com.unisage.backend.dto.response.internal.InternalVerificationResultResponse;
 import com.unisage.backend.entity.ChatModel;
 import com.unisage.backend.entity.ChatModelVerification;
 import com.unisage.backend.entity.enums.ChatModelPurpose;
 import com.unisage.backend.entity.enums.ChatModelStatus;
 import com.unisage.backend.entity.enums.ChatModelVerificationStatus;
 import com.unisage.backend.entity.enums.CredentialHealthErrorType;
+import com.unisage.backend.entity.enums.VerificationResultType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
 import com.unisage.backend.repository.ChatModelVerificationRepository;
 import com.unisage.backend.service.modelregistry.ChatModelCandidatePromotionService;
 import com.unisage.backend.service.modelregistry.ChatModelCandidatePromotionServiceImpl;
+import com.unisage.backend.service.modelregistry.ChatModelVerificationResultService;
+import com.unisage.backend.service.modelregistry.ChatModelVerificationResultServiceImpl;
 import com.unisage.backend.service.modelregistry.EmbeddingIndexIdentityService;
 import com.unisage.backend.service.modelregistry.ModelRegistryInternalServiceImpl;
 import com.unisage.backend.service.modelregistry.ModelRegistryVersionService;
@@ -41,8 +46,8 @@ import static org.mockito.Mockito.when;
 
 /**
  * State-transition matrix from plan.md "State machine". Names double as the scenario list.
- * The activate/deactivate/verify service methods landed in Task 3, so every scenario below is
- * enabled — only {@code VerificationFencingTest} stays disabled (Task 6: claim/result lifecycle).
+ * Every scenario below is enabled, including {@code pending_verifyFail_hetRetry_staysPending},
+ * which needed the result endpoint's service (Task 6) to report a verify failure.
  */
 class ChatModelStateTransitionTest {
 
@@ -82,9 +87,12 @@ class ChatModelStateTransitionTest {
         promotionService = new ChatModelCandidatePromotionServiceImpl(
                 chatModelRepository, chatModelVerificationRepository, embeddingIndexIdentityService, modelRegistryVersionService);
         ReflectionTestUtils.setField(promotionService, "embeddingCollectionName", "unisage_chunks");
+        resultService = new ChatModelVerificationResultServiceImpl(
+                chatModelRepository, chatModelVerificationRepository, promotionService);
     }
 
     private ChatModelCandidatePromotionService promotionService;
+    private ChatModelVerificationResultService resultService;
 
     private ChatModelVerification jobFor(ChatModel model) {
         return ChatModelVerification.builder()
@@ -191,9 +199,36 @@ class ChatModelStateTransitionTest {
         assertThat(outcome).isEqualTo(ChatModelCandidatePromotionService.Outcome.PROMOTED);
     }
 
-    @org.junit.jupiter.api.Disabled("Task 6 — needs the claim/result endpoint to report a verify failure")
     @Test
     void pending_verifyFail_hetRetry_staysPending() {
+        ChatModel model = modelWith(ChatModelPurpose.CHAT, ChatModelStatus.PENDING, true, false);
+        UUID jobId = UUID.randomUUID();
+        UUID leaseToken = UUID.randomUUID();
+        ChatModelVerification job = ChatModelVerification.builder()
+                .id(jobId)
+                .chatModel(model)
+                .status(ChatModelVerificationStatus.RUNNING)
+                .candidateGeneration(model.getCandidateGeneration())
+                .baseRevision(model.getRevision())
+                .leaseToken(leaseToken)
+                .attempt(3)
+                .maxAttempts(3)
+                .build();
+        when(chatModelVerificationRepository.findChatModelIdById(jobId)).thenReturn(Optional.of(model.getId()));
+        when(chatModelRepository.findByIdForUpdate(model.getId())).thenReturn(Optional.of(model));
+        when(chatModelVerificationRepository.findByIdForUpdate(jobId)).thenReturn(Optional.of(job));
+        when(chatModelVerificationRepository.isLeaseCurrentlyValid(jobId, leaseToken)).thenReturn(true);
+
+        // attempt already equals maxAttempts — no retries left, so TRANSIENT behaves like PERMANENT.
+        InternalVerificationResultRequest request = new InternalVerificationResultRequest(
+                leaseToken, VerificationResultType.TRANSIENT, "rate_limited", "429 too many requests", null, null);
+        InternalVerificationResultResponse response = resultService.submitResult(jobId, request);
+
+        assertThat(response.applied()).isTrue();
+        assertThat(job.getStatus()).isEqualTo(ChatModelVerificationStatus.FAILED);
+        assertThat(model.getStatus()).isEqualTo(ChatModelStatus.PENDING);
+        assertThat(model.getVerifiedAt()).isNull();
+        verify(modelRegistryVersionService, never()).bump();
     }
 
     @Test

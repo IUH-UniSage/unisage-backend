@@ -6,26 +6,30 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.openapitools.jackson.nullable.JsonNullable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.unisage.backend.dto.request.ChatModelRequest;
 import com.unisage.backend.dto.request.ChatModelUpdateRequest;
+import com.unisage.backend.dto.request.internal.InternalVerificationResultRequest;
 import com.unisage.backend.dto.response.ChatModelResponse;
+import com.unisage.backend.dto.response.internal.InternalVerificationResultResponse;
 import com.unisage.backend.entity.ChatModel;
 import com.unisage.backend.entity.ChatModelVerification;
 import com.unisage.backend.entity.enums.ChatModelPurpose;
 import com.unisage.backend.entity.enums.ChatModelSourceType;
 import com.unisage.backend.entity.enums.ChatModelStatus;
 import com.unisage.backend.entity.enums.ChatModelVerificationStatus;
+import com.unisage.backend.entity.enums.VerificationResultType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
 import com.unisage.backend.repository.ChatModelVerificationRepository;
 import com.unisage.backend.service.modelregistry.ChatModelCandidatePromotionService;
 import com.unisage.backend.service.modelregistry.ChatModelCandidatePromotionServiceImpl;
+import com.unisage.backend.service.modelregistry.ChatModelVerificationResultService;
+import com.unisage.backend.service.modelregistry.ChatModelVerificationResultServiceImpl;
 import com.unisage.backend.service.modelregistry.EmbeddingIndexIdentityService;
 import com.unisage.backend.service.modelregistry.ModelRegistryVersionService;
 import com.unisage.backend.utils.SsrfGuard;
@@ -42,9 +46,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Staged credential rotation from plan.md "Credential rotation". Enabled once the update-key /
- * promote service landed in Task 3 — the two scenarios that need a verifier to actually report a
- * result ({@code activeRow_verifyFail_oldKeyStillRuns_rowUnchanged}) stay disabled for Task 6.
+ * Staged credential rotation from plan.md "Credential rotation". Every scenario is enabled,
+ * including {@code activeRow_verifyFail_oldKeyStillRuns_rowUnchanged}, which needed the result
+ * endpoint's service (Task 6) to actually report a verify failure.
  */
 class ChatModelRotationTest {
 
@@ -53,6 +57,7 @@ class ChatModelRotationTest {
     private ModelRegistryVersionService modelRegistryVersionService;
     private ChatModelServiceImpl chatModelService;
     private ChatModelCandidatePromotionService promotionService;
+    private ChatModelVerificationResultService resultService;
 
     @BeforeEach
     void setUp() {
@@ -65,6 +70,8 @@ class ChatModelRotationTest {
         promotionService = new ChatModelCandidatePromotionServiceImpl(
                 chatModelRepository, chatModelVerificationRepository,
                 mock(EmbeddingIndexIdentityService.class), modelRegistryVersionService);
+        resultService = new ChatModelVerificationResultServiceImpl(
+                chatModelRepository, chatModelVerificationRepository, promotionService);
         ReflectionTestUtils.setField(chatModelService, "embeddingCollectionName", "unisage_chunks");
         ReflectionTestUtils.setField(promotionService, "embeddingCollectionName", "unisage_chunks");
 
@@ -119,9 +126,38 @@ class ChatModelRotationTest {
                 job.getCandidateApiKeyEncrypted().equals("sk-new") && job.getStatus() == ChatModelVerificationStatus.QUEUED));
     }
 
-    @Disabled("Task 6 — needs the claim/result endpoint to report a verify failure")
     @Test
     void activeRow_verifyFail_oldKeyStillRuns_rowUnchanged() {
+        ChatModel model = activeCloudRow();
+        UUID jobId = UUID.randomUUID();
+        UUID leaseToken = UUID.randomUUID();
+        ChatModelVerification job = ChatModelVerification.builder()
+                .id(jobId)
+                .chatModel(model)
+                .status(ChatModelVerificationStatus.RUNNING)
+                .candidateGeneration(model.getCandidateGeneration())
+                .baseRevision(model.getRevision())
+                .candidateApiKeyEncrypted("sk-new")
+                .leaseToken(leaseToken)
+                .attempt(1)
+                .maxAttempts(3)
+                .build();
+        when(chatModelVerificationRepository.findChatModelIdById(jobId)).thenReturn(Optional.of(model.getId()));
+        when(chatModelRepository.findByIdForUpdate(model.getId())).thenReturn(Optional.of(model));
+        when(chatModelVerificationRepository.findByIdForUpdate(jobId)).thenReturn(Optional.of(job));
+        when(chatModelVerificationRepository.isLeaseCurrentlyValid(jobId, leaseToken)).thenReturn(true);
+
+        InternalVerificationResultRequest request = new InternalVerificationResultRequest(
+                leaseToken, VerificationResultType.PERMANENT, "invalid_api_key", "key revoked", null, null);
+        InternalVerificationResultResponse response = resultService.submitResult(jobId, request);
+
+        assertThat(response.applied()).isTrue();
+        assertThat(response.duplicate()).isFalse();
+        assertThat(job.getStatus()).isEqualTo(ChatModelVerificationStatus.FAILED);
+        // The old key keeps serving — a failed verify never touches the row.
+        assertThat(model.getApiKeyEncrypted()).isEqualTo("sk-old");
+        assertThat(model.getStatus()).isEqualTo(ChatModelStatus.ACTIVE);
+        verify(modelRegistryVersionService, never()).bump();
     }
 
     @Test
