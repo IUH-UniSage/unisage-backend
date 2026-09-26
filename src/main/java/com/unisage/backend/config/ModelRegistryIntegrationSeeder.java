@@ -17,7 +17,7 @@ import com.unisage.backend.entity.enums.ChatModelStatus;
 import com.unisage.backend.repository.ChatModelRepository;
 import com.unisage.backend.repository.ChatModelVerificationRepository;
 import com.unisage.backend.service.chatmodel.ChatModelService;
-import com.unisage.backend.service.modelregistry.ChatModelCandidatePromotionService;
+import com.unisage.backend.service.chatmodelcandidatepromotion.ChatModelCandidatePromotionService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

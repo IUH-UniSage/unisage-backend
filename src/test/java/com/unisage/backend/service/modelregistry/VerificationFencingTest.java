@@ -27,6 +27,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import com.unisage.backend.event.consumer.ModelRegistryEventPublisher;
+import com.unisage.backend.service.chatmodelcandidatepromotion.ChatModelCandidatePromotionService;
+import com.unisage.backend.service.chatmodelverificationclaim.ChatModelVerificationClaimService;
+import com.unisage.backend.service.chatmodelverificationresult.ChatModelVerificationResultService;
+import com.unisage.backend.service.modelregistryinternal.ModelRegistryInternalService;
+import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
 
 import com.unisage.backend.dto.request.internal.CredentialHealthReportRequest;
 import com.unisage.backend.dto.request.internal.InternalVerificationResultRequest;

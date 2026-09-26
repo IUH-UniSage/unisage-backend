@@ -23,11 +23,11 @@ import com.unisage.backend.dto.response.internal.InternalModelRegistrySnapshotRe
 import com.unisage.backend.dto.response.internal.InternalModelRegistryVersionResponse;
 import com.unisage.backend.dto.response.internal.InternalVerificationClaimResponse;
 import com.unisage.backend.dto.response.internal.InternalVerificationResultResponse;
-import com.unisage.backend.service.modelregistry.ChatModelVerificationClaimService;
-import com.unisage.backend.service.modelregistry.ChatModelVerificationResultService;
-import com.unisage.backend.service.modelregistry.EmbeddingIndexIdentityService;
-import com.unisage.backend.service.modelregistry.ModelRegistryInternalService;
-import com.unisage.backend.service.modelregistry.ModelRegistryVersionService;
+import com.unisage.backend.service.chatmodelverificationclaim.ChatModelVerificationClaimService;
+import com.unisage.backend.service.chatmodelverificationresult.ChatModelVerificationResultService;
+import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityService;
+import com.unisage.backend.service.modelregistryinternal.ModelRegistryInternalService;
+import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

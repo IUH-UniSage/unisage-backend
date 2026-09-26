@@ -23,7 +23,7 @@ import com.unisage.backend.entity.enums.ChatModelSourceType;
 import com.unisage.backend.entity.enums.ChatModelStatus;
 import com.unisage.backend.repository.ChatModelRepository;
 import com.unisage.backend.event.consumer.ModelRegistryEventPublisher;
-import com.unisage.backend.service.modelregistry.ModelRegistryVersionService;
+import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

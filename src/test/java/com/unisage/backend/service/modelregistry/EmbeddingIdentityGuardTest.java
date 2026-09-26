@@ -7,6 +7,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.unisage.backend.service.chatmodelcandidatepromotion.ChatModelCandidatePromotionService;
+import com.unisage.backend.service.chatmodelcandidatepromotion.ChatModelCandidatePromotionServiceImpl;
+import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityService;
+import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityServiceImpl;
+import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
+
 import com.unisage.backend.dto.request.internal.InternalEmbeddingIndexIdentityRequest;
 import com.unisage.backend.dto.response.ChatModelResponse;
 import com.unisage.backend.dto.response.internal.InternalEmbeddingIndexIdentityResponse;
