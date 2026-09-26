@@ -1,5 +1,6 @@
 package com.unisage.backend.service.chatmodel;
 
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -8,15 +9,23 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import com.unisage.backend.dto.request.internal.CredentialHealthReportRequest;
+import com.unisage.backend.dto.response.internal.CredentialHealthReportResponse;
 import com.unisage.backend.entity.ChatModel;
 import com.unisage.backend.entity.enums.ChatModelPurpose;
 import com.unisage.backend.entity.enums.ChatModelStatus;
+import com.unisage.backend.entity.enums.CredentialHealthErrorType;
 import com.unisage.backend.repository.ChatModelRepository;
+import com.unisage.backend.service.modelregistry.ModelRegistryInternalServiceImpl;
+import com.unisage.backend.service.modelregistry.ModelRegistryVersionService;
 import com.unisage.backend.utils.SsrfGuard;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -29,12 +38,17 @@ class ChatModelStateTransitionTest {
 
     private ChatModelRepository chatModelRepository;
     private ChatModelServiceImpl chatModelService;
+    private ModelRegistryVersionService modelRegistryVersionService;
+    private ModelRegistryInternalServiceImpl modelRegistryInternalService;
 
     @BeforeEach
     void setUp() {
         chatModelRepository = mock(ChatModelRepository.class);
         chatModelService = new ChatModelServiceImpl(chatModelRepository, new SsrfGuard());
         when(chatModelRepository.save(any(ChatModel.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        modelRegistryVersionService = mock(ModelRegistryVersionService.class);
+        modelRegistryInternalService = new ModelRegistryInternalServiceImpl(chatModelRepository, modelRegistryVersionService);
     }
 
     private ChatModel modelWith(ChatModelStatus status, boolean isActive) {
@@ -80,13 +94,38 @@ class ChatModelStateTransitionTest {
     }
 
     @Test
-    @Disabled("Task 2 — needs the health-report endpoint")
     void active_healthPermanent_becomesDisabled_correctRevision() {
+        UUID id = UUID.randomUUID();
+        when(chatModelRepository.existsById(id)).thenReturn(true);
+        when(chatModelRepository.recordHealthError(eq(id), eq(3), any(), any(), any())).thenReturn(1);
+        when(chatModelRepository.disableIfActive(id)).thenReturn(1);
+
+        CredentialHealthReportRequest request = new CredentialHealthReportRequest(
+                3, 10L, CredentialHealthErrorType.PERMANENT, "invalid_api_key", "key revoked", OffsetDateTime.now());
+
+        CredentialHealthReportResponse response = modelRegistryInternalService.reportHealth(id, request);
+
+        assertThat(response.applied()).isTrue();
+        verify(chatModelRepository).recordHealthError(eq(id), eq(3), any(), eq("invalid_api_key"), any());
+        verify(chatModelRepository).disableIfActive(id);
+        verify(modelRegistryVersionService).bump();
     }
 
     @Test
-    @Disabled("Task 2 — needs the health-report endpoint")
     void active_healthPermanent_staleRevision_ignored() {
+        UUID id = UUID.randomUUID();
+        when(chatModelRepository.existsById(id)).thenReturn(true);
+        // Row is already on revision 4 (rotated since); report still carries the old revision 3.
+        when(chatModelRepository.recordHealthError(eq(id), eq(3), any(), any(), any())).thenReturn(0);
+
+        CredentialHealthReportRequest request = new CredentialHealthReportRequest(
+                3, 10L, CredentialHealthErrorType.PERMANENT, "invalid_api_key", "key revoked", OffsetDateTime.now());
+
+        CredentialHealthReportResponse response = modelRegistryInternalService.reportHealth(id, request);
+
+        assertThat(response.applied()).isFalse();
+        verify(chatModelRepository, never()).disableIfActive(any());
+        verify(modelRegistryVersionService, never()).bump();
     }
 
     @Test
