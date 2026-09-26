@@ -1,4 +1,4 @@
-package com.unisage.backend.service.modelregistry;
+package com.unisage.backend.service.embeddingindexidentity;
 
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -17,6 +17,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+
 
 import com.unisage.backend.dto.request.internal.InternalEmbeddingIndexIdentityRequest;
 import com.unisage.backend.dto.response.internal.InternalEmbeddingIndexIdentityResponse;
