@@ -352,4 +352,95 @@ class ChatModelRotationTest {
         verify(chatModelVerificationRepository, never()).save(any());
         verify(modelRegistryVersionService).bump();
     }
+
+    @Test
+    void maxRpmOnlyEdit_appliesImmediately_doesNotBump() {
+        // Decision (Task 7 audit): unisage-agent parses maxRpm into its registry dataclass but
+        // nothing there reads it for routing/rate-limiting yet (Task 9/10 territory) -- so a
+        // maxRpm-only edit is pure reload churn with no behavioral effect. Only priority bumps.
+        ChatModel model = activeCloudRow();
+        when(chatModelRepository.findByIdForUpdate(model.getId())).thenReturn(Optional.of(model));
+
+        ChatModelUpdateRequest request = baseUpdateFrom(model).maxRpm(999).build();
+        chatModelService.update(model.getId(), request);
+
+        assertThat(model.getMaxRpm()).isEqualTo(999);
+        verify(modelRegistryVersionService, never()).bump();
+    }
+
+    @Test
+    void priorityOnlyEdit_bumpsExactlyOnce() {
+        ChatModel model = activeCloudRow();
+        when(chatModelRepository.findByIdForUpdate(model.getId())).thenReturn(Optional.of(model));
+
+        ChatModelUpdateRequest request = baseUpdateFrom(model).priority(9).build();
+        chatModelService.update(model.getId(), request);
+
+        assertThat(model.getPriority()).isEqualTo(9);
+        verify(modelRegistryVersionService, org.mockito.Mockito.times(1)).bump();
+    }
+
+    // ── verification-requested wake-up event (Task 7) ──────────────────────
+
+    @Test
+    void create_publishesVerificationRequested_exactlyOnce() {
+        com.unisage.backend.dto.request.ChatModelRequest request = com.unisage.backend.dto.request.ChatModelRequest.builder()
+                .modelPurpose(ChatModelPurpose.CHAT)
+                .sourceType(ChatModelSourceType.CLOUD_API)
+                .llmProvider("openai")
+                .llmModelName("gpt-4o-mini")
+                .apiKey("sk-abc")
+                .apiBaseUrl("https://api.openai.com/v1")
+                .maxRpm(60)
+                .build();
+        when(chatModelRepository.save(any(ChatModel.class))).thenAnswer(invocation -> {
+            ChatModel entity = invocation.getArgument(0);
+            entity.setId(UUID.randomUUID());
+            return entity;
+        });
+
+        chatModelService.create(request);
+
+        verify(applicationEventPublisher, org.mockito.Mockito.times(1))
+                .publishEvent(org.mockito.ArgumentMatchers.any(
+                        com.unisage.backend.service.modelregistry.VerificationRequestedEvent.class));
+    }
+
+    @Test
+    void update_credentialChanged_publishesVerificationRequested_exactlyOnce() {
+        ChatModel model = activeCloudRow();
+        when(chatModelRepository.findByIdForUpdate(model.getId())).thenReturn(Optional.of(model));
+
+        ChatModelUpdateRequest request = baseUpdateFrom(model).apiKey(JsonNullable.of("sk-new")).build();
+        chatModelService.update(model.getId(), request);
+
+        verify(applicationEventPublisher, org.mockito.Mockito.times(1))
+                .publishEvent(org.mockito.ArgumentMatchers.any(
+                        com.unisage.backend.service.modelregistry.VerificationRequestedEvent.class));
+    }
+
+    @Test
+    void update_noCredentialChange_neverPublishesVerificationRequested() {
+        ChatModel model = activeCloudRow();
+        when(chatModelRepository.findByIdForUpdate(model.getId())).thenReturn(Optional.of(model));
+
+        ChatModelUpdateRequest request = baseUpdateFrom(model).priority(7).build();
+        chatModelService.update(model.getId(), request);
+
+        verify(applicationEventPublisher, never()).publishEvent(
+                org.mockito.ArgumentMatchers.any(
+                        com.unisage.backend.service.modelregistry.VerificationRequestedEvent.class));
+    }
+
+    @Test
+    void verify_publishesVerificationRequested_exactlyOnce() {
+        ChatModel model = activeCloudRow();
+        when(chatModelRepository.findByIdForUpdate(model.getId())).thenReturn(Optional.of(model));
+
+        chatModelService.verify(model.getId());
+
+        verify(applicationEventPublisher, org.mockito.Mockito.times(1))
+                .publishEvent(org.mockito.ArgumentMatchers.any(
+                        com.unisage.backend.service.modelregistry.VerificationRequestedEvent.class));
+    }
 }
