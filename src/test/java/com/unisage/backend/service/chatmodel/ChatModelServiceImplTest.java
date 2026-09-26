@@ -2,11 +2,15 @@ package com.unisage.backend.service.chatmodel;
 
 import com.unisage.backend.dto.request.ChatModelRequest;
 import com.unisage.backend.entity.ChatModel;
+import com.unisage.backend.entity.ChatModelVerification;
 import com.unisage.backend.entity.enums.ChatModelPurpose;
 import com.unisage.backend.entity.enums.ChatModelSourceType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
+import com.unisage.backend.repository.ChatModelVerificationRepository;
+import com.unisage.backend.service.modelregistry.EmbeddingIndexIdentityService;
+import com.unisage.backend.service.modelregistry.ModelRegistryVersionService;
 import com.unisage.backend.utils.SsrfGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +30,7 @@ import static org.mockito.Mockito.when;
 class ChatModelServiceImplTest {
 
     private ChatModelRepository chatModelRepository;
+    private ChatModelVerificationRepository chatModelVerificationRepository;
     private ChatModelServiceImpl chatModelService;
 
     /** Fake DNS so this stays a real unit test — no network — and a fixed test allowlist. */
@@ -45,15 +50,27 @@ class ChatModelServiceImplTest {
         return guard;
     }
 
+    private ChatModelServiceImpl serviceWithAllowlist(String allowlist) {
+        return new ChatModelServiceImpl(
+                chatModelRepository,
+                chatModelVerificationRepository,
+                testSsrfGuard(allowlist),
+                mock(EmbeddingIndexIdentityService.class),
+                mock(ModelRegistryVersionService.class));
+    }
+
     @BeforeEach
     void setUp() {
         chatModelRepository = mock(ChatModelRepository.class);
-        chatModelService = new ChatModelServiceImpl(chatModelRepository, testSsrfGuard("api.openai.com,localhost"));
+        chatModelVerificationRepository = mock(ChatModelVerificationRepository.class);
+        chatModelService = serviceWithAllowlist("api.openai.com,localhost");
         when(chatModelRepository.save(any(ChatModel.class))).thenAnswer(invocation -> {
             ChatModel entity = invocation.getArgument(0);
             entity.setId(UUID.randomUUID());
             return entity;
         });
+        when(chatModelVerificationRepository.save(any(ChatModelVerification.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
@@ -162,7 +179,7 @@ class ChatModelServiceImplTest {
 
     @Test
     void create_selfHostedLocalhost_rejectedWhenAllowlistEmpty() {
-        chatModelService = new ChatModelServiceImpl(chatModelRepository, testSsrfGuard(""));
+        chatModelService = serviceWithAllowlist("");
         ChatModelRequest request = ChatModelRequest.builder()
                 .modelPurpose(ChatModelPurpose.CHAT)
                 .sourceType(ChatModelSourceType.SELF_HOSTED)
