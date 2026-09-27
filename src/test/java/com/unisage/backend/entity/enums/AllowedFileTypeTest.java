@@ -11,7 +11,6 @@ class AllowedFileTypeTest {
         assertThat(AllowedFileType.fromExtension("report.pdf")).contains(AllowedFileType.PDF);
         assertThat(AllowedFileType.fromExtension("notes.txt")).contains(AllowedFileType.TXT);
         assertThat(AllowedFileType.fromExtension("policy.docx")).contains(AllowedFileType.DOCX);
-        assertThat(AllowedFileType.fromExtension("policy.doc")).contains(AllowedFileType.DOC);
         assertThat(AllowedFileType.fromExtension("page.html")).contains(AllowedFileType.HTML);
     }
 
@@ -24,6 +23,7 @@ class AllowedFileTypeTest {
     void fromExtension_rejectsUnlistedExtension() {
         assertThat(AllowedFileType.fromExtension("malware.exe")).isEmpty();
         assertThat(AllowedFileType.fromExtension("image.png")).isEmpty();
+        assertThat(AllowedFileType.fromExtension("legacy.doc")).isEmpty();
     }
 
     @Test
