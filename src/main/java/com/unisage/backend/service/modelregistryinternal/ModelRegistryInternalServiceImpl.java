@@ -120,6 +120,7 @@ public class ModelRegistryInternalServiceImpl implements ModelRegistryInternalSe
                 model.getSourceType(),
                 model.getLlmProvider(),
                 model.getLlmModelName(),
+                model.getDisplayName(),
                 model.getApiBaseUrl(),
                 model.getApiKeyEncrypted(),
                 model.getPriority(),

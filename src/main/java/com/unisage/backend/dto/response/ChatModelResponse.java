@@ -18,6 +18,7 @@ public record ChatModelResponse(
     ChatModelSourceType sourceType,
     String llmProvider,
     String llmModelName,
+    String displayName,
     String modelSourceRef,
     Boolean hasApiKey,
     String apiBaseUrl,

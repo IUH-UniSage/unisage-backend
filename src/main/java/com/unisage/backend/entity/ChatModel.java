@@ -100,6 +100,10 @@ public class ChatModel extends BaseEntity {
     @Column(name = "llm_model_name")
     private String llmModelName;
 
+    /** Optional operator-chosen label (e.g. "Key backup #2") - purely a display aid, never read for routing/verification. */
+    @Column(name = "display_name", length = 100)
+    private String displayName;
+
     /** Định danh model nguồn — chuỗi tự do, không ràng buộc định dạng; tuỳ chọn khi {@code sourceType == SELF_HOSTED}, không dùng khi {@code CLOUD_API}. */
     @Column(name = "model_source_ref")
     private String modelSourceRef;

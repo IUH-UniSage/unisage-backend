@@ -32,6 +32,9 @@ public record ChatModelUpdateRequest(
     @NotBlank(message = "llmModelName không được để trống")
     String llmModelName,
 
+    /** Optional operator-chosen label, purely a display aid - applies immediately like priority/maxRpm. */
+    String displayName,
+
     String modelSourceRef,
 
     JsonNullable<String> apiKey,

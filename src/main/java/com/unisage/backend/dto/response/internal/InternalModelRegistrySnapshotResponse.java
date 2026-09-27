@@ -53,6 +53,9 @@ public record InternalModelRegistrySnapshotResponse(
         ChatModelSourceType sourceType,
         String provider,
         String modelName,
+        /** Operator-chosen label, or null - purely a display aid for Python's own logs (e.g. a
+         *  failover log line), never read for routing/verification decisions. */
+        String displayName,
         String apiBaseUrl,
         String apiKey,
         Integer priority,
@@ -65,6 +68,7 @@ public record InternalModelRegistrySnapshotResponse(
                     + ", sourceType=" + sourceType
                     + ", provider=" + provider
                     + ", modelName=" + modelName
+                    + ", displayName=" + displayName
                     + ", apiBaseUrl=" + apiBaseUrl
                     + ", apiKey=REDACTED, priority=" + priority
                     + ", maxRpm=" + maxRpm + "]";

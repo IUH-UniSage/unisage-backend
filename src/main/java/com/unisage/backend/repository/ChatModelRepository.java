@@ -9,22 +9,28 @@ import java.util.Optional;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.unisage.backend.entity.ChatModel;
-import com.unisage.backend.entity.enums.ChatModelPurpose;
 import com.unisage.backend.entity.enums.ChatModelStatus;
 
-public interface ChatModelRepository extends JpaRepository<ChatModel, UUID> {
+public interface ChatModelRepository extends JpaRepository<ChatModel, UUID>, JpaSpecificationExecutor<ChatModel> {
 
     @Override
     @EntityGraph(attributePaths = {"createdBy", "updatedBy"})
     Page<ChatModel> findAll(Pageable pageable);
+
+    /** Backs {@code GET /chat-models}'s modelPurpose/status/isActive filters (built as a {@link Specification}). */
+    @Override
+    @EntityGraph(attributePaths = {"createdBy", "updatedBy"})
+    Page<ChatModel> findAll(Specification<ChatModel> spec, Pageable pageable);
 
     /**
      * Locks the row for the duration of the transaction — used by staged rotation
@@ -35,18 +41,6 @@ public interface ChatModelRepository extends JpaRepository<ChatModel, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT c FROM ChatModel c WHERE c.id = :id")
     Optional<ChatModel> findByIdForUpdate(@Param("id") UUID id);
-
-    /**
-     * Backs {@code GET /chat-models}'s {@code modelPurpose}/{@code status} filters (Task 3);
-     * either filter is optional (null = don't filter on it). Sorting comes from {@code pageable}.
-     */
-    @EntityGraph(attributePaths = {"createdBy", "updatedBy"})
-    @Query("SELECT c FROM ChatModel c WHERE (:purpose IS NULL OR c.modelPurpose = :purpose) "
-            + "AND (:status IS NULL OR c.status = :status)")
-    Page<ChatModel> findAllFiltered(
-            @Param("purpose") ChatModelPurpose purpose,
-            @Param("status") ChatModelStatus status,
-            Pageable pageable);
 
     /**
      * Generic compare-and-set transition used by every SA-triggered status change (plan.md

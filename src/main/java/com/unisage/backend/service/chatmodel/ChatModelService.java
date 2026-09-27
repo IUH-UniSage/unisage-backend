@@ -19,7 +19,13 @@ public interface ChatModelService {
 
     ChatModelResponse getById(UUID id);
 
-    PageResponse<List<ChatModelResponse>> getAll(ChatModelPurpose modelPurpose, ChatModelStatus status, Pageable pageable);
+    /**
+     * {@code isActive} defaults to {@code true} at the controller so a plain GET only returns
+     * non-soft-deleted rows. {@code query} matches (case-insensitively) against llmModelName,
+     * llmProvider, modelSourceRef or apiBaseUrl.
+     */
+    PageResponse<List<ChatModelResponse>> getAll(
+            String query, ChatModelPurpose modelPurpose, ChatModelStatus status, Boolean isActive, Pageable pageable);
 
     void delete(UUID id);
 

@@ -27,11 +27,15 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import jakarta.persistence.criteria.Predicate;
+
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -80,6 +84,7 @@ public class ChatModelServiceImpl implements ChatModelService {
                 .sourceType(request.sourceType())
                 .llmProvider(request.llmProvider())
                 .llmModelName(request.llmModelName())
+                .displayName(request.displayName())
                 .modelSourceRef(request.modelSourceRef())
                 .apiKeyEncrypted(request.apiKey())
                 .apiBaseUrl(request.apiBaseUrl())
@@ -149,6 +154,7 @@ public class ChatModelServiceImpl implements ChatModelService {
         model.setSourceType(request.sourceType());
         model.setMaxRpm(request.maxRpm());
         model.setPriority(request.priority());
+        model.setDisplayName(request.displayName());
 
         // ── Credential fields — staged rotation, never written straight onto the row. ─────────
         boolean credentialChanged = !Objects.equals(model.getLlmProvider(), request.llmProvider())
@@ -266,9 +272,37 @@ public class ChatModelServiceImpl implements ChatModelService {
     }
 
     @Override
-    public PageResponse<List<ChatModelResponse>> getAll(ChatModelPurpose modelPurpose, ChatModelStatus status, Pageable pageable) {
-        Page<ChatModel> page = chatModelRepository.findAllFiltered(modelPurpose, status, pageable);
+    public PageResponse<List<ChatModelResponse>> getAll(
+            String query, ChatModelPurpose modelPurpose, ChatModelStatus status, Boolean isActive, Pageable pageable) {
+        Page<ChatModel> page = chatModelRepository.findAll(
+                buildSpec(query, modelPurpose, status, isActive), pageable);
         return PageResponse.fromPage(page, this::mapToResponse);
+    }
+
+    /** All filters are optional; a null criterion is simply not added, so no null query parameters. */
+    private Specification<ChatModel> buildSpec(
+            String query, ChatModelPurpose modelPurpose, ChatModelStatus status, Boolean isActive) {
+        return (root, cq, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (modelPurpose != null) {
+                predicates.add(cb.equal(root.get("modelPurpose"), modelPurpose));
+            }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+            if (isActive != null) {
+                predicates.add(cb.equal(root.get("isActive"), isActive));
+            }
+            if (query != null && !query.isBlank()) {
+                String like = "%" + query.trim().toLowerCase(Locale.ROOT) + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("llmModelName")), like),
+                        cb.like(cb.lower(root.get("llmProvider")), like),
+                        cb.like(cb.lower(root.get("modelSourceRef")), like),
+                        cb.like(cb.lower(root.get("apiBaseUrl")), like)));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
     }
 
     /**
@@ -447,7 +481,7 @@ public class ChatModelServiceImpl implements ChatModelService {
         chatModelVerificationRepository.supersedeOpenJobs(model.getId());
         int newGeneration = model.getCandidateGeneration() + 1;
         model.setCandidateGeneration(newGeneration);
-        chatModelRepository.save(model);
+        model = chatModelRepository.save(model);
 
         ChatModelVerification job = chatModelVerificationRepository.save(
                 candidateJobFor(model, newGeneration, model.getRevision()));
@@ -490,6 +524,7 @@ public class ChatModelServiceImpl implements ChatModelService {
                 .sourceType(chatModel.getSourceType())
                 .llmProvider(chatModel.getLlmProvider())
                 .llmModelName(chatModel.getLlmModelName())
+                .displayName(chatModel.getDisplayName())
                 .modelSourceRef(chatModel.getModelSourceRef())
                 .hasApiKey(StringUtils.hasText(chatModel.getApiKeyEncrypted()))
                 .apiBaseUrl(chatModel.getApiBaseUrl())

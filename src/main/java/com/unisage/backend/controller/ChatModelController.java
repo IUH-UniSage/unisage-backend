@@ -40,12 +40,22 @@ public class ChatModelController {
         return ResponseEntity.ok(ApiResponse.success(chatModelService.getById(id)));
     }
 
+    /**
+     * {@code isActive} has no server-side default: omitting it returns every row regardless of
+     * soft-delete state. The admin UI defaults to {@code isActive=true} itself (so a fresh page
+     * load only shows non-deleted rows) but always sends the param explicitly, which is what lets
+     * its own "Tất cả" filter option ask for both by omitting it — a server-side default here would
+     * make that option indistinguishable from not passing the param at all.
+     */
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<List<ChatModelResponse>>>> getAll(
+            @RequestParam(required = false) String q,
             @RequestParam(required = false) ChatModelPurpose modelPurpose,
             @RequestParam(required = false) ChatModelStatus status,
-            @PageableDefault(sort = "priority") Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(chatModelService.getAll(modelPurpose, status, pageable)));
+            @RequestParam(required = false) Boolean isActive,
+            @PageableDefault(size = 10, sort = "priority") Pageable pageable) {
+        return ResponseEntity.ok(
+                ApiResponse.success(chatModelService.getAll(q, modelPurpose, status, isActive, pageable)));
     }
 
     @PutMapping("/{id}")

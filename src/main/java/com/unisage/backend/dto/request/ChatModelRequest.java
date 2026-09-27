@@ -20,6 +20,9 @@ public record ChatModelRequest(
     @NotBlank(message = "llmModelName không được để trống")
     String llmModelName,
 
+    /** Optional operator-chosen label, purely a display aid - never affects routing/verification. */
+    String displayName,
+
     String modelSourceRef,
 
     String apiKey,
