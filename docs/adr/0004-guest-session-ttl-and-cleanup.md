@@ -166,5 +166,4 @@ chưa có hạ tầng Testcontainers/embedded DB để assert việc này ở d�
   (các query bulk-delete/`findExpiredIds`)
 - `src/main/resources/db/migration/V1__baseline_schema.sql` (tiền lệ không dùng `ON DELETE
   CASCADE`, đối chiếu ở Decision #4)
-- `src/main/resources/application.properties` (`app.guest-session.ttl-days`,
-  `app.guest-session.cleanup.cron`)
+- `src/main/resources/application.properties` (`app.guest-session.cleanup.cron`)
