@@ -22,6 +22,12 @@ public interface ConversationService {
 
     void softDelete(UUID id);
 
+    /**
+     * Keeps only the {@code keep} most recent conversations of each user/guest session and
+     * soft-deletes the rest. Returns how many were deleted.
+     */
+    int trimToMaxPerOwner(int keep);
+
     /** Attaches a previously-guest (user == null) conversation to a now-logged-in user. */
     ConversationResponse claim(UUID conversationId, UUID userId);
 }
