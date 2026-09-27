@@ -311,15 +311,38 @@ class MessageServiceImplTest {
                 .isEqualTo(ErrorCode.MESSAGE_NOT_FOUND);
     }
 
-    // ── getByConversation() limit ceiling ───────────────────────────────
+    // ── getByConversation() limits ───────────────────────────────────────
 
     @Test
-    void getByConversation_noLimit_capsAtMaxHistory() {
+    void getByConversation_uiWithoutLimit_returnsWholeHistory() {
         UUID conversationId = UUID.randomUUID();
         List<Message> messages = buildMessages(conversationId, 25);
         when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
 
-        List<MessageResponse> result = messageService.getByConversation(conversationId, null);
+        List<MessageResponse> result = messageService.getByConversation(conversationId, null, false);
+
+        assertThat(result).hasSize(25);
+    }
+
+    @Test
+    void getByConversation_uiWithLimit_returnsLatestMessages() {
+        UUID conversationId = UUID.randomUUID();
+        List<Message> messages = buildMessages(conversationId, 25);
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
+
+        List<MessageResponse> result = messageService.getByConversation(conversationId, 22, false);
+
+        assertThat(result).hasSize(22);
+        assertThat(result.get(result.size() - 1).content()).isEqualTo("msg-24");
+    }
+
+    @Test
+    void getByConversation_contextWithoutLimit_capsAtMaxHistory() {
+        UUID conversationId = UUID.randomUUID();
+        List<Message> messages = buildMessages(conversationId, 25);
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
+
+        List<MessageResponse> result = messageService.getByConversation(conversationId, null, true);
 
         assertThat(result).hasSize(20);
         // keeps the most recent ones (tail of the ascending list)
@@ -327,24 +350,24 @@ class MessageServiceImplTest {
     }
 
     @Test
-    void getByConversation_limitBelowCeiling_isRespected() {
+    void getByConversation_contextLimitBelowCeiling_isRespected() {
         UUID conversationId = UUID.randomUUID();
         List<Message> messages = buildMessages(conversationId, 25);
         when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
 
-        List<MessageResponse> result = messageService.getByConversation(conversationId, 5);
+        List<MessageResponse> result = messageService.getByConversation(conversationId, 5, true);
 
         assertThat(result).hasSize(5);
         assertThat(result.get(result.size() - 1).content()).isEqualTo("msg-24");
     }
 
     @Test
-    void getByConversation_limitAboveCeiling_isCappedAtMaxHistory() {
+    void getByConversation_contextLimitAboveCeiling_isCappedAtMaxHistory() {
         UUID conversationId = UUID.randomUUID();
         List<Message> messages = buildMessages(conversationId, 25);
         when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
 
-        List<MessageResponse> result = messageService.getByConversation(conversationId, 1000);
+        List<MessageResponse> result = messageService.getByConversation(conversationId, 1000, true);
 
         assertThat(result).hasSize(20);
     }
@@ -355,7 +378,7 @@ class MessageServiceImplTest {
         List<Message> messages = buildMessages(conversationId, 3);
         when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
 
-        List<MessageResponse> result = messageService.getByConversation(conversationId, 10);
+        List<MessageResponse> result = messageService.getByConversation(conversationId, 10, true);
 
         assertThat(result).hasSize(3);
     }
@@ -370,7 +393,7 @@ class MessageServiceImplTest {
         when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
         when(ticketRepository.findByMessageIdIn(any())).thenReturn(List.of(ticket));
 
-        List<MessageResponse> result = messageService.getByConversation(conversationId, 10);
+        List<MessageResponse> result = messageService.getByConversation(conversationId, 10, false);
 
         assertThat(result).extracting(MessageResponse::ticketId).containsExactly(null, ticketId, null);
         assertThat(result.get(1).id()).isEqualTo(reportedMessageId);

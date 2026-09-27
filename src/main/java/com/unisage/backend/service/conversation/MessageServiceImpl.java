@@ -146,11 +146,16 @@ public class MessageServiceImpl implements MessageService {
     }
 
     @Override
-    public List<MessageResponse> getByConversation(UUID conversationId, Integer limit) {
+    public List<MessageResponse> getByConversation(UUID conversationId, Integer limit, boolean forContext) {
         List<Message> messages = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
 
-        int maxMessageHistory = configResolver.getInt("chat.max_history_messages", 20);
-        int effectiveLimit = (limit != null && limit > 0) ? Math.min(limit, maxMessageHistory) : maxMessageHistory;
+        int effectiveLimit = (limit != null && limit > 0) ? limit : Integer.MAX_VALUE;
+        if (forContext) {
+            // Only the prompt context is capped - capping the UI too hid older messages whenever a
+            // conversation was reopened (UNISAGE-94).
+            int maxMessageHistory = configResolver.getInt("chat.max_history_messages", 20);
+            effectiveLimit = Math.min(effectiveLimit, maxMessageHistory);
+        }
         if (messages.size() > effectiveLimit) {
             messages = messages.subList(messages.size() - effectiveLimit, messages.size());
         }
