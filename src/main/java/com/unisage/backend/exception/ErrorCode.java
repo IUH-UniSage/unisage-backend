@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
     // System errors (9xxx)
     SYS_UNCATEGORIZED(HttpStatus.INTERNAL_SERVER_ERROR, 9999, "Hệ thống có lỗi chưa xác định. Vui lòng thử lại sau."),
+    ROUTE_NOT_FOUND(HttpStatus.NOT_FOUND, 9998, "Không tìm thấy endpoint này."),
 
     // Authentication errors (1xxx)
     AUTH_UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, 1001, "Bạn cần đăng nhập để thực hiện thao tác này."),
@@ -25,6 +26,8 @@ public enum ErrorCode {
     // Validation
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, 2300, "Dữ liệu đầu vào không hợp lệ."),
     DOCUMENT_PERMISSION_FORBIDDEN(HttpStatus.FORBIDDEN, 2310, "Ban không đủ quyền để tạo documemnt."),
+    DOCUMENT_PUBLIC_ACCESS_LEVEL_CONFLICT(HttpStatus.BAD_REQUEST, 2311,
+            "Tài liệu công khai không được đặt cấp độ truy cập tối thiểu."),
 
     // Not found errors
     CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, 2101, "Category không tồn tại."),
@@ -70,6 +73,26 @@ public enum ErrorCode {
     TICKET_RESOLUTION_REQUIRED(HttpStatus.BAD_REQUEST, 2143, "Cần nhập nội dung phản hồi khi đánh dấu đã giải quyết."),
     SYSTEM_CONFIG_INVALID_VALUE(HttpStatus.BAD_REQUEST, 2146, "Giá trị cấu hình không hợp lệ với kiểu dữ liệu của cấu hình này."),
     SYSTEM_CONFIG_NOT_EDITABLE(HttpStatus.FORBIDDEN, 2147, "Cấu hình này không thể chỉnh sửa."),
+
+    // Internal API (/internal/**) — X-Internal-Secret is checked separately by
+    // InternalSecretFilter (code 1007); this is the CIDR layer.
+    INTERNAL_CALLER_NOT_ALLOWED(HttpStatus.FORBIDDEN, 2500, "Địa chỉ gọi không nằm trong danh sách cho phép."),
+
+    // Dynamic Model Registry (25xx)
+    CHAT_MODEL_STATUS_CONFLICT(HttpStatus.CONFLICT, 2510, "Trạng thái model đã thay đổi, vui lòng tải lại."),
+    EMBEDDING_ACTIVE_CONFLICT(HttpStatus.CONFLICT, 2511, "Một model embedding khác vừa được kích hoạt."),
+    CHAT_MODEL_NOT_VERIFIED(HttpStatus.CONFLICT, 2512, "Model chưa được xác minh, không thể kích hoạt."),
+    VERIFICATION_LEASE_LOST(HttpStatus.CONFLICT, 2513, "Lượt xác minh đã hết hạn hoặc bị lấy lại bởi tiến trình khác."),
+    CHAT_MODEL_API_KEY_REQUIRED_FOR_NEW_HOST(HttpStatus.BAD_REQUEST, 2514,
+            "Phải nhập lại apiKey khi đổi apiBaseUrl sang host mới."),
+    CHAT_MODEL_PROVIDER_UNSUPPORTED(HttpStatus.BAD_REQUEST, 2515, "Provider này chưa được hỗ trợ."),
+    CHAT_MODEL_URL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, 2516, "apiBaseUrl không hợp lệ hoặc không được phép."),
+    EMBEDDING_REINDEX_REQUIRED(HttpStatus.CONFLICT, 2517,
+            "Model embedding này khác danh tính với dữ liệu đã index, cần re-index trước khi dùng."),
+    EMBEDDING_INDEX_IDENTITY_EXISTS(HttpStatus.CONFLICT, 2518, "Danh tính index của collection này đã được xác lập."),
+    VERIFICATION_JOB_NOT_FOUND(HttpStatus.NOT_FOUND, 2519, "Job xác minh không tồn tại."),
+    REGISTRY_RESET_JOB_RUNNING(HttpStatus.CONFLICT, 2520,
+            "Còn job xác minh đang chạy với lease chưa hết hạn, thử lại sau."),
 
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),

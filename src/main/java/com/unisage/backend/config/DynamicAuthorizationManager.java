@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.AntPathMatcher;
 
 import com.unisage.backend.predefined.PredefinedPublicPaths.PublicPath;
+import com.unisage.backend.security.InternalSecretFilter;
 
 import java.util.List;
 import java.util.UUID;
@@ -53,6 +54,16 @@ public class DynamicAuthorizationManager implements AuthorizationManager<Request
         log.debug("DynamicAuthZ → {} {}", httpMethod, normalizedPath);
 
         try {
+            // /internal/** needs a verified X-Internal-Secret, never RBAC — even for a valid JWT.
+            if (pathMatcher.match("/internal/**", normalizedPath)) {
+                boolean trustedInternalCaller = Boolean.TRUE.equals(
+                        request.getAttribute(InternalSecretFilter.TRUSTED_INTERNAL_CALLER_ATTRIBUTE));
+                if (!trustedInternalCaller) {
+                    log.warn("Denied /internal/** without verified caller: {}", normalizedPath);
+                }
+                return new AuthorizationDecision(trustedInternalCaller);
+            }
+
             if (isPublicPath(normalizedPath, httpMethod)) {
                 log.debug("Public path — granted: {}", normalizedPath);
                 return new AuthorizationDecision(true);

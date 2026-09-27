@@ -45,7 +45,9 @@ public class InternalSecretFilter extends OncePerRequestFilter {
 
     /** Paths only ever meant to be called by trusted internal services, never an end-user. */
     private static final List<PublicPath> INTERNAL_ONLY_PATHS = List.of(
-            new PublicPath("PATCH", "/messages/*")
+            new PublicPath("PATCH", "/messages/*"),
+            // Dynamic Model Registry internal namespace — see plan.md "Internal API contract".
+            new PublicPath("*", "/internal/**")
     );
 
     private final ObjectMapper objectMapper;
@@ -80,7 +82,12 @@ public class InternalSecretFilter extends OncePerRequestFilter {
     }
 
     private boolean isValidSecret(String headerValue) {
-        return internalSecretKey != null && internalSecretKey.equals(headerValue);
+        if (internalSecretKey == null || headerValue == null) {
+            return false;
+        }
+        return java.security.MessageDigest.isEqual(
+                internalSecretKey.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                headerValue.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private String normalize(String requestUri) {

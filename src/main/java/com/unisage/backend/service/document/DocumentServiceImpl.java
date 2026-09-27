@@ -56,6 +56,8 @@ public class DocumentServiceImpl implements DocumentService {
         User uploader = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
+        validatePublicAccessLevelConsistency(request.isPublic(), request.minAccessLevelId());
+
         AccessLevel minAccessLevel = resolveMinAccessLevel(request.minAccessLevelId(), uploader);
 
         Department docPackage = null;
@@ -143,7 +145,12 @@ public class DocumentServiceImpl implements DocumentService {
             document.setFileType(request.fileType());
         }
 
-        if (request.minAccessLevelId() != null) {
+        Boolean effectiveIsPublic = request.isPublic() != null ? request.isPublic() : document.getIsPublic();
+        validatePublicAccessLevelConsistency(effectiveIsPublic, request.minAccessLevelId());
+
+        if (Boolean.TRUE.equals(effectiveIsPublic)) {
+            document.setMinAccessLevel(null);
+        } else if (request.minAccessLevelId() != null) {
             UUID userId = securityUtil.getCurrentUserId();
             User requester = userRepository.findById(userId)
                     .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
@@ -238,6 +245,16 @@ public class DocumentServiceImpl implements DocumentService {
                         .createdAt(v.getCreatedAt())
                         .build())
                 .toList();
+    }
+
+    /**
+     * A public document has no access-level gate — mirrors the
+     * {@code documents_public_access_level_check} DB constraint (see V19 migration).
+     */
+    private void validatePublicAccessLevelConsistency(Boolean isPublic, UUID minAccessLevelId) {
+        if (Boolean.TRUE.equals(isPublic) && minAccessLevelId != null) {
+            throw new AppException(ErrorCode.DOCUMENT_PUBLIC_ACCESS_LEVEL_CONFLICT);
+        }
     }
 
     /**
