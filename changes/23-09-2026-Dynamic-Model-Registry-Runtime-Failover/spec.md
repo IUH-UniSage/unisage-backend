@@ -152,15 +152,29 @@ dấu hiệu lỗi nào. Vì vậy:
 
 ### 4.7. Cảnh báo Slack
 
-- Bắn cảnh báo khi: 1 credential bị khoá vĩnh viễn, hết toàn bộ credential khả
-  dụng cho 1 purpose, job ingest embedding bị dừng do lỗi provider, hoặc verify
-  thất bại vĩnh viễn.
-- **Không** bắn cảnh báo cho lỗi tạm thời tự phục hồi được — tránh làm loãng
-  kênh Slack bằng những sự cố không cần người can thiệp.
-- Chống dội thông báo: cùng 1 credential + cùng 1 loại sự cố chỉ nhận tối đa 1
-  cảnh báo mỗi 15 phút, dù có bao nhiêu request lỗi cùng lúc.
+- Bắn cảnh báo khi: **mọi lỗi gọi provider bị circuit breaker ghi nhận — kể cả
+  lỗi tạm thời (TRANSIENT, ví dụ 503 "high demand")**, không chỉ khi credential
+  bị khoá vĩnh viễn (PERMANENT); cộng thêm khi hết toàn bộ credential khả dụng
+  cho 1 purpose, job ingest embedding bị dừng do lỗi provider, hoặc verify thất
+  bại vĩnh viễn. (Quyết định sản phẩm: người vận hành cần biết ngay lần đầu
+  provider chập chờn, không phải đợi tới lúc credential bị loại hẳn — đổi từ
+  thiết kế ban đầu "TRANSIENT không bao giờ cảnh báo".)
+- Circuit breaker cũng đánh dấu cooldown cho credential đó ngay tại lần lỗi
+  TRANSIENT đầu tiên (không đợi hết lượt thử) — request kế tiếp cho cùng
+  purpose sẽ tự động thử credential có độ ưu tiên kế tiếp thay vì lặp lại đúng
+  credential vừa lỗi.
+- Chống dội thông báo vẫn là cơ chế chính giữ kênh Slack không bị loãng: cùng 1
+  credential + cùng 1 loại sự cố (PERMANENT/TRANSIENT tách biệt) chỉ nhận tối
+  đa 1 cảnh báo mỗi 15 phút, dù có bao nhiêu request lỗi cùng lúc hay lỗi lặp
+  lại trong cửa sổ đó.
+- Với node streaming (sinh câu trả lời) đã gửi 1 phần nội dung cho người dùng
+  rồi mới lỗi giữa chừng: không thể đổi credential cho **request đó** (tránh
+  trộn nội dung từ 2 model khác nhau trong cùng 1 câu trả lời), nhưng vẫn ghi
+  nhận lỗi + cảnh báo Slack như bình thường, nên request **kế tiếp** đã tự
+  tránh credential vừa lỗi.
 - Nội dung tin nhắn không bao giờ chứa API key — được lọc qua bộ redact ngay
-  trước khi gửi, dù nguồn lỗi đến từ đâu.
+  trước khi gửi, dù nguồn lỗi đến từ đâu. Card Slack hiển thị dạng Block Kit
+  (viền màu, từng field tách dòng riêng), không phải 1 đoạn text thô dính liền.
 
 ### 4.8. Bảo mật
 
