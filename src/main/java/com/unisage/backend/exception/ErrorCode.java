@@ -26,6 +26,8 @@ public enum ErrorCode {
     // Validation
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, 2300, "Dữ liệu đầu vào không hợp lệ."),
     DOCUMENT_PERMISSION_FORBIDDEN(HttpStatus.FORBIDDEN, 2310, "Ban không đủ quyền để tạo documemnt."),
+    DOCUMENT_PUBLIC_ACCESS_LEVEL_CONFLICT(HttpStatus.BAD_REQUEST, 2311,
+            "Tài liệu công khai không được đặt cấp độ truy cập tối thiểu."),
 
     // Not found errors
     CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, 2101, "Category không tồn tại."),
