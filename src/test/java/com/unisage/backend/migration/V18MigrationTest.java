@@ -22,10 +22,10 @@ import org.testcontainers.utility.DockerImageName;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** V16 applies cleanly on a fresh DB, backfills existing rows, and the immutability trigger holds. */
+/** V18 applies cleanly on a fresh DB, backfills existing rows, and the immutability trigger holds. */
 @Testcontainers
 @SpringBootTest
-class V16MigrationTest {
+class V18MigrationTest {
 
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(

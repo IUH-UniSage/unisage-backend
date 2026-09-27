@@ -106,9 +106,9 @@ class EmbeddingIndexIdentityConcurrencyTest {
 
         // No UPDATE/DELETE statement is ever issued for this table under any code path — enforced
         // by 3 independent layers (no repository update/delete method, the writer only ever runs
-        // INSERT ... ON CONFLICT DO NOTHING, and the V16 immutability trigger). The trigger itself
+        // INSERT ... ON CONFLICT DO NOTHING, and the V18 immutability trigger). The trigger itself
         // (raises on a direct hand-written UPDATE/DELETE) is exercised deterministically in
-        // V16MigrationTest#embeddingIndexIdentity_rejectsUpdateAndDelete; pg_stat_user_tables'
+        // V18MigrationTest#embeddingIndexIdentity_rejectsUpdateAndDelete; pg_stat_user_tables'
         // n_tup_upd/n_tup_del counters are per-backend and only flushed on that backend's next
         // transaction boundary, so diffing them across threads/connections here would be flaky
         // rather than a real signal — omitted in favor of the deterministic trigger test.

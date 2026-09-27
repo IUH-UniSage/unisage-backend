@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Guards against the 3 copies of the 7 verification statuses (plan.md "Verification lifecycle")
- * drifting apart: the Java enum (source of truth), the V16 CHECK constraint, and Jackson's binding
+ * drifting apart: the Java enum (source of truth), the V18 CHECK constraint, and Jackson's binding
  * of the enum used by every SA-facing DTO field of this type (e.g. a future
  * {@code latestVerification.status}).
  */
