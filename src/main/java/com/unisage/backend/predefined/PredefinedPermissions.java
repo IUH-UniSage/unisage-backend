@@ -114,4 +114,8 @@ public final class PredefinedPermissions {
     // ─── SystemHealth ─────────────────────────────────────────────────────
     // Read-only: nothing here is admin-editable, so no corresponding _UPDATE/_ALL.
     public static final String SYSTEM_HEALTH_READ = "SYSTEM_HEALTH_READ";
+
+    // ─── Dashboard ──────────────────────────────────────────────────────────
+    // Read-only aggregate view, same shape as SystemHealth: no _UPDATE/_ALL.
+    public static final String DASHBOARD_READ = "DASHBOARD_READ";
 }

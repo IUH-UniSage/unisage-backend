@@ -374,7 +374,12 @@ public class DataInitializer implements CommandLineRunner {
             // ── SystemHealth ─────────────────────────────────────────────
             def(PredefinedPermissions.SYSTEM_HEALTH_READ,
                 "/admin/health/**", PermissionMethod.GET, ResourceType.SYSTEM,
-                "Xem tình trạng hệ thống")
+                "Xem tình trạng hệ thống"),
+
+            // ── Dashboard ──────────────────────────────────────────────────
+            def(PredefinedPermissions.DASHBOARD_READ,
+                "/admin/dashboard/**", PermissionMethod.GET, ResourceType.SYSTEM,
+                "Xem tổng quan hệ thống")
         ));
 
         return list;
@@ -426,7 +431,8 @@ public class DataInitializer implements CommandLineRunner {
         List<String> explicit = List.of(
             permKey(PredefinedPermissions.SYSTEM_CONFIG_READ),
             permKey(PredefinedPermissions.SYSTEM_CONFIG_UPDATE),
-            permKey(PredefinedPermissions.SYSTEM_HEALTH_READ)
+            permKey(PredefinedPermissions.SYSTEM_HEALTH_READ),
+            permKey(PredefinedPermissions.DASHBOARD_READ)
         );
         assign(role, perms, explicit);
         count += explicit.size();
