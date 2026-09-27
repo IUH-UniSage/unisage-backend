@@ -5,6 +5,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -105,4 +108,25 @@ public interface ChatModelVerificationRepository extends JpaRepository<ChatModel
             )
             """, nativeQuery = true)
     boolean existsRunningWithUnexpiredLease();
+
+    /**
+     * Backs the admin "Jobs" tab (list) — {@code chatModelId}/{@code status} filters are both
+     * optional (null = don't filter on it).
+     * {@code @EntityGraph} eager-fetches {@code chatModel} so the response mapper never touches a
+     * lazy association outside this method's session (the exact bug just fixed in
+     * {@code ChatModelServiceImpl.verify()}).
+     */
+    @EntityGraph(attributePaths = {"chatModel"})
+    @Query("SELECT v FROM ChatModelVerification v WHERE "
+            + "(:chatModelId IS NULL OR v.chatModel.id = :chatModelId) "
+            + "AND (:status IS NULL OR v.status = :status)")
+    Page<ChatModelVerification> findAllFiltered(
+            @Param("chatModelId") UUID chatModelId,
+            @Param("status") ChatModelVerificationStatus status,
+            Pageable pageable);
+
+    /** Backs the admin "Jobs" tab (detail) — same {@code @EntityGraph} reasoning as {@link #findAllFiltered}. */
+    @EntityGraph(attributePaths = {"chatModel"})
+    @Query("SELECT v FROM ChatModelVerification v WHERE v.id = :id")
+    Optional<ChatModelVerification> findByIdWithChatModel(@Param("id") UUID id);
 }
