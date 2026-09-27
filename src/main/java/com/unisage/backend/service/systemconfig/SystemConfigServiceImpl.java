@@ -2,6 +2,7 @@ package com.unisage.backend.service.systemconfig;
 
 import java.util.List;
 
+import org.springframework.boot.autoconfigure.web.servlet.MultipartProperties;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,6 +24,9 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
     private final SystemConfigRepository systemConfigRepository;
     private final ObjectMapper objectMapper;
+    private final MultipartProperties multipartProperties;
+
+    static final String MAX_FILE_SIZE_KEY = "ingest.max_file_size_mb";
 
     @Override
     public List<SystemConfigResponse> getAll(SystemConfigCategory category) {
@@ -47,6 +51,9 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         }
 
         validateValue(request.value(), config.getValueType());
+        if (MAX_FILE_SIZE_KEY.equals(configKey)) {
+            validateMaxFileSize(request.value());
+        }
         config.setValue(request.value());
 
         config = systemConfigRepository.save(config);
@@ -82,6 +89,18 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             case STRING -> {
                 // Any non-null string is valid; @NotBlank on the request already rejects blank.
             }
+        }
+    }
+
+    /**
+     * Spring rejects any multipart body above {@code spring.servlet.multipart.max-file-size} before
+     * FileServiceImpl ever sees it, so a higher admin value would silently have no effect.
+     */
+    private void validateMaxFileSize(String value) {
+        double mb = Double.parseDouble(value);
+        long ceilingMb = multipartProperties.getMaxFileSize().toMegabytes();
+        if (mb <= 0 || mb > ceilingMb) {
+            throw new AppException(ErrorCode.SYSTEM_CONFIG_FILE_SIZE_OUT_OF_RANGE);
         }
     }
 

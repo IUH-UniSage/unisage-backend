@@ -73,6 +73,8 @@ public enum ErrorCode {
     TICKET_RESOLUTION_REQUIRED(HttpStatus.BAD_REQUEST, 2143, "Cần nhập nội dung phản hồi khi đánh dấu đã giải quyết."),
     SYSTEM_CONFIG_INVALID_VALUE(HttpStatus.BAD_REQUEST, 2146, "Giá trị cấu hình không hợp lệ với kiểu dữ liệu của cấu hình này."),
     SYSTEM_CONFIG_NOT_EDITABLE(HttpStatus.FORBIDDEN, 2147, "Cấu hình này không thể chỉnh sửa."),
+    SYSTEM_CONFIG_FILE_SIZE_OUT_OF_RANGE(HttpStatus.BAD_REQUEST, 2155,
+            "Kích thước file tối đa phải lớn hơn 0 và không vượt quá giới hạn tải lên của máy chủ (100 MB)."),
 
     // Internal API (/internal/**) — X-Internal-Secret is checked separately by
     // InternalSecretFilter (code 1007); this is the CIDR layer.

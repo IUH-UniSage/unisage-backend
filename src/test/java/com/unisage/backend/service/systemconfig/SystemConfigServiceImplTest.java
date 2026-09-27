@@ -6,6 +6,8 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.web.servlet.MultipartProperties;
+import org.springframework.util.unit.DataSize;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.unisage.backend.dto.request.UpdateSystemConfigRequest;
@@ -31,7 +33,9 @@ class SystemConfigServiceImplTest {
     @BeforeEach
     void setUp() {
         systemConfigRepository = mock(SystemConfigRepository.class);
-        service = new SystemConfigServiceImpl(systemConfigRepository, new ObjectMapper());
+        MultipartProperties multipartProperties = new MultipartProperties();
+        multipartProperties.setMaxFileSize(DataSize.ofMegabytes(100));
+        service = new SystemConfigServiceImpl(systemConfigRepository, new ObjectMapper(), multipartProperties);
         when(systemConfigRepository.save(any(SystemConfig.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -141,5 +145,38 @@ class SystemConfigServiceImplTest {
         assertThatThrownBy(() -> service.updateValue("locked.key", request))
                 .isInstanceOf(AppException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.SYSTEM_CONFIG_NOT_EDITABLE);
+    }
+
+    @Test
+    void updateValue_maxFileSizeWithinUploadCeiling_updates() {
+        SystemConfig existing = config("ingest.max_file_size_mb", "10", ValueType.NUMBER, true);
+        when(systemConfigRepository.findByConfigKey("ingest.max_file_size_mb")).thenReturn(Optional.of(existing));
+
+        SystemConfigResponse result = service.updateValue("ingest.max_file_size_mb",
+                UpdateSystemConfigRequest.builder().value("100").build());
+
+        assertThat(result.value()).isEqualTo("100");
+    }
+
+    @Test
+    void updateValue_maxFileSizeAboveUploadCeiling_throwsOutOfRange() {
+        SystemConfig existing = config("ingest.max_file_size_mb", "10", ValueType.NUMBER, true);
+        when(systemConfigRepository.findByConfigKey("ingest.max_file_size_mb")).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.updateValue("ingest.max_file_size_mb",
+                UpdateSystemConfigRequest.builder().value("101").build()))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.SYSTEM_CONFIG_FILE_SIZE_OUT_OF_RANGE);
+    }
+
+    @Test
+    void updateValue_maxFileSizeZero_throwsOutOfRange() {
+        SystemConfig existing = config("ingest.max_file_size_mb", "10", ValueType.NUMBER, true);
+        when(systemConfigRepository.findByConfigKey("ingest.max_file_size_mb")).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.updateValue("ingest.max_file_size_mb",
+                UpdateSystemConfigRequest.builder().value("0").build()))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.SYSTEM_CONFIG_FILE_SIZE_OUT_OF_RANGE);
     }
 }
