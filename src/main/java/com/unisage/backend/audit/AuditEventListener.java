@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.Temporal;
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -48,16 +49,30 @@ public class AuditEventListener implements PostInsertEventListener, PostUpdateEv
     // immutable audit table is a privacy exposure this trail was never meant to create, not
     // just noise. See docs/adr/0003-audit-log-persistence.md.
     // UsageLimit is the per-identity token counter, rewritten on every chat turn: pure bookkeeping.
+    // SystemHealthCheck is written by the health-check scheduler every few minutes with no human
+    // actor - it flooded the trail with "Hệ thống / Khác" rows (UNISAGE-92).
     private static final Set<String> EXCLUDED_ENTITIES =
-            Set.of("AuditLog", "Message", "Conversation", "UsageLimit");
+            Set.of("AuditLog", "Message", "Conversation", "UsageLimit", "SystemHealthCheck");
 
-    // Fields BaseEntity/AuthServiceImpl.login() touch as pure bookkeeping on every login - see
-    // the skip check in handle() below.
-    private static final Set<String> LOGIN_BOOKKEEPING_FIELDS =
-            Set.of("lastLogin", "updatedAt", "updatedBy");
+    // Field AuthServiceImpl.login() touches on every login (updatedAt/updatedBy are already
+    // dropped as BOOKKEEPING_FIELDS) - see the skip check in handle() below.
+    private static final Set<String> LOGIN_BOOKKEEPING_FIELDS = Set.of("lastLogin");
 
     // Never leak secrets into the audit trail.
     private static final Set<String> SENSITIVE_FIELDS = Set.of("passwordHash", "apiKeyEncrypted");
+
+    // BaseEntity/optimistic-lock bookkeeping that changes on every write - already covered by the
+    // audit row's own actor/createdAt, so listing it as a "change" is pure noise (UNISAGE-92).
+    private static final Set<String> BOOKKEEPING_FIELDS =
+            Set.of("createdAt", "createdBy", "updatedAt", "updatedBy", "version");
+
+    private static final String SOFT_DELETE_FIELD = "deletedAt";
+
+    // Human-readable name of the row, checked in this order. Snapshotted at write time as
+    // "_label" because the row may later be renamed or deleted, so CREATE/DELETE entries can say
+    // WHICH object without dumping every field of it (UNISAGE-92).
+    private static final List<String> LABEL_FIELDS =
+            List.of("title", "name", "label", "code", "llmModelName", "configKey", "email");
 
     private static final Map<String, ResourceType> RESOURCE_TYPE_BY_ENTITY = Map.ofEntries(
             Map.entry("User", ResourceType.USER),
@@ -66,6 +81,7 @@ public class AuditEventListener implements PostInsertEventListener, PostUpdateEv
             Map.entry("Department", ResourceType.DEPARTMENT),
             Map.entry("UserDepartmentAccess", ResourceType.USER_DEPARTMENT_ACCESS),
             Map.entry("Document", ResourceType.DOCUMENT),
+            Map.entry("DocumentVersion", ResourceType.DOCUMENT),
             Map.entry("Category", ResourceType.CATEGORY),
             Map.entry("AccessLevel", ResourceType.ACCESS_LEVEL),
             Map.entry("ChatModel", ResourceType.CHAT_MODEL),
@@ -112,19 +128,36 @@ public class AuditEventListener implements PostInsertEventListener, PostUpdateEv
             return;
         }
 
-        Map<String, Object> details = buildDetails(action, persister.getPropertyNames(), oldState, newState);
-        if (action == AuditAction.UPDATE && details.isEmpty()) {
-            // No actual field changed (e.g. a version-only touch) — nothing worth recording.
-            return;
+        String[] propertyNames = persister.getPropertyNames();
+        if (action == AuditAction.UPDATE && isSoftDelete(propertyNames, oldState, newState)) {
+            // Soft delete is an UPDATE at the ORM level, but to an admin it is a deletion.
+            action = AuditAction.DELETE;
         }
-        if ("User".equals(entityName) && action == AuditAction.UPDATE
-                && LOGIN_BOOKKEEPING_FIELDS.containsAll(details.keySet())) {
-            // AuthServiceImpl.login() already publishes a LOGIN domain event (AuthAuditListener)
-            // for this exact moment - this UPDATE fires from the same request writing
-            // user.lastLogin, and would otherwise show up as a second, redundant row for the same
-            // login. Only skip when lastLogin/updatedAt/updatedBy are the ONLY changed fields, so
-            // a real profile edit made in the same transaction is still captured.
-            return;
+
+        Map<String, Object> details;
+        if (action == AuditAction.UPDATE) {
+            details = buildChanges(propertyNames, oldState, newState);
+            if (details.isEmpty()) {
+                // No business field changed (e.g. a version/updatedAt-only touch).
+                return;
+            }
+            if ("User".equals(entityName) && LOGIN_BOOKKEEPING_FIELDS.containsAll(details.keySet())) {
+                // AuthServiceImpl.login() already publishes a LOGIN domain event
+                // (AuthAuditListener) for this exact moment - this UPDATE fires from the same
+                // request writing user.lastLogin, and would otherwise show up as a second,
+                // redundant row for the same login. Only skip when lastLogin is the ONLY changed
+                // field, so a real profile edit made in the same transaction is still captured.
+                return;
+            }
+        } else {
+            // CREATE/DELETE act on the object as a whole - record which one, not every field.
+            details = new LinkedHashMap<>();
+        }
+        // Every row carries the object's name so the admin list can say WHICH object instead of
+        // a bare UUID.
+        String label = labelOf(propertyNames, newState != null ? newState : oldState);
+        if (label != null) {
+            details.put("_label", label);
         }
 
         ResourceType resourceType = RESOURCE_TYPE_BY_ENTITY.getOrDefault(entityName, ResourceType.OTHER);
@@ -173,42 +206,56 @@ public class AuditEventListener implements PostInsertEventListener, PostUpdateEv
         }
     }
 
-    private Map<String, Object> buildDetails(AuditAction action, String[] propertyNames,
-                                              Object[] oldState, Object[] newState) {
+    private Map<String, Object> buildChanges(String[] propertyNames, Object[] oldState, Object[] newState) {
         Map<String, Object> details = new LinkedHashMap<>();
         if (propertyNames == null) {
             return details;
         }
         for (int i = 0; i < propertyNames.length; i++) {
             String property = propertyNames[i];
-            if (SENSITIVE_FIELDS.contains(property)) {
+            if (SENSITIVE_FIELDS.contains(property) || BOOKKEEPING_FIELDS.contains(property)) {
                 continue;
             }
-            Object oldValue = oldState != null && i < oldState.length ? safeValue(oldState[i]) : null;
-            Object newValue = newState != null && i < newState.length ? safeValue(newState[i]) : null;
-
-            switch (action) {
-                case CREATE -> {
-                    if (newValue != null) {
-                        details.put(property, newValue);
-                    }
-                }
-                case DELETE -> {
-                    if (oldValue != null) {
-                        details.put(property, oldValue);
-                    }
-                }
-                case UPDATE -> {
-                    if (!Objects.equals(oldValue, newValue)) {
-                        Map<String, Object> change = new LinkedHashMap<>();
-                        change.put("old", oldValue);
-                        change.put("new", newValue);
-                        details.put(property, change);
-                    }
-                }
+            Object oldValue = valueAt(oldState, i);
+            Object newValue = valueAt(newState, i);
+            if (!Objects.equals(oldValue, newValue)) {
+                Map<String, Object> change = new LinkedHashMap<>();
+                change.put("old", oldValue);
+                change.put("new", newValue);
+                details.put(property, change);
             }
         }
         return details;
+    }
+
+    private boolean isSoftDelete(String[] propertyNames, Object[] oldState, Object[] newState) {
+        int index = indexOf(propertyNames, SOFT_DELETE_FIELD);
+        return index >= 0 && valueAt(oldState, index) == null && valueAt(newState, index) != null;
+    }
+
+    private String labelOf(String[] propertyNames, Object[] state) {
+        for (String field : LABEL_FIELDS) {
+            Object value = valueAt(state, indexOf(propertyNames, field));
+            if (value instanceof CharSequence text && !text.toString().isBlank()) {
+                return text.toString();
+            }
+        }
+        return null;
+    }
+
+    private int indexOf(String[] propertyNames, String property) {
+        if (propertyNames != null) {
+            for (int i = 0; i < propertyNames.length; i++) {
+                if (property.equals(propertyNames[i])) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private Object valueAt(Object[] state, int index) {
+        return state != null && index >= 0 && index < state.length ? safeValue(state[index]) : null;
     }
 
     private Object safeValue(Object value) {
