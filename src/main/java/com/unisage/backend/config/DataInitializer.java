@@ -380,7 +380,12 @@ public class DataInitializer implements CommandLineRunner {
             // ── SystemHealth ─────────────────────────────────────────────
             def(PredefinedPermissions.SYSTEM_HEALTH_READ,
                 "/admin/health/**", PermissionMethod.GET, ResourceType.SYSTEM,
-                "Xem tình trạng hệ thống")
+                "Xem tình trạng hệ thống"),
+
+            // ── Dashboard ──────────────────────────────────────────────────
+            def(PredefinedPermissions.DASHBOARD_READ,
+                "/admin/dashboard/**", PermissionMethod.GET, ResourceType.SYSTEM,
+                "Xem tổng quan hệ thống")
         ));
 
         return list;
@@ -436,7 +441,8 @@ public class DataInitializer implements CommandLineRunner {
             // Covered functionally by CHAT_MODEL_ALL already (method ALL matches PATCH/POST too),
             // but seeded explicitly so the permission exists as its own row for role granularity.
             permKey(PredefinedPermissions.CHAT_MODEL_ACTIVATE),
-            permKey(PredefinedPermissions.CHAT_MODEL_VERIFY)
+            permKey(PredefinedPermissions.CHAT_MODEL_VERIFY),
+            permKey(PredefinedPermissions.DASHBOARD_READ)
         );
         assign(role, perms, explicit);
         count += explicit.size();
