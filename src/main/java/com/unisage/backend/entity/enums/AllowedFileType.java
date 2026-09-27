@@ -15,7 +15,8 @@ public enum AllowedFileType {
     TXT(".txt"),
     PDF(".pdf"),
     DOCX(".docx"),
-    DOC(".doc"),
+    // No legacy .doc: unisage-agent's parser only reads OOXML .docx, so a .doc upload was stored
+    // and then failed at ingestion (UNISAGE-94).
     HTML(".html");
 
     private final String extension;

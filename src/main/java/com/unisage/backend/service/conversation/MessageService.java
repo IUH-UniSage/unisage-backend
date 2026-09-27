@@ -14,7 +14,12 @@ public interface MessageService {
 
     MessageResponse update(UUID id, UpdateMessageRequest request);
 
-    List<MessageResponse> getByConversation(UUID conversationId, Integer limit);
+    /**
+     * {@code forContext = false} (the chat UI) returns the whole history, or its last {@code limit}
+     * messages. {@code forContext = true} (the agent building a prompt) is additionally capped by
+     * the admin setting {@code chat.max_history_messages}.
+     */
+    List<MessageResponse> getByConversation(UUID conversationId, Integer limit, boolean forContext);
 
     MessageResponse getById(UUID id);
 }

@@ -65,6 +65,12 @@ public class ConversationServiceImpl implements ConversationService {
 
     @Override
     @Transactional
+    public int trimToMaxPerOwner(int keep) {
+        return conversationRepository.softDeleteBeyondNewestPerOwner(keep);
+    }
+
+    @Override
+    @Transactional
     public void softDelete(UUID id) {
         Conversation conversation = conversationRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));

@@ -44,7 +44,8 @@ buộc từ 2 dự án tham chiếu (`IUH_Project_Zalo_BE` dùng Redis TTL riên
 
 `GuestSessionCleanupJob` (`@Scheduled`, cron mặc định `0 0 3 * * *` — 3h sáng hằng ngày, cấu hình
 qua `app.guest-session.cleanup.cron`) gọi lặp `GuestSessionService.purgeExpiredBatch(batchSize)`
-(mặc định 500 dòng/lần, `app.guest-session.cleanup.batch-size`) cho tới khi một lượt trả về ít
+(500 dòng/lần, hằng số `GuestSessionCleanupJob.BATCH_SIZE` — UNISAGE-94 bỏ cấu hình này khỏi
+`system_configs` vì đây là thông số tinh chỉnh nội bộ, admin không cần sửa) cho tới khi một lượt trả về ít
 hơn `batchSize`, tức đã hết session hết hạn để xử lý. Chọn batch thay vì một câu lệnh xoá hàng
 loạt duy nhất vì số lượng guest session hết hạn tại một thời điểm không có giới hạn trên (một
 project sinh viên có thể tích luỹ hàng chục nghìn session sau vài tháng không dọn), và một
@@ -165,5 +166,4 @@ chưa có hạ tầng Testcontainers/embedded DB để assert việc này ở d�
   (các query bulk-delete/`findExpiredIds`)
 - `src/main/resources/db/migration/V1__baseline_schema.sql` (tiền lệ không dùng `ON DELETE
   CASCADE`, đối chiếu ở Decision #4)
-- `src/main/resources/application.properties` (`app.guest-session.ttl-days`,
-  `app.guest-session.cleanup.cron`, `app.guest-session.cleanup.batch-size`)
+- `src/main/resources/application.properties` (`app.guest-session.cleanup.cron`)
