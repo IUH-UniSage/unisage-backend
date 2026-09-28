@@ -200,7 +200,16 @@ pass (không skip, không pending), có link CI run hoặc report JUnit đính k
 - **Routing Policy (Phase 9, làm sau cùng) phụ thuộc dữ liệu cost/latency từ plan
   Cost Tracking** (`changes/23-09-2026-Cost-Tracking-Budget-Management/`). Số phase
   0-9 và số task 0-20 được giữ nguyên vì plan đó tham chiếu "Model Registry Phase
-  0-6", "Phase 9", V16, V20.
+  0-6", "Phase 9".
+  **Migration version (cập nhật vòng review chung):** giả định ban đầu "V16 cho
+  Model Registry, V20 cho Routing Policy" đã sai vì các migration khác trên
+  `main` chen vào trước — migration state machine của plan này thực tế lên DB
+  dưới tên `V18__add_chat_model_purpose_and_status.sql` (không phải `V16`, xem
+  file thật trong `db/migration/`), và plan Cost Tracking đã chốt lại dùng
+  V25-V27 (repo hiện ở V24 tại thời điểm sửa). Routing Policy (Phase 9) vì vậy
+  dùng **V28**, không phải V20 — luôn xác nhận bằng
+  `ls db/migration | sort -V | tail -1` trước khi tạo file thật, số ở đây chỉ
+  đúng tại thời điểm viết.
 
 ## Cutover khỏi cấu hình `.env` tĩnh
 
@@ -256,9 +265,24 @@ vừa đọc `.env`".
 Base path Java: `/api/v1/internal/model-registry` (context path `/api/v1`). Mọi
 request bắt buộc header `X-Internal-Secret`; không cần JWT.
 
-Đây là **danh sách đầy đủ và duy nhất** các endpoint nội bộ của feature (7
-endpoint). Mọi chỗ khác (security flow, DTO isolation, gateway-block test, test
-`no-store`) tham chiếu bảng này; thêm endpoint mới thì sửa ở đây trước.
+Đây là **danh sách đầy đủ và duy nhất** các endpoint nội bộ **của riêng feature
+này** (7 endpoint) — đây là checkpoint gốc của plan Model Registry, đạt được
+độc lập với Cost Tracking. Mọi chỗ khác (security flow, DTO isolation,
+gateway-block test, test `no-store`) tham chiếu bảng này; thêm endpoint mới
+thì sửa ở đây trước.
+
+**Sau khi tích hợp plan Cost Tracking** (`changes/23-09-2026-Cost-Tracking-Budget-Management/`,
+mục "Internal API & bảo mật" của plan đó), 3 endpoint nội bộ của Cost
+(`POST /internal/usage-logs`, `GET /internal/budgets/snapshot`,
+`GET /internal/usage-logs/period-totals`) dùng chung cơ chế xác thực này và
+được thêm vào **cùng** `InternalEndpointCoverageTest`/`InternalNoStoreTest`.
+Từ thời điểm đó, **có hai mốc nghiệm thu khác nhau, không được lẫn lộn**:
+- Checkpoint Phase 0.5 của plan này (độc lập, không phụ thuộc Cost Tracking):
+  coverage test phải bằng đúng **7**.
+- Checkpoint chung sau khi Cost Tracking Task 2 merge: coverage test (bản đã
+  được Cost Tracking mở rộng) phải bằng đúng **10** (7 của plan này + 3 của
+  Cost Tracking). Nếu Cost Tracking chưa merge, con số đúng vẫn là 7 — không
+  tự ý sửa số 7 ở đây chỉ vì có kế hoạch mở rộng trong tương lai.
 
 | # | Method | Path (sau base path) | Gọi bởi | Trả secret? | Mục đích |
 |---|--------|------|---------|---|----------|
@@ -511,7 +535,7 @@ khi không có credential nào ACTIVE (vd sau khi bị DISABLED).
      "đọc rồi ghi" (tránh race check-then-insert).
   2. Repository không có method update/delete cho entity này (entity
      `@Immutable`).
-  3. V16 thêm trigger `BEFORE UPDATE OR DELETE ON embedding_index_identity` raise
+  3. V18 thêm trigger `BEFORE UPDATE OR DELETE ON embedding_index_identity` raise
      exception — kể cả SQL tay hay bug sau này cũng không sửa được. Plan re-index
      sau này dùng collection mới, không cần xoá row cũ.
 - Race khởi tạo lần đầu (collection rỗng, 2 worker cùng upsert đầu tiên, hoặc
@@ -582,7 +606,8 @@ khớp danh tính index, lệch → 409 `EMBEDDING_REINDEX_REQUIRED`.
 Health report mang revision cũ bị bỏ qua, nên không thể DISABLE nhầm row vừa
 được rotate.
 
-Ràng buộc DB (migration V16):
+Ràng buộc DB (migration V18 — tên file thật trong repo, không phải V16 như
+dự kiến ban đầu, vì migration khác trên `main` đã chen số V16/V17 trước):
 - `CHECK (status IN ('PENDING','ACTIVE','INACTIVE','DISABLED'))`,
   `CHECK (model_purpose IN ('CHAT','EMBEDDING','EXTRACTION'))`.
 - `CREATE UNIQUE INDEX ux_chat_models_single_active_embedding ON chat_models (model_purpose) WHERE model_purpose = 'EMBEDDING' AND status = 'ACTIVE' AND is_active = true;`
@@ -625,7 +650,7 @@ Pull-based, chỉ có chiều Python → Java. Java giữ job state trong bảng
 | `created_at`, `started_at`, `finished_at` | |
 
 **Trạng thái verification — danh sách chuẩn duy nhất (7 giá trị).** Java enum
-`ChatModelVerificationStatus`, CHECK constraint V16, DTO SA-facing
+`ChatModelVerificationStatus`, CHECK constraint V18, DTO SA-facing
 (`latestVerification.status`), type TypeScript của `unisage-web` và mọi chỗ trong
 plan/todo phải dùng **đúng** danh sách này:
 
@@ -979,7 +1004,7 @@ backend, Slack, response SA. Quy tắc:
 
 ### Phase 1: Java — Mở rộng Model Registry
 - [ ] Task 1: `modelPurpose`, `status`, `verifiedAt`, bảng verification + version,
-      constraint (V16)
+      constraint (V18)
 - [ ] Task 2: `POST /internal/model-registry/credentials/{id}/health`
 - [ ] Task 3: API SA: activate/deactivate/re-verify/priority theo state machine
 

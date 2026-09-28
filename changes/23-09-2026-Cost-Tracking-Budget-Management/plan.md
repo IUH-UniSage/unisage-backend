@@ -4,12 +4,35 @@
 
 Phase này nối tiếp **sau khi** Dynamic Model Registry + Runtime Active Switch
 (`changes/23-09-2026-Dynamic-Model-Registry-Runtime-Failover/`) đã triển khai
-**và nghiệm thu** xong Phase 0-6 (LiteLLM trong `get_graph_models()`,
-`model_router`, failover Chat/Extraction, Embedding đọc registry). Tại thời
-điểm viết plan này, code vẫn dùng `OpenAIChatModel` (`app/api/deps.py`) và
-OpenAI SDK trực tiếp (`multi_representation.py`, `openai_embedder.py`), chưa có
-`litellm`/`model_router` — nên **Phase 0 của plan này là cổng chặn**: không bắt
-đầu Phase 2 khi chưa chốt được điểm lấy usage/token thật cho từng loại call.
+xong Phase 0-6 (model native PydanticAI trong `get_graph_models()`,
+`model_router`, failover Chat/Extraction, Embedding đọc registry — xem
+"Phản hồi review" mục 6 bên dưới cho quyết định về prerequisite gate).
+
+**Quyết định kiến trúc gọi provider (ADR 0005 của plan Model Registry): dùng
+model native của PydanticAI theo từng provider, không dùng LiteLLM SDK để gọi
+provider.** Plan này **không mâu thuẫn** với quyết định đó — `litellm` ở đây
+chỉ được dùng như **thư viện tra cứu giá offline** (`litellm.completion_cost()`,
+`litellm.cost_per_token()`), đọc bảng giá tĩnh đóng gói sẵn trong package, không
+mở kết nối mạng, không phải là đường gọi provider. Test kiến trúc của plan
+Model Registry (`test_no_raw_provider_clients.py`, mục "SSRF policy" của plan
+đó) quét `litellm.*completion(`/`embedding(` — tức các hàm **gọi provider thật**
+(`litellm.completion`, `litellm.acompletion`, `litellm.embedding`) — không quét
+`completion_cost`/`cost_per_token`, nên 2 hàm định giá này không vi phạm rào
+SSRF/factory duy nhất. Task 0 của plan này (spike) phải xác nhận lại bằng code
+thật: gọi `litellm.cost_per_token(model=..., prompt_tokens=..., completion_tokens=...)`
+không phát sinh network call (mock `httpx`/socket, assert 0 request), rồi mới
+được coi là chốt.
+
+**Cập nhật (vòng review 3):** Dynamic Model Registry đã được triển khai —
+`model_router`/factory provider (Task 0.6, Task 5 của plan đó) và model native
+PydanticAI theo provider đã tồn tại trong code, thay cho `OpenAIChatModel`
+(`app/api/deps.py`) và OpenAI SDK trực tiếp (`multi_representation.py`,
+`openai_embedder.py`) mà bản plan gốc mô tả. Điều **chưa** tồn tại là móc nối
+Cost Tracking vào các điểm đó: `UsageRecorder` (Task 6), hook usage trong
+`model_router` đủ trường cho Cost (Task 0 của plan này), `cost_calculator`
+(Task 5) — đây là lý do **Phase 0 của plan này vẫn là cổng chặn**: không bắt
+đầu Phase 2 khi chưa chốt được điểm lấy usage/token thật cho từng loại call
+*từ code registry thật đang có*, không phải từ giả định lý thuyết.
 
 SA hiện không có cách nào biết hệ thống đang tốn bao nhiêu tiền LLM mỗi
 ngày/tháng, theo chức năng nào (Chat/Extraction/Embedding), hay dừng lại khi
@@ -23,28 +46,55 @@ cost/latency theo credential mà `RequestUsageLine` của phase này tạo ra.
 
 ## Phản hồi review
 
+**Ghi chú:** các bảng "Vòng 1"/"Vòng 2" bên dưới là **lịch sử** — quyết định ở
+đó có thể đã bị **superseded** bởi vòng sau (vd blocker 5 ở Vòng 1 và blocker 4
+ở Vòng 2 đã bị Vòng 3 thay thế). Quyết định **hiện hành** luôn là bảng có số
+vòng **lớn nhất**; không lấy quyết định ở vòng cũ làm căn cứ implement nếu vòng
+mới hơn có ghi đè.
+
+**Vòng 1 (lịch sử — SUPERSEDED một phần, xem dòng ⚠):**
+
 | Blocker trong review | Quyết định |
 |---|---|
 | 1. 1 record/1 `chatModel` không đủ cho multi-model/failover | Parent `RequestUsageLog` + child `RequestUsageLine` (1 dòng/1 LLM hoặc embedding call, kể cả attempt failover lỗi), snapshot provider/model/sourceType tại thời điểm gọi |
 | 2. Budget chưa phải hard limit, race khi concurrent | **Soft limit** (đã chốt) + **reservation mỗi request** bằng Redis Lua atomic; THROTTLE = giới hạn concurrency; ma trận hành vi theo scope ở mục "Budget semantics" |
 | 3. USER_GROUP/`scopeRefId` không có domain | Bỏ USER_GROUP khỏi phase này (code chưa có khái niệm nhóm). Thay `scopeRefId` bằng 2 cột có kiểu: `scopeProvider` (String), `scopePurpose` (enum) |
 | 4. Thiếu persistence cho alert config, debounce có race | Entity `BudgetAlertSetting`; `BudgetAlertLog.dedupeKey` UNIQUE + claim bằng `INSERT ... ON CONFLICT DO NOTHING`; Slack cấu hình qua **env** (đã chốt) |
-| 5. Endpoint nội bộ không qua được RBAC | Whitelist tường minh trong `InternalSecretFilter` + `PredefinedPublicPaths`, prefix `/internal/**`, test đủ 5 case |
-| 6. Prerequisite chưa có | Phase 0 = gate nghiệm thu Model Registry + spike chốt nguồn usage cho PydanticAI/LiteLLM/embedding/extraction |
+| ⚠ 5. Endpoint nội bộ không qua được RBAC | ~~Whitelist tường minh trong `InternalSecretFilter` + `PredefinedPublicPaths`~~ — **SUPERSEDED bởi Vòng 3 blocker 3**: đổi sang mô hình `TRUSTED_INTERNAL_CALLER_ATTRIBUTE` của plan Model Registry, không dùng `PredefinedPublicPaths` |
+| 6. Prerequisite chưa có | Phase 0 = gate nghiệm thu Model Registry + spike chốt nguồn usage cho PydanticAI/LiteLLM/embedding/extraction (⚠ điều kiện "nghiệm thu" bị nới lỏng ở Vòng 3 blocker 4) |
 | Thiếu sót khác | Lưu cả `userMessageId` + `assistantMessageId`; FK `ON DELETE SET NULL`; `requestId` idempotent; quy tắc `costUsd = null`; timezone `app.timezone`; index bổ sung; RBAC `USAGE_LOG`/`BUDGET`; spec đầy đủ cho UI |
 
-**Vòng 2:**
+**Vòng 2 (lịch sử — SUPERSEDED một phần, xem dòng ⚠):**
 
 | Blocker | Quyết định |
 |---|---|
 | 1. PROVIDER budget không có reservation atomic | Mỗi provider attempt gọi `acquire_provider.lua` (check + tăng `reserved`/`inflight` atomic) và `release_provider.lua` khi attempt xong; failover = release provider cũ, acquire provider mới |
 | 2. Unique index với cột NULL không chặn trùng SYSTEM | 3 partial unique index riêng cho SYSTEM/PROVIDER/PURPOSE + CHECK constraint theo scope |
 | 3. `BudgetAlertSetting` 1 dòng chưa enforce; retry alert không có trạng thái | PK cố định `id = 1` + `CHECK (id = 1)`, seed bằng migration, API chỉ GET/PUT; `BudgetAlertLog` thêm `attemptCount`, `nextAttemptAt`, `lastAttemptAt`, status `GAVE_UP` |
-| 4. Version migration sai (repo đang ở V15) | Chốt số: Model Registry V16, plan này V17-V19, Routing Policy V20 — xem "Migration versions" |
+| ⚠ 4. Version migration sai (repo đang ở V15) | ~~Chốt số: Model Registry V16, plan này V17-V19, Routing Policy V20~~ — **SUPERSEDED bởi Vòng 3 blocker 2**: giả định "repo ở V15" sai; số đúng hiện hành là V25-V27 (plan này) / V28 (Routing Policy) |
 | 5. `timestamptz` không khớp `LocalDateTime` | Giữ `timestamp(6) without time zone` chứa giá trị **UTC** (convention của `Clock.systemUTC()` / `UsageLimitServiceImpl`); cắt kỳ theo `APP_TIMEZONE` rồi đổi sang UTC khi query |
 | 6. Outbox worker, scheduler, Redis persistence chưa có deploy | Task 11b: Celery beat + task drain/reclaim/release/reconcile, Taskfile + README, Redis AOF + volume, health báo outbox/dead-letter, lệnh replay dead-letter |
 | 7. Mail env chưa có | Đã thêm `SPRING_MAIL_*` + `BUDGET_ALERT_MAIL_FROM` vào `.env.example`/`.ENV`; thiếu host/from → `SKIPPED`; tắt `management.health.mail` |
 | Bổ sung | Request không có LLM call → không tạo parent; `conversationId` FK ON DELETE SET NULL; Redis lưu **micro-USD integer**; `APP_TIMEZONE` + biến budget đã thêm vào `unisage-agent/.env.example` |
+
+**Vòng 3 (⚠ blocker 1 được bổ sung ở Vòng 4, xem dòng đó):**
+
+| Blocker | Quyết định |
+|---|---|
+| ⚠ 1. Mâu thuẫn LiteLLM với ADR 0005 (model native PydanticAI, cấm LiteLLM SDK gọi provider) | `litellm` trong plan này chỉ là **thư viện tra giá offline** (`completion_cost`/`cost_per_token`), không gọi provider — xem Overview + Task 0 acceptance criteria (test không network call). Không dùng `litellm.acompletion`/`litellm.aembedding` ở đâu trong plan này. **Bổ sung ở Vòng 4:** rule kiến trúc `test_no_raw_provider_clients.py` phía plan Model Registry vẫn cấm `import litellm` tuyệt đối — đã sửa để whitelist đúng module `cost_calculator.py` |
+| 2. Migration version sai, đụng thực tế (repo đã ở V24, migration state machine của Model Registry đã lên DB dưới tên `V18__add_chat_model_purpose_and_status.sql`, không phải V16 như plan Model Registry ghi) | Chốt lại: plan này dùng **V25-V27**, Routing Policy (Phase 9 của Model Registry) dời sang **V28** — xem "Migration versions" đã cập nhật bên dưới; luôn chạy `ls db/migration \| sort -V \| tail -1` trước khi tạo file vì đây là dự án dùng chung với các thay đổi khác trên `main` |
+| 3. Internal API không nhất quán với mô hình bảo mật đã chốt ở plan Model Registry (secret set request attribute, `DynamicAuthorizationManager` cấp quyền theo attribute + pattern path, **không** qua `PredefinedPublicPaths`) | Đổi theo đúng mô hình Model Registry — xem "Internal API & bảo mật" đã sửa bên dưới; 3 endpoint của plan này được thêm vào cùng 1 danh sách `INTERNAL_ONLY_PATHS`/coverage test với 7 endpoint của Model Registry (tổng 10) |
+| 4. Prerequisite Model Registry Phase 0-6 chưa đạt "implementation approved" | **Chủ động bỏ qua theo quyết định của product owner**: Dynamic Model Registry đã được triển khai và test xong ở mức đủ dùng cho plan này (dù chưa đạt mọi tiêu chí ở mục "Gate: implementation approved" của plan đó); Task 0 không còn chặn cứng vào trạng thái approve hình thức của plan kia, chỉ chặn vào việc spike thực sự xác nhận được nguồn usage/token — xem Task 0 đã sửa |
+| Bổ sung | UNIQUE `(usage_log_id, seq)` ở DB cho `RequestUsageLine`, không chỉ validate ở service; làm rõ điều kiện kích hoạt THROTTLE (mục "Budget semantics"); quy tắc đối soát khi outbox rỗng nhưng vẫn còn item trong `usage:outbox:dead`; hook native duy nhất trước/sau mỗi attempt bao gồm usage ở chunk cuối stream, provider/model sau failover, latency, `chatModelId` |
+
+**Vòng 4 (quyết định hiện hành, chỉ sửa nốt phần còn sót của Vòng 3):**
+
+| Blocker | Quyết định |
+|---|---|
+| 1. Rule kiến trúc của plan Model Registry (`test_no_raw_provider_clients.py`) vẫn cấm mọi `import litellm` trong agent, mâu thuẫn với việc plan này cần import litellm để tra giá | Sửa rule ở phía plan Model Registry (`todo.md` Task 0.6): whitelist đúng 1 module `app/core/cost_calculator.py` được phép `import litellm`; **trong chính module đó** vẫn quét và cấm tuyệt đối `litellm.completion(`/`acompletion(`/`embedding(`/`aembedding(` và mọi cách tạo provider transport (httpx/AsyncOpenAI/`client=`/`api_base=` ra ngoài) — module chỉ được làm phép tính giá thuần, không mở kết nối mạng. Mọi file khác trong `app/` vẫn cấm `import litellm` hoàn toàn |
+| 2. Task 18 (Routing Policy) của plan Model Registry vẫn ghi `V20__add_routing_policy.sql` trong cả plan.md và todo.md — tham chiếu **active**, không phải lịch sử | Đã sửa cả 2 file của plan Model Registry thành `V28__add_routing_policy.sql`, khớp với bảng "Migration version" đã chốt |
+| 3. Plan này yêu cầu coverage 10 endpoint, nhưng plan Model Registry vẫn mô tả coverage là đúng 7 — hai tiêu chí nghiệm thu khác nhau nếu không ghi rõ | Sửa plan Model Registry, mục "Internal API contract": checkpoint gốc (Phase 0.5, độc lập) vẫn là **7** đúng như trước; sau khi Cost Tracking Task 2 merge, coverage test (bản mở rộng) phải là **10** — không đổi số 7 ở checkpoint gốc, chỉ ghi thêm mốc sau khi tích hợp |
+| 4. Mô tả cũ còn gây nhiễu | Sửa Overview (không còn nói "code chưa có model_router/factory" — Model Registry đã triển khai xong, chỉ Cost Tracking chưa móc nối vào); sửa risk table dùng đúng V25-V28 thay vì V16-V20; bỏ `PredefinedPublicPaths.java` khỏi "Files likely touched" của Task 2 (todo.md); gắn nhãn "lịch sử — SUPERSEDED một phần" cho các bảng Vòng 1/Vòng 2/Vòng 3 ở trên |
 
 ## Architecture Decisions
 
@@ -125,8 +175,11 @@ CLOUD_API), `costStatus` (PRICED/UNPRICED/FREE), `latencyMs`, `status`
   (`purpose`, `started_at`); (`user_id`, `started_at`); (`status`,
   `started_at`); (`user_message_id`); (`assistant_message_id`);
   (`conversation_id`).
-- `request_usage_lines`: (`usage_log_id`); (`occurred_at`); (`provider`,
-  `occurred_at`); (`chat_model_id`, `occurred_at`).
+- `request_usage_lines`: **UNIQUE(`usage_log_id`, `seq`)** — chặn trùng `seq`
+  ở tầng DB, không chỉ validate ở service (`RequestUsageLogServiceImpl` vẫn
+  validate trước để trả `ErrorCode` rõ ràng thay vì lộ constraint violation, nhưng
+  DB là chốt chặn cuối khi có bug/race ở tầng service); (`occurred_at`);
+  (`provider`, `occurred_at`); (`chat_model_id`, `occurred_at`).
 
 ### `Budget`
 `id`, `scope` (SYSTEM/PROVIDER/PURPOSE), `scopeProvider` (String, bắt buộc khi
@@ -240,11 +293,25 @@ làm mới mỗi lần tăng).
 
 **Ma trận hành vi khi vượt limit:**
 
+**Làm rõ điều kiện kích hoạt THROTTLE (vòng 3):** THROTTLE **không** kích hoạt
+ngay khi `committed + reserved` vượt `limitUsd` — nó chỉ giới hạn **số request
+đang chạy đồng thời** (`inflight`) khi ngân sách của kỳ **đã** vượt. Điều kiện
+từ chối là **AND** của cả hai vế (khớp với Lua `reserve_request`/
+`acquire_provider` ở mục "Budget semantics" bước 1-2, không phải OR):
+`(committed + reserved ≥ limit) AND (inflight ≥ throttleMaxConcurrency)`. Nói
+cách khác: nếu ngân sách còn dư (`committed + reserved < limit`) thì THROTTLE
+cho qua **vô điều kiện về concurrency** dù `inflight` đang cao — THROTTLE chỉ
+là van giới hạn tốc độ chi tiêu *sau khi* đã chạm limit, không phải giới hạn
+concurrency chung. Ngược lại nếu limit đã bị chạm nhưng `inflight <
+throttleMaxConcurrency` thì vẫn cho qua thêm request tới khi đạt cap. Đây là
+lý do action này tên là THROTTLE (giảm tốc khi đã vượt) chứ không phải một cơ
+chế rate-limit độc lập với budget.
+
 | Scope | ALERT | THROTTLE | BLOCK |
 |---|---|---|---|
-| SYSTEM | Cho qua, Java gửi alert | Tối đa `throttleMaxConcurrency` request in-flight toàn hệ thống; vượt → từ chối `BUDGET_THROTTLED` (HTTP 429, không queue, không delay) | Từ chối `BUDGET_EXCEEDED` trước mọi call provider |
-| PURPOSE | Như SYSTEM, chỉ cho purpose đó | Như SYSTEM, đếm in-flight theo purpose | Như SYSTEM — **không fallback được** vì mọi provider của purpose đều dùng chung budget |
-| PROVIDER | Cho qua | `acquire_provider` DENY khi in-flight của provider ≥ cap → router fallback; hết candidate → `BUDGET_THROTTLED` | `acquire_provider` DENY → router fallback; hết candidate → `BUDGET_EXCEEDED` |
+| SYSTEM | Cho qua, Java gửi alert | Đã vượt limit **và** đang có ≥ `throttleMaxConcurrency` request in-flight toàn hệ thống → từ chối `BUDGET_THROTTLED` (HTTP 429, không queue, không delay); chưa vượt limit thì cho qua bất kể inflight | Từ chối `BUDGET_EXCEEDED` trước mọi call provider |
+| PURPOSE | Như SYSTEM, chỉ cho purpose đó | Như SYSTEM, đếm in-flight theo purpose, cùng điều kiện AND ở trên | Như SYSTEM — **không fallback được** vì mọi provider của purpose đều dùng chung budget |
+| PROVIDER | Cho qua | Đã vượt limit của provider **và** `inflight` của provider ≥ cap → `acquire_provider` DENY → router fallback; hết candidate → `BUDGET_THROTTLED` | `acquire_provider` DENY → router fallback; hết candidate → `BUDGET_EXCEEDED` |
 
 Ingest (Extraction/Embedding) bị từ chối vì budget → job ingest đánh dấu lỗi
 retry được (không mất tài liệu), không retry dồn dập ngay.
@@ -264,28 +331,53 @@ cap) — Lua không đọc DB.
 
 **Đối soát `committed`:** job định kỳ, cho từng scope của kỳ hiện tại:
 1. Lua đọc atomic `LLEN usage:outbox` + `LLEN usage:outbox:processing` +
-   `committed` hiện tại (`C0`); outbox/processing khác rỗng → bỏ qua lượt này.
+   `LLEN usage:outbox:dead` + `committed` hiện tại (`C0`); **bất kỳ danh sách
+   nào trong 3 danh sách trên khác rỗng → bỏ qua lượt này**, không chỉ
+   outbox/processing.
 2. Lấy `dbTotal` từ `GET /internal/usage-logs/period-totals`.
 3. `INCRBY committed (dbTotal − C0)` — cộng delta thay vì `SET`, nên settle chạy
    xen giữa bước 1-3 không bị ghi đè. Sai lệch còn lại (payload vừa vào DB trong
    khoảng đó) tự triệt tiêu ở lượt sau.
 
+**Quy tắc khi payload đã vào `usage:outbox:dead` nhưng DB chưa có record
+tương ứng (vòng 3):** đây chính xác là lý do bước 1 phải kiểm cả `dead`, không
+chỉ outbox/processing — payload trong `usage:outbox:dead` là cost **đã phát
+sinh thật** (provider đã bị gọi, tiền đã tốn) nhưng chưa tới được DB (lỗi
+schema, Java từ chối 4xx...), nên `dbTotal` hiện tại **thấp hơn** committed
+thực tế của kỳ. Nếu job đối soát bỏ qua điều kiện này và chạy `INCRBY committed
+(dbTotal − C0)`, nó sẽ **trừ nhầm** `committed` xuống thấp hơn số tiền thực đã
+chi — sai theo hướng nguy hiểm hơn (đánh giá thấp mức tiêu, có thể để budget
+BLOCK cho qua thêm request trong khi thực ra đã vượt). Vì vậy: còn item trong
+`dead` → job đối soát **không** cộng delta cho scope liên quan, chỉ log
+cảnh báo kèm số item trong `dead` và tuổi của item cũ nhất (giống cách health
+agent báo `usageOutbox.dead > 0` → `degraded`), buộc SA chạy
+`task usage:replay-dead` sau khi sửa nguyên nhân trước khi đối soát tiếp tục
+chạy bình thường. Committed không bị hạ sai chỉ vì có 1 payload lỗi schema kẹt
+trong dead.
+
 ## Migration versions
 
-Repo đang ở `V15__usage_limit_plans_and_token_windows.sql`. Chốt số để 2 plan
-không đụng nhau:
+**Cập nhật (vòng 3):** giả định ban đầu "repo đang ở V15" đã sai — các migration
+khác trên `main` đã chen vào trước khi plan Model Registry migrate xong, nên
+migration state machine của Model Registry (`add_chat_model_purpose_and_status`)
+thực tế lên DB dưới tên `V18__add_chat_model_purpose_and_status.sql`, không
+phải `V16` như văn bản gốc của plan Model Registry ghi (plan đó đã được sửa lại
+để phản ánh đúng, xem file `plan.md` của Model Registry, mục "Migration
+versions"). Tại thời điểm viết bản sửa này, `db/migration` đã có tới
+`V24__drop_doc_from_allowed_extensions.sql`. Chốt số mới:
 
 | Version | Plan | Nội dung |
 |---|---|---|
-| V16 | Model Registry | `V16__add_chat_model_purpose_and_status.sql` (plan Model Registry đã sửa từ `V10` cũ) |
-| V17 | Plan này | `V17__add_request_usage_logs.sql` |
-| V18 | Plan này | `V18__add_budget_tables.sql` |
-| V19 | Plan này | `V19__seed_cost_permissions.sql` |
-| V20 | Model Registry Phase 9 | `V20__add_routing_policy.sql` |
+| V18 | Model Registry (đã áp dụng) | `V18__add_chat_model_purpose_and_status.sql` |
+| V25 | Plan này | `V25__add_request_usage_logs.sql` |
+| V26 | Plan này | `V26__add_budget_tables.sql` |
+| V27 | Plan này | `V27__seed_cost_permissions.sql` |
+| V28 | Model Registry Phase 9 | `V28__add_routing_policy.sql` |
 
 Trước khi tạo file, chạy `ls db/migration | sort -V | tail -1`; nếu đã có
-migration khác chen vào thì dời cả dải V16-V20 lên và cập nhật bảng này ở cả 2
-plan trong cùng commit.
+migration khác chen vào thì dời cả dải V25-V28 lên và cập nhật bảng này ở cả 2
+plan trong cùng commit. Không giả định số phiên bản cố định trong code (test,
+tên class Java...) — chỉ dùng chúng trong tên file migration và tài liệu.
 
 ## Deployment (worker, scheduler, Redis)
 
@@ -307,15 +399,36 @@ plan trong cùng commit.
 
 ## Internal API & bảo mật
 
+**Cập nhật (vòng 3):** đổi theo đúng mô hình đã chốt ở plan Model Registry
+(`changes/23-09-2026-Dynamic-Model-Registry-Runtime-Failover/plan.md`, mục
+"Internal API contract" / "Security flow") — **không** dùng
+`PredefinedPublicPaths` cho `/internal/**` (bản trước của plan này yêu cầu vậy,
+sai và không nhất quán với plan kia).
+
 - Prefix `/internal/**`, khai báo tường minh từng method+path (không wildcard
-  rộng) ở **cả hai** nơi: `InternalSecretFilter.INTERNAL_ONLY_PATHS` (thiếu/sai
-  secret → 403 ngay tại filter) và `PredefinedPublicPaths.PUBLIC_PATHS` (để
-  `DynamicAuthorizationManager` không đòi JWT) — cùng pattern `PATCH /messages/*`
-  hiện có.
-- Endpoint nội bộ: `POST /internal/usage-logs`, `GET /internal/budgets/snapshot`,
-  `GET /internal/usage-logs/period-totals`.
-- Secret hợp lệ **không** mở được endpoint user-facing: filter chỉ set attribute,
-  `/usage-logs`, `/budgets`... vẫn phải qua RBAC bằng JWT.
+  rộng) trong `InternalSecretFilter.INTERNAL_ONLY_PATHS`: thiếu/sai secret →
+  403 `INTERNAL_SECRET_INVALID` ngay tại filter; secret đúng → filter set
+  request attribute `TRUSTED_INTERNAL_CALLER_ATTRIBUTE = TRUE`.
+  `DynamicAuthorizationManager` có nhánh riêng: path khớp `/internal/**` **và**
+  attribute đó `TRUE` → grant, **không** cần path nằm trong
+  `PredefinedPublicPaths` và không cần JWT. Path `/internal/**` thiếu attribute
+  (vd filter chưa chạy, bug thứ tự filter) → deny, kể cả JWT SA hợp lệ.
+- Áp dụng chung với 7 endpoint của Model Registry: `InternalCallerCidrFilter`
+  (CIDR fail-closed) và `InternalResponseHeadersFilter` (`Cache-Control:
+  no-store` + `Pragma: no-cache` cho mọi response `/internal/**`, kể cả 3
+  endpoint không trả secret của plan này).
+- Endpoint nội bộ của plan này (thêm vào **cùng một** bảng danh sách endpoint
+  nội bộ duy nhất với 7 endpoint của Model Registry, tổng 10 — xem
+  "Contract coverage" bên dưới): `POST /internal/usage-logs`,
+  `GET /internal/budgets/snapshot`, `GET /internal/usage-logs/period-totals`.
+- Secret hợp lệ **không** mở được endpoint user-facing: attribute chỉ được
+  kiểm trong nhánh `/internal/**` của `DynamicAuthorizationManager`,
+  `/usage-logs`, `/budgets`... vẫn đi qua nhánh RBAC bằng JWT như bình thường.
+- **Contract coverage:** `InternalEndpointCoverageTest` của Model Registry
+  (Task 0.1 plan đó) phải mở rộng để assert đúng **10** endpoint (7 Model
+  Registry + 3 plan này), không phải 7; `InternalNoStoreTest` mở rộng tương tự
+  cho 3 endpoint mới. Sửa 2 test này là một phần của Task 2 plan này, trong
+  cùng commit với việc thêm endpoint (tránh coverage test bị lệch ngầm).
 - RBAC: thêm `ResourceType.USAGE_LOG` ("Nhật ký chi phí AI"), `BUDGET` ("Ngân
   sách AI"); permission trong `PredefinedPermissions`; `DataInitializer` gán cho
   SYSTEM_ADMIN; migration Flyway insert permission + role_permission cho DB đã
@@ -450,7 +563,7 @@ với `RequestUsageLog`. Để 2 hệ thống độc lập (xem Open Questions).
 | Reservation treo khi process crash làm "khoá" budget | Medium | TTL + job `release_expired_reservations` mỗi phút |
 | Outbox Redis mất dữ liệu nếu Redis không bật persistence | Medium | AOF + volume là acceptance criterion của Task 11b, có test restart |
 | Dead-letter tích tụ không ai thấy | Medium | Health agent `degraded` khi `dead > 0`, hiện ở trang System Health; `task usage:replay-dead` |
-| Số migration đụng với plan Model Registry | Medium | Bảng "Migration versions" chốt V16-V20, kiểm tra `sort -V` trước khi tạo file |
+| Số migration đụng với plan Model Registry | Medium | Bảng "Migration versions" chốt V25-V28 (V18 Model Registry đã áp dụng, V25-V27 plan này, V28 Routing Policy), kiểm tra `sort -V` trước khi tạo file |
 | LiteLLM không có giá model mới | Medium | UNPRICED + estimate fallback, không coi là $0 |
 | Bảng giá FE lệch giá thật | Low | Chỉ tham khảo, ghi chú trên UI |
 | Slack webhook URL lộ | Medium | Chỉ trong env (`.ENV` không commit), không lưu DB, không trả về API |
