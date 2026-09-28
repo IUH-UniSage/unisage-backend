@@ -10,37 +10,74 @@ Quyết định đã chốt với product owner:
   placeholder vào `.env.example` và `.ENV`), không lưu DB, không nhập qua UI.
 - SMTP cũng qua env (`SPRING_MAIL_*`, `BUDGET_ALERT_MAIL_FROM`, placeholder đã
   thêm). `APP_TIMEZONE` + `BUDGET_*` đã thêm vào `unisage-agent/.env.example`.
-- Migration: V17-V19 (xem "Migration versions" trong plan.md).
+- Migration: **V25-V27** (đã đổi từ V17-V19 ở vòng review 3 — xem "Migration
+  versions" trong plan.md; repo thực tế đã ở V24, migration state machine của
+  Model Registry lên DB là V18 chứ không phải V16).
+- `litellm` trong plan này **chỉ** dùng để tra giá offline
+  (`completion_cost`/`cost_per_token`), không dùng để gọi provider — không mâu
+  thuẫn với ADR 0005 của plan Model Registry (cấm LiteLLM SDK làm đường gọi
+  provider). Xem Overview trong plan.md.
+- Internal API `/internal/usage-logs`, `/internal/budgets/snapshot`,
+  `/internal/usage-logs/period-totals` cấp quyền theo cùng mô hình
+  `TRUSTED_INTERNAL_CALLER_ATTRIBUTE` của plan Model Registry, **không** qua
+  `PredefinedPublicPaths` (đổi ở vòng review 3 — xem "Internal API & bảo mật"
+  trong plan.md).
+- **Prerequisite Model Registry Phase 0-6:** product owner xác nhận đã
+  implement và test xong ở mức đủ dùng, **cho phép bỏ qua** yêu cầu "implementation
+  approved" hình thức của plan Model Registry — xem Task 0 bên dưới đã sửa.
 
 ---
 
 ## Phase 0: Gate
 
-### Task 0: Nghiệm thu Model Registry + spike chốt nguồn usage/token
+### Task 0: Spike chốt nguồn usage/token (prerequisite Model Registry: xem ghi chú)
 
 **Description:** Plan này cần biết chính xác provider/model/credential và
-usage thật của từng call. Code hiện tại chưa có (`OpenAIChatModel` trong
-`app/api/deps.py`, OpenAI SDK trực tiếp trong `multi_representation.py` và
-`openai_embedder.py`, chưa có `litellm`/`model_router`).
+usage thật của từng call, dựa trên model native PydanticAI theo provider (ADR
+0005 của plan Model Registry) — **không** phải LiteLLM SDK làm đường gọi.
+
+**Prerequisite (đã sửa ở vòng review 3):** bản gốc của task này yêu cầu Model
+Registry Phase 0-6 phải đạt "implementation approved" (mục "Gate: implementation
+approved" của plan Model Registry) trước khi bắt đầu. Product owner xác nhận
+Dynamic Model Registry **đã được implement và test xong** ở mức đủ để plan này
+dựa vào — quyết định này **ghi đè** yêu cầu approve hình thức, task 0 không
+còn chặn vào trạng thái checklist của plan kia. Điều vẫn bắt buộc: spike dưới
+đây phải chạy trên code Model Registry **thật đang có** (không phải giả định
+lý thuyết), vì Task 5-10 của plan này gọi thẳng vào `model_router`/factory của
+Model Registry.
 
 **Acceptance criteria:**
-- [ ] Model Registry Phase 0-6 (`changes/23-09-2026-Dynamic-Model-Registry-Runtime-Failover/`)
-      đã tick xong và được human nghiệm thu
 - [ ] Ghi vào `unisage-agent/docs/product/DECISIONS.md` bảng "nguồn usage" cho 4
       loại call, mỗi dòng có: điểm hook trong code, field input/output/cached
       token, cách lấy provider/model/`chatModelId` thực tế sau failover, cách lấy
-      latency — PydanticAI agent run (`result.usage()`), LiteLLM completion
-      (`response.usage` + `completion_cost`), embedding (`response.usage.prompt_tokens`),
-      extraction
+      latency — PydanticAI agent run (`result.usage()`), embedding
+      (`response.usage.prompt_tokens`), extraction. Với LiteLLM: chỉ ghi cách
+      dùng `litellm.cost_per_token`/`completion_cost` để **định giá** kết quả
+      usage đã lấy được từ model native, không phải cách LiteLLM tự lấy usage
+      (plan này không gọi provider qua LiteLLM)
+- [ ] Test xác nhận `litellm.completion_cost()`/`litellm.cost_per_token()`
+      **không** phát sinh network call (mock transport/socket ở tầng thấp nhất
+      có thể, assert 0 request) — bằng chứng bằng test chạy được, không chỉ đọc
+      tài liệu LiteLLM, để không vi phạm ADR 0005 và test kiến trúc
+      `test_no_raw_provider_clients.py` của plan Model Registry
 - [ ] Xác nhận streaming Chat trả usage ở chunk cuối (hoặc cách thay thế) cho
       provider đang dùng
-- [ ] Xác nhận 1 hook duy nhất trong `model_router` gọi được callback "trước
-      mỗi attempt" và "sau mỗi attempt" (cần cho Task 6 và Task 10)
+- [ ] Xác nhận **1 hook duy nhất** trong `model_router` gọi được callback
+      "trước mỗi attempt" và "sau mỗi attempt" (cần cho Task 6 và Task 10), và
+      hook đó cung cấp đủ toàn bộ: usage ở chunk cuối cùng của stream (không
+      phải usage tích luỹ giữa chừng), provider/model **sau khi** failover xảy
+      ra (không phải provider/model lúc bắt đầu attempt nếu 2 giá trị này khác
+      nhau), latency đo được của đúng attempt đó (không phải latency toàn
+      request), và `chatModelId` snapshot tại thời điểm gọi. Nếu hook hiện có
+      của Model Registry thiếu bất kỳ trường nào ở trên, spike phải đề xuất mở
+      rộng chữ ký callback đó (đổi 1 chỗ, không thêm hook thứ hai) và ghi vào
+      DECISIONS.md
 
 **Verification:**
 - [ ] Human đọc bảng trong DECISIONS.md và approve
 
-**Dependencies:** Model Registry Phase 0-6
+**Dependencies:** Dynamic Model Registry đã implement (không chờ "implementation
+approved" hình thức — xem "Prerequisite" ở trên)
 
 **Files likely touched:**
 - `unisage-agent/docs/product/DECISIONS.md`
@@ -53,9 +90,12 @@ usage thật của từng call. Code hiện tại chưa có (`OpenAIChatModel` t
 
 ### Task 1: Entity `RequestUsageLog` + `RequestUsageLine` + migration
 
-**Description:** Parent/child theo `plan.md` mục "Data Model". Repo đang ở V15,
-Model Registry dùng V16 → file của task này là `V17__add_request_usage_logs.sql`
-(kiểm tra lại bằng `sort -V` trước khi tạo).
+**Description:** Parent/child theo `plan.md` mục "Data Model". Repo thực tế đã
+ở V24 (không phải V15 như bản trước), migration state machine của Model
+Registry đã lên DB là V18 → file của task này là
+`V25__add_request_usage_logs.sql` (**bắt buộc kiểm tra lại bằng
+`ls db/migration | sort -V | tail -1` trước khi tạo** — số này chỉ đúng tại
+thời điểm viết bản sửa này, `main` có thể đã thêm migration mới).
 
 **Acceptance criteria:**
 - [ ] `RequestUsageLog` đủ field theo plan, có `userMessageId` +
@@ -63,9 +103,11 @@ Model Registry dùng V16 → file của task này là `V17__add_request_usage_lo
 - [ ] `RequestUsageLine` đủ field theo plan, snapshot `provider`/`modelName`/
       `sourceType`, `costStatus` (PRICED/UNPRICED/FREE), `attempt`
 - [ ] Enum mới: `UsagePurpose`, `UsageRequestStatus`, `UsageCostStatus`
-- [ ] `V17__add_request_usage_logs.sql`: FK `conversation_id`, `user_message_id`,
+- [ ] `V25__add_request_usage_logs.sql`: FK `conversation_id`, `user_message_id`,
       `assistant_message_id`, `user_id`, `chat_model_id` là **ON DELETE SET NULL**;
-      `usage_log_id` ON DELETE CASCADE; UNIQUE `request_id`; đủ index ở plan
+      `usage_log_id` ON DELETE CASCADE; UNIQUE `request_id`; **UNIQUE
+      (`usage_log_id`, `seq`)** trên `request_usage_lines` ở tầng DB (không chỉ
+      validate ở service); đủ index ở plan
 - [ ] Cột thời gian `timestamp(6) without time zone` chứa UTC, entity dùng
       `LocalDateTime`; `startedAt`/`finishedAt`/`occurredAt` set từ `Clock` bean
       hoặc parse ISO-8601 UTC, không dựa vào `createdAt` của auditing
@@ -88,7 +130,7 @@ Model Registry dùng V16 → file của task này là `V17__add_request_usage_lo
 - `backend-java/src/main/java/com/unisage/backend/entity/RequestUsageLog.java`
 - `backend-java/src/main/java/com/unisage/backend/entity/RequestUsageLine.java`
 - `backend-java/src/main/java/com/unisage/backend/entity/enums/Usage*.java`
-- `backend-java/src/main/resources/db/migration/V17__add_request_usage_logs.sql`
+- `backend-java/src/main/resources/db/migration/V25__add_request_usage_logs.sql`
 - `backend-java/pom.xml`
 - `backend-java/src/test/java/com/unisage/backend/support/PostgresIntegrationTest.java`
 - `backend-java/src/test/java/com/unisage/backend/usagelog/GuestSessionCleanupUsageLogTest.java`
@@ -101,13 +143,24 @@ Model Registry dùng V16 → file của task này là `V17__add_request_usage_lo
 
 **Description:** Python (worker outbox) gửi 1 payload/request gồm parent + list
 line. Endpoint phải qua được `DynamicAuthorizationManager` mà không có JWT, và
-chỉ khi có secret hợp lệ.
+chỉ khi có secret hợp lệ — theo **đúng mô hình đã dùng bởi 7 endpoint nội bộ
+của Model Registry** (không phải `PredefinedPublicPaths`, đã sửa ở vòng review 3).
 
 **Acceptance criteria:**
 - [ ] Thêm `POST /internal/usage-logs`, `GET /internal/budgets/snapshot`,
-      `GET /internal/usage-logs/period-totals` vào **cả**
-      `InternalSecretFilter.INTERNAL_ONLY_PATHS` và `PredefinedPublicPaths.PUBLIC_PATHS`
-      (method + path tường minh, không `/internal/**` wildcard)
+      `GET /internal/usage-logs/period-totals` vào
+      `InternalSecretFilter.INTERNAL_ONLY_PATHS` (method + path tường minh,
+      không `/internal/**` wildcard) — set `TRUSTED_INTERNAL_CALLER_ATTRIBUTE`
+      khi secret đúng, để nhánh `/internal/**` của `DynamicAuthorizationManager`
+      (đã có từ Model Registry Task 0.1) grant mà không cần JWT. **Không** thêm
+      vào `PredefinedPublicPaths` — endpoint đó dành cho path public thật sự,
+      không phải cho luồng xác thực bằng secret nội bộ
+- [ ] Áp `InternalCallerCidrFilter` + `InternalResponseHeadersFilter`
+      (`Cache-Control: no-store`, `Pragma: no-cache`) cho cả 3 endpoint, dùng
+      lại filter chung của Model Registry, không viết filter riêng
+- [ ] Mở rộng `InternalEndpointCoverageTest` và `InternalNoStoreTest` của
+      Model Registry để assert đúng **10** endpoint (7 cũ + 3 mới), trong cùng
+      commit thêm endpoint — tránh coverage test lệch ngầm
 - [ ] Insert parent + lines trong 1 transaction; Java tự tính tổng từ lines, không
       tin tổng do client gửi
 - [ ] `requestId` trùng → `INSERT ... ON CONFLICT (request_id) DO NOTHING`, trả
@@ -128,11 +181,12 @@ chỉ khi có secret hợp lệ.
 
 **Files likely touched:**
 - `backend-java/src/main/java/com/unisage/backend/security/InternalSecretFilter.java`
-- `backend-java/src/main/java/com/unisage/backend/predefined/PredefinedPublicPaths.java`
 - `backend-java/src/main/java/com/unisage/backend/controller/InternalUsageLogController.java`
 - `backend-java/src/main/java/com/unisage/backend/service/usagelog/RequestUsageLogServiceImpl.java`
 - `backend-java/src/main/java/com/unisage/backend/dto/request/UsageLogIngestRequest.java`
 - `backend-java/src/main/java/com/unisage/backend/repository/RequestUsageLogRepository.java`
+- `backend-java/src/test/java/com/unisage/backend/internal/InternalEndpointCoverageTest.java` (mở rộng lên 10 endpoint, sở hữu bởi Model Registry)
+- `backend-java/src/test/java/com/unisage/backend/internal/InternalNoStoreTest.java` (mở rộng tương tự)
 
 **Estimated scope:** M
 
@@ -184,8 +238,8 @@ quyền truy cập cho SA.
 - `backend-java/src/main/java/com/unisage/backend/predefined/PredefinedPermissions.java`
 - `backend-java/src/main/java/com/unisage/backend/config/DataInitializer.java`
 - `backend-java/src/main/java/com/unisage/backend/exception/ErrorCode.java`
-- `backend-java/src/main/resources/db/migration/V18__add_budget_tables.sql`
-- `backend-java/src/main/resources/db/migration/V19__seed_cost_permissions.sql`
+- `backend-java/src/main/resources/db/migration/V26__add_budget_tables.sql`
+- `backend-java/src/main/resources/db/migration/V27__seed_cost_permissions.sql`
 
 **Estimated scope:** L — tách 3a (entity + migration + RBAC) và 3b (API) nếu dài
 

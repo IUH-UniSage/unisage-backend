@@ -359,12 +359,14 @@ plan.md) thành spec kiểm thử được, trước khi code Task 1/3.
         model → job ở cả 2 đường), kết quả cuối nhất quán
 - [x] Stale health: test skeleton report mang `credentialRevision` cũ sau rotate →
       `applied: false`, không tăng counter, không DISABLE
-- [x] SQL V16 draft gồm CHECK constraint, unique partial index embedding,
+- [x] SQL draft (tên dự kiến ban đầu `V16`, thật ra lên DB là
+      `V18__add_chat_model_purpose_and_status.sql` — xem ghi chú ở Task 1) gồm
+      CHECK constraint, unique partial index embedding,
       `CHECK (NOT (is_active = false AND status = 'ACTIVE'))`, cột `revision`,
       `candidate_generation`, cột `lease_token`/`lease_until`/
       `last_result_lease_token`/`candidate_generation`/`base_revision`/`candidate_*`
       của bảng verification (status đủ 7 giá trị theo bảng "Trạng thái verification" của plan.md), unique partial index 1 job
-      dở/credential, backfill row cũ — `V16__add_chat_model_purpose_and_status.sql`
+      dở/credential, backfill row cũ
 - [x] `ErrorCode` mới được chốt tên: `CHAT_MODEL_STATUS_CONFLICT`,
       `EMBEDDING_ACTIVE_CONFLICT`, `CHAT_MODEL_NOT_VERIFIED`,
       `VERIFICATION_LEASE_LOST`, `CHAT_MODEL_API_KEY_REQUIRED_FOR_NEW_HOST`,
@@ -422,14 +424,14 @@ plan.md) thành spec kiểm thử được, trước khi code Task 1/3.
       snapshot embedding lệch danh tính cùng ingest chạy live; `test_embedding_identity_guard.py`
       và các unit test của Task 13 chỉ phủ logic guard, không phủ kịch bản 2-worker
       này trên live stack)
-- [x] Chạy thử V16 draft trên bản copy DB dev: row cũ backfill đúng, index tạo
-      được (fail nếu dữ liệu hiện có vi phạm → xử lý trong migration) —
-      `V16MigrationTest`, Testcontainers pgvector Postgres thật
+- [x] Chạy thử migration draft trên bản copy DB dev: row cũ backfill đúng, index
+      tạo được (fail nếu dữ liệu hiện có vi phạm → xử lý trong migration) —
+      `V18MigrationTest`, Testcontainers pgvector Postgres thật
 
 **Verification:**
 - [ ] Review với human
 - [x] Manual check: 2 transaction activate 2 embedding đồng thời → 1 bị index chặn
-      — verified bằng `V16MigrationTest#singleActiveEmbedding_uniqueIndexEnforced`
+      — verified bằng `V18MigrationTest#singleActiveEmbedding_uniqueIndexEnforced`
       thay vì `psql` tay (cùng khẳng định, tự động hoá được)
 
 **Dependencies:** None
@@ -438,7 +440,7 @@ plan.md) thành spec kiểm thử được, trước khi code Task 1/3.
 - `unisage-backend/src/test/java/com/unisage/backend/service/chatmodel/ChatModelStateTransitionTest.java`
 - `unisage-backend/src/test/java/com/unisage/backend/service/chatmodel/ChatModelRotationTest.java`
 - `unisage-backend/src/test/java/com/unisage/backend/service/modelregistry/VerificationFencingTest.java`
-- `unisage-backend/src/main/resources/db/migration/V16__add_chat_model_purpose_and_status.sql` (draft)
+- `unisage-backend/src/main/resources/db/migration/V18__add_chat_model_purpose_and_status.sql` (draft)
 
 **Estimated scope:** M (4 files, chủ yếu test skeleton)
 
@@ -475,7 +477,7 @@ nghiệp vụ.
       (chỉ có qua `ModelRegistryVersionServiceTest` tự động); làm khi Task 7 nối
       nghiệp vụ thật
 
-**Dependencies:** None (migration bảng version gộp vào V16 cùng Task 1)
+**Dependencies:** None (migration bảng version gộp vào V18 cùng Task 1)
 
 **Files likely touched:**
 - `unisage-backend/pom.xml`
@@ -704,8 +706,23 @@ this pass — see Task 0.5)
       định của SDK
 - [x] Test kiến trúc `tests/core/test_no_raw_provider_clients.py`: quét AST của
       `app/`, fail nếu thấy `OpenAI(`, `AsyncOpenAI(`, `Anthropic(`,
-      `httpx.Client(`, `httpx.AsyncClient(` ở ngoài factory, **hoặc bất kỳ
-      `import litellm` nào** (ADR 0005 — bỏ LiteLLM, không được quay lại dùng nó)
+      `httpx.Client(`, `httpx.AsyncClient(` ở ngoài factory (ADR 0005 — bỏ
+      LiteLLM làm đường gọi provider, không được quay lại dùng nó)
+- [ ] **Cập nhật (đồng bộ với plan Cost Tracking, quyết định litellm-chỉ-định-giá):**
+      rule cấm `import litellm` tuyệt đối ở trên **quá rộng** — Cost Tracking
+      cần `litellm.completion_cost()`/`litellm.cost_per_token()` để tra giá
+      offline. Thu hẹp rule thành 2 phần:
+      1. **Whitelist đúng 1 module** `app/core/cost_calculator.py` (đặt bởi
+         plan Cost Tracking) được phép `import litellm` — chỉ để gọi
+         `completion_cost`/`cost_per_token`, không dùng cho gì khác.
+      2. Trong **chính module đó**, test kiến trúc vẫn quét và fail nếu thấy
+         `litellm.completion(`, `litellm.acompletion(`, `litellm.embedding(`,
+         `litellm.aembedding(`, hoặc bất kỳ cách tạo `httpx`/`AsyncOpenAI`/
+         provider transport nào (kể cả gián tiếp qua kwargs như `client=`,
+         `api_base=` trỏ ra ngoài) — `cost_calculator.py` chỉ được phép làm
+         phép tính giá thuần, không được mở bất kỳ kết nối mạng nào.
+      Mọi file khác trong `app/` (kể cả `model_router.py`, `get_graph_models()`)
+      vẫn bị cấm `import litellm` hoàn toàn như rule gốc.
 - [x] Allowlist production mặc định rỗng, giá trị thật do hạ tầng điền lúc deploy
       (plan.md "Open Questions"); test profile Java đặt `localhost` để test hiện có
       (`http://localhost:8000/v1` trong `ChatModelServiceImplTest`) vẫn pass; thêm
@@ -962,10 +979,15 @@ its own docstring — so nothing in this task is done)
 
 ## Phase 1: Java — Mở rộng Model Registry
 
-### Task 1: `modelPurpose`, `status`, verification, version + migration V16
+### Task 1: `modelPurpose`, `status`, verification, version + migration V18
 
-**Description:** Hiện thực schema đã chốt ở Task 0.3/0.4. Tên file V16 giữ nguyên
-vì plan Cost Tracking tham chiếu; file chứa toàn bộ schema registry.
+**Description:** Hiện thực schema đã chốt ở Task 0.3/0.4. **Cập nhật:** tên file
+dự kiến ban đầu là `V16`, nhưng khi migrate thật thì `V16__dashboard_permission.sql`
+và `V17__purge_noise_audit_logs.sql` từ `main` đã chiếm 2 số đó trước, nên file
+thật trong repo là `V18__add_chat_model_purpose_and_status.sql` (xác nhận bằng
+`ls db/migration`, có `V18MigrationTest` tương ứng, không phải `V16MigrationTest`
+như một số dòng checklist bên dưới còn ghi theo tên nháp cũ). Plan Cost Tracking
+đã được sửa lại để tham chiếu đúng V18 thay vì V16.
 
 **Acceptance criteria:**
 - [x] Enum `ChatModelPurpose` (CHAT/EMBEDDING/EXTRACTION), `ChatModelStatus`
@@ -980,14 +1002,14 @@ vì plan Cost Tracking tham chiếu; file chứa toàn bộ schema registry.
       dùng `INSERT ... ON CONFLICT (collection_name) DO NOTHING RETURNING`, 0 row →
       409 `EMBEDDING_INDEX_IDENTITY_EXISTS`; không có nhánh update, không
       check-then-insert
-- [x] V16 thêm trigger `BEFORE UPDATE OR DELETE ON embedding_index_identity` raise
+- [x] V18 thêm trigger `BEFORE UPDATE OR DELETE ON embedding_index_identity` raise
       exception
 - [x] Bật test skeleton "Bootstrap danh tính đồng thời" của Task 0.3 —
       `EmbeddingIndexIdentityConcurrencyTest`; dùng `@RepeatedTest(10)` thay vì 50
       vòng, và bỏ assertion `pg_stat_user_tables` (flaky do connection pool riêng
-      của 2 thread) — "không UPDATE/DELETE" đã được `V16MigrationTest` phủ chắc
+      của 2 thread) — "không UPDATE/DELETE" đã được `V18MigrationTest` phủ chắc
       chắn hơn (assert trigger raise), không mất coverage
-- [x] V16 có `CHECK (status IN ('QUEUED','RUNNING','SUCCEEDED','FAILED','SUPERSEDED','CANCELLED','REINDEX_REQUIRED'))`
+- [x] V18 có `CHECK (status IN ('QUEUED','RUNNING','SUCCEEDED','FAILED','SUPERSEDED','CANCELLED','REINDEX_REQUIRED'))`
       cho `chat_model_verifications`
 - [x] `contracts/verification-statuses.json` (7 giá trị, đúng thứ tự bảng plan.md)
       được **sinh** từ enum bởi `ContractExportTest`; CI chạy test rồi
@@ -1002,7 +1024,7 @@ vì plan Cost Tracking tham chiếu; file chứa toàn bộ schema registry.
       `candidate*` với key qua `ApiKeyConverter`, `leaseToken`, `leaseUntil`,
       `lastResultLeaseToken`) + repository (claim bằng
       native query `FOR UPDATE SKIP LOCKED`)
-- [x] `V16__add_chat_model_purpose_and_status.sql`: cột mới, CHECK, unique partial
+- [x] `V18__add_chat_model_purpose_and_status.sql`: cột mới, CHECK, unique partial
       index embedding, unique partial index 1 job dở/credential, bảng
       `chat_model_verifications`, bảng `model_registry_version` (seed
       `version = 1`), backfill row cũ theo plan.md
@@ -1025,12 +1047,12 @@ vì plan Cost Tracking tham chiếu; file chứa toàn bộ schema registry.
       tạo EMBEDDING `SELF_HOSTED` hợp lệ (URL trong allowlist test) được chấp nhận
 
 **Verification:**
-- [x] Tests pass: `./mvnw test` (`ddl-auto=validate` bắt lệch entity ↔ V16) — 371
+- [x] Tests pass: `./mvnw test` (`ddl-auto=validate` bắt lệch entity ↔ V18) — 371
       run, 0 failures, 0 errors, 52 skipped (đều là placeholder có chủ đích cho
       Task 2/3)
 - [x] Build succeeds: `./mvnw clean package -DskipTests`
 - [ ] Manual check: migrate DB dev, row cũ vẫn dùng được, status backfill đúng —
-      chưa làm thủ công trên DB dev thật, chỉ mới xác nhận qua `V16MigrationTest`
+      chưa làm thủ công trên DB dev thật, chỉ mới xác nhận qua `V18MigrationTest`
       (Testcontainers)
 
 **Dependencies:** Task 0.3, Task 0.4
@@ -1042,7 +1064,7 @@ vì plan Cost Tracking tham chiếu; file chứa toàn bộ schema registry.
 - `unisage-backend/src/main/java/com/unisage/backend/entity/enums/ChatModelStatus.java`
 - `unisage-backend/src/main/java/com/unisage/backend/entity/enums/ChatModelVerificationStatus.java`
 - `unisage-backend/src/main/java/com/unisage/backend/repository/ChatModelVerificationRepository.java`
-- `unisage-backend/src/main/resources/db/migration/V16__add_chat_model_purpose_and_status.sql`
+- `unisage-backend/src/main/resources/db/migration/V18__add_chat_model_purpose_and_status.sql`
 
 **Estimated scope:** M (6-7 files)
 
@@ -1949,7 +1971,9 @@ vi hiện tại), `LOWEST_COST`, `BALANCED` (cost + latency có trọng số),
 - [ ] Entity/bảng `routing_policy`: `modelPurpose`, `strategy`, `maxLatencyMs`,
       `minRequiredModel` (tuỳ chọn), API SA-facing
 - [ ] Policy nằm trong snapshot nội bộ (Task 4), thay đổi policy bump version
-- [ ] Migration `V20__add_routing_policy.sql`
+- [ ] Migration `V28__add_routing_policy.sql` (đã đổi từ V20 — xem "Migration
+      version" trong plan.md; xác nhận lại bằng `ls db/migration | sort -V | tail -1`
+      trước khi tạo file thật vì Cost Tracking (V25-V27) có thể chưa merge)
 
 **Verification:**
 - [ ] Tests pass: `./mvnw test`
@@ -1961,7 +1985,7 @@ thiểu là schema)
 **Files likely touched:**
 - `unisage-backend/src/main/java/com/unisage/backend/entity/RoutingPolicy.java`
 - `unisage-backend/src/main/java/com/unisage/backend/controller/RoutingPolicyController.java`
-- `unisage-backend/src/main/resources/db/migration/V20__add_routing_policy.sql`
+- `unisage-backend/src/main/resources/db/migration/V28__add_routing_policy.sql`
 
 **Estimated scope:** M (3-4 files)
 
