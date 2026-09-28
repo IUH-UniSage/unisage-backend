@@ -168,44 +168,61 @@ chỉ khi có secret hợp lệ — theo **đúng mô hình đã dùng bởi 7 e
 của Model Registry** (không phải `PredefinedPublicPaths`, đã sửa ở vòng review 3).
 
 **Acceptance criteria:**
-- [ ] Thêm `POST /internal/usage-logs`, `GET /internal/budgets/snapshot`,
-      `GET /internal/usage-logs/period-totals` vào
-      `InternalSecretFilter.INTERNAL_ONLY_PATHS` (method + path tường minh,
-      không `/internal/**` wildcard) — set `TRUSTED_INTERNAL_CALLER_ATTRIBUTE`
-      khi secret đúng, để nhánh `/internal/**` của `DynamicAuthorizationManager`
-      (đã có từ Model Registry Task 0.1) grant mà không cần JWT. **Không** thêm
-      vào `PredefinedPublicPaths` — endpoint đó dành cho path public thật sự,
-      không phải cho luồng xác thực bằng secret nội bộ
-- [ ] Áp `InternalCallerCidrFilter` + `InternalResponseHeadersFilter`
-      (`Cache-Control: no-store`, `Pragma: no-cache`) cho cả 3 endpoint, dùng
-      lại filter chung của Model Registry, không viết filter riêng
-- [ ] Mở rộng `InternalEndpointCoverageTest` và `InternalNoStoreTest` của
-      Model Registry để assert đúng **10** endpoint (7 cũ + 3 mới), trong cùng
-      commit thêm endpoint — tránh coverage test lệch ngầm
-- [ ] Insert parent + lines trong 1 transaction; Java tự tính tổng từ lines, không
+- [x] ~~Thêm 3 endpoint vào `InternalSecretFilter.INTERNAL_ONLY_PATHS`~~ —
+      **phát hiện khi implement:** không cần, hạ tầng `/internal/**` của Model
+      Registry (`InternalSecretFilter`, `InternalCallerCidrFilter`,
+      `InternalResponseHeadersFilter`, và nhánh `/internal/**` trong
+      `DynamicAuthorizationManager`) đã match theo **wildcard** `/internal/**`
+      từ trước, không phải danh sách method+path tường minh từng endpoint như
+      plan giả định — bất kỳ controller mới nào dưới `/internal/**` tự động
+      được 3 filter + authorization manager bảo vệ, không cần sửa filter.
+      Không đụng `PredefinedPublicPaths` (đúng như plan)
+- [x] `InternalCallerCidrFilter` + `InternalResponseHeadersFilter` áp dụng tự
+      động cho endpoint mới (wildcard, xem trên) — không cần thay đổi 2 filter
+      này
+- [x] Mở rộng `InternalEndpointCoverageTest` và `InternalNoStoreTest` — đổi
+      `contracts/internal-endpoints.json` từ 1 `basePath` dùng chung sang
+      `basePath` theo từng entry (endpoint Cost Tracking nằm ở `/internal`,
+      không phải `/internal/model-registry` như Model Registry), 2 test đọc
+      field mới; `/internal/usage-logs` đã `"implemented": true`, 2 endpoint
+      còn lại (`budgets/snapshot`, `usage-logs/period-totals`) để `false` tới
+      khi Task 3/4 implement
+- [x] Insert parent + lines trong 1 transaction; Java tự tính tổng từ lines, không
       tin tổng do client gửi
-- [ ] `requestId` trùng → `INSERT ... ON CONFLICT (request_id) DO NOTHING`, trả
-      200 với id có sẵn, không ghi thêm line
-- [ ] Validate: `lines` không rỗng (request không có LLM call thì Python không
-      gửi — xem plan), `seq` không trùng, token ≥ 0, `costStatus = PRICED` thì
-      `costUsd` bắt buộc, timestamp có offset `Z`
-- [ ] Controller/Service đi qua checklist `api-review-checklist`
+- [x] `requestId` trùng → `INSERT ... ON CONFLICT (request_id) DO NOTHING`, trả
+      200 với id có sẵn, không ghi thêm line — dùng `JdbcTemplate` native SQL,
+      không phải JPA save + catch `DataIntegrityViolationException` (catch
+      exception sẽ abort transaction Postgres, không thể SELECT lại trong
+      cùng transaction)
+- [x] Validate: `lines` không rỗng (`@NotEmpty`), `seq` không trùng, token ≥ 0
+      (`@Min(0)`), `costStatus = PRICED` thì `costUsd` bắt buộc (ngược lại phải
+      null, khớp DB CHECK), timestamp có offset `Z` (`OffsetDateTime`, JSR-380
+      parse tự từ chối thiếu offset)
+- [x] Controller/Service đi qua checklist `api-review-checklist` — internal
+      controller theo đúng convention plain-DTO (không `ApiResponse`-wrap) của
+      `InternalModelRegistryController` cùng package, không phải convention
+      REST API SA-facing; service không `throw new` gì ngoài `AppException`
 
 **Verification:**
-- [ ] `./mvnw test` có 5 case auth: không secret → 403; sai secret → 403; đúng
-      secret → 200; đúng secret gọi `GET /budgets` không JWT → bị từ chối; JWT SA
-      gọi `/internal/usage-logs` không secret → 403
-- [ ] Test gửi cùng payload 2 lần → 1 parent, đúng số line
-- [ ] Test 2 thread gửi cùng `requestId` đồng thời → 1 parent
+- [x] `./mvnw test` có 5 case auth: không secret → 403; sai secret → 403; đúng
+      secret → 200; đúng secret gọi `GET /users` không JWT → bị từ chối; JWT
+      giả gọi `/internal/usage-logs` không secret → 403
+      (`InternalUsageLogControllerTest`)
+- [x] Test gửi cùng payload 2 lần → 1 parent, đúng số line
+- [x] Test 2 thread gửi cùng `requestId` đồng thời → 1 parent (8 thread, đúng 1
+      parent + 1 line, mọi response đều 200)
 
 **Dependencies:** Task 1
 
 **Files likely touched:**
-- `backend-java/src/main/java/com/unisage/backend/security/InternalSecretFilter.java`
-- `backend-java/src/main/java/com/unisage/backend/controller/InternalUsageLogController.java`
-- `backend-java/src/main/java/com/unisage/backend/service/usagelog/RequestUsageLogServiceImpl.java`
-- `backend-java/src/main/java/com/unisage/backend/dto/request/UsageLogIngestRequest.java`
-- `backend-java/src/main/java/com/unisage/backend/repository/RequestUsageLogRepository.java`
+- `backend-java/src/main/java/com/unisage/backend/controller/internal/InternalUsageLogController.java`
+- `backend-java/src/main/java/com/unisage/backend/service/usagelog/RequestUsageLogService{,Impl}.java`
+- `backend-java/src/main/java/com/unisage/backend/dto/request/internal/UsageLog{,Line}IngestRequest.java`
+- `backend-java/src/main/java/com/unisage/backend/dto/response/internal/UsageLogIngestResponse.java`
+- `backend-java/src/main/java/com/unisage/backend/exception/ErrorCode.java` (`USAGE_LOG_INVALID_PAYLOAD`)
+- `backend-java/contracts/internal-endpoints.json`
+- `backend-java/src/test/java/com/unisage/backend/controller/internal/{InternalEndpointCoverageTest,InternalNoStoreTest,InternalUsageLogControllerTest}.java`
+- (`InternalSecretFilter.java` không cần sửa — xem phát hiện ở trên)
 - `backend-java/src/test/java/com/unisage/backend/internal/InternalEndpointCoverageTest.java` (mở rộng lên 10 endpoint, sở hữu bởi Model Registry)
 - `backend-java/src/test/java/com/unisage/backend/internal/InternalNoStoreTest.java` (mở rộng tương tự)
 

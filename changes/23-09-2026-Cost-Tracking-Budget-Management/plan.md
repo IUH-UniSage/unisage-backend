@@ -405,14 +405,19 @@ tên class Java...) — chỉ dùng chúng trong tên file migration và tài li
 `PredefinedPublicPaths` cho `/internal/**` (bản trước của plan này yêu cầu vậy,
 sai và không nhất quán với plan kia).
 
-- Prefix `/internal/**`, khai báo tường minh từng method+path (không wildcard
-  rộng) trong `InternalSecretFilter.INTERNAL_ONLY_PATHS`: thiếu/sai secret →
-  403 `INTERNAL_SECRET_INVALID` ngay tại filter; secret đúng → filter set
-  request attribute `TRUSTED_INTERNAL_CALLER_ATTRIBUTE = TRUE`.
-  `DynamicAuthorizationManager` có nhánh riêng: path khớp `/internal/**` **và**
-  attribute đó `TRUE` → grant, **không** cần path nằm trong
-  `PredefinedPublicPaths` và không cần JWT. Path `/internal/**` thiếu attribute
-  (vd filter chưa chạy, bug thứ tự filter) → deny, kể cả JWT SA hợp lệ.
+- Prefix `/internal/**`. **Cập nhật khi implement Task 2 (thực tế khác giả định
+  ban đầu ở trên):** `InternalSecretFilter.INTERNAL_ONLY_PATHS` **đã** dùng
+  wildcard `("*", "/internal/**")` từ Model Registry Task 0.1, không phải danh
+  sách method+path tường minh từng endpoint — bất kỳ controller mới nào dưới
+  `/internal/**` tự động được bảo vệ, **không cần sửa filter** khi thêm
+  endpoint. Hành vi: thiếu/sai secret → 403 `INTERNAL_SECRET_INVALID` ngay tại
+  filter; secret đúng → filter set request attribute
+  `TRUSTED_INTERNAL_CALLER_ATTRIBUTE = TRUE` cho **mọi** request (không riêng
+  `/internal/**`). `DynamicAuthorizationManager` có nhánh riêng: path khớp
+  `/internal/**` **và** attribute đó `TRUE` → grant, **không** cần path nằm
+  trong `PredefinedPublicPaths` và không cần JWT. Path `/internal/**` thiếu
+  attribute (vd filter chưa chạy, bug thứ tự filter) → deny, kể cả JWT SA hợp
+  lệ.
 - Áp dụng chung với 7 endpoint của Model Registry: `InternalCallerCidrFilter`
   (CIDR fail-closed) và `InternalResponseHeadersFilter` (`Cache-Control:
   no-store` + `Pragma: no-cache` cho mọi response `/internal/**`, kể cả 3
