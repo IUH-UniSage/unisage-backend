@@ -464,27 +464,42 @@ tháng tính theo `app.timezone`.
 **Acceptance criteria:**
 - [x] `enqueue(payload)` = `LPUSH usage:outbox` — không gọi HTTP trong request
       (đã làm cùng Task 6, xem `app/core/usage_outbox.py`)
-- [ ] Celery task `drain_usage_outbox` (beat mỗi 5s) giữ lock
+- [x] Celery task `drain_usage_outbox` (beat mỗi
+      `USAGE_OUTBOX_DRAIN_INTERVAL_SECONDS`, mặc định 5s) giữ lock
       `usage:outbox:lock` (`SET NX EX 60`) → chỉ 1 drainer; đầu lượt đưa toàn bộ
-      `usage:outbox:processing` về outbox (reclaim item kẹt do worker chết)
-- [ ] Mỗi item: `LMOVE usage:outbox → usage:outbox:processing`, gửi
-      `POST /internal/usage-logs` kèm `X-Internal-Secret`; 2xx → `LREM` khỏi
-      processing; lỗi mạng/5xx → trả lại outbox, dừng lượt (thử lại ở nhịp beat
-      sau); 4xx → `usage:outbox:dead` + log error; gửi lại an toàn nhờ
-      idempotency `requestId`
-- [ ] Metric/log: độ dài outbox, số dead
+      `usage:outbox:processing` về outbox (reclaim item kẹt do worker chết).
+      Lock này degrade khác lock verification: mất Redis → **bỏ qua lượt**
+      (không "chạy tiếp không khoá" như verification), vì 2 drainer chạy song
+      song không khoá có thể reclaim `processing` không nhất quán
+- [x] Mỗi item: `LMOVE usage:outbox → usage:outbox:processing`, gửi
+      `POST /internal/usage-logs` (qua `BackendJavaClient.ingest_usage_log`,
+      tự kèm `X-Internal-Secret`); 2xx → `LREM` khỏi processing; lỗi mạng/5xx →
+      trả lại outbox ngay, dừng lượt (thử lại ở nhịp beat sau); 4xx →
+      `usage:outbox:dead` + log error; gửi lại an toàn nhờ idempotency
+      `requestId`
+- [x] Metric/log: `outbox_health()` trả `{pending, dead}` — chưa nối vào
+      `GET /api/v1/health` (đó là Task 11b), hàm đã sẵn sàng để nối
 
 **Verification:**
-- [ ] pytest: Java down → Chat trả lời bình thường, outbox tăng; Java lên lại →
-      outbox rỗng, Java nhận đủ; gửi trùng không sinh record trùng
+- [x] pytest: 6 test với fake Redis (list ops thuần, không cần Lua nên không
+      cần Redis thật) — gửi thành công, 4xx → dead-letter, 5xx → trả lại outbox
+      + dừng lượt, reclaim item kẹt, 2 drainer đồng thời chỉ 1 chạy, health đếm
+      đúng. **Chưa làm:** kịch bản "Java down → Chat vẫn trả lời, outbox tăng;
+      Java lên lại → outbox rỗng" end-to-end thật (cần cả 2 service chạy) —
+      để dành cho Checkpoint Phase 2/harness tích hợp
 
 **Dependencies:** Task 2, Task 6
 
 **Files likely touched:**
 - `unisage-agent/app/core/usage_outbox.py`
-- `unisage-agent/app/worker/tasks/usage_outbox.py`
-- `unisage-agent/app/integrations/backend_java_client.py`
-- `unisage-agent/tests/core/test_usage_outbox.py`
+- `unisage-agent/app/worker/usage_outbox_tasks.py` (không phải
+  `app/worker/tasks/usage_outbox.py` như dự kiến — codebase này để task Celery
+  phẳng trong `app/worker/`, không có thư mục con `tasks/`, giống
+  `verification_tasks.py`)
+- `unisage-agent/app/worker/celery_app.py` (đăng ký task + beat_schedule)
+- `unisage-agent/app/integrations/backend_java_client.py` (`ingest_usage_log`)
+- `unisage-agent/app/core/config.py` (`USAGE_OUTBOX_DRAIN_INTERVAL_SECONDS`)
+- `unisage-agent/tests/worker/test_usage_outbox_tasks.py`
 
 **Estimated scope:** M
 
