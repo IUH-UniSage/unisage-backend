@@ -47,7 +47,7 @@ lý thuyết), vì Task 5-10 của plan này gọi thẳng vào `model_router`/f
 Model Registry.
 
 **Acceptance criteria:**
-- [ ] Ghi vào `unisage-agent/docs/product/DECISIONS.md` bảng "nguồn usage" cho 4
+- [x] Ghi vào `unisage-agent/docs/product/DECISIONS.md` bảng "nguồn usage" cho 4
       loại call, mỗi dòng có: điểm hook trong code, field input/output/cached
       token, cách lấy provider/model/`chatModelId` thực tế sau failover, cách lấy
       latency — PydanticAI agent run (`result.usage()`), embedding
@@ -55,14 +55,21 @@ Model Registry.
       dùng `litellm.cost_per_token`/`completion_cost` để **định giá** kết quả
       usage đã lấy được từ model native, không phải cách LiteLLM tự lấy usage
       (plan này không gọi provider qua LiteLLM)
-- [ ] Test xác nhận `litellm.completion_cost()`/`litellm.cost_per_token()`
+- [x] Test xác nhận `litellm.completion_cost()`/`litellm.cost_per_token()`
       **không** phát sinh network call (mock transport/socket ở tầng thấp nhất
       có thể, assert 0 request) — bằng chứng bằng test chạy được, không chỉ đọc
       tài liệu LiteLLM, để không vi phạm ADR 0005 và test kiến trúc
-      `test_no_raw_provider_clients.py` của plan Model Registry
-- [ ] Xác nhận streaming Chat trả usage ở chunk cuối (hoặc cách thay thế) cho
-      provider đang dùng
-- [ ] Xác nhận **1 hook duy nhất** trong `model_router` gọi được callback
+      `test_no_raw_provider_clients.py` của plan Model Registry.
+      **Phát hiện quan trọng:** `import litellm` mặc định fetch bảng giá từ
+      GitHub qua mạng thật khi gặp model lạ hoặc lúc import — phải set
+      `LITELLM_LOCAL_MODEL_COST_MAP=True` **trước khi import** để tắt hẳn
+      (verify bằng test spy socket, xem `test_cost_calculator.py::test_cost_per_token_never_opens_a_network_connection`
+      và DECISIONS.md)
+- [x] Xác nhận streaming Chat trả usage ở chunk cuối (hoặc cách thay thế) cho
+      provider đang dùng — `result.usage()` bên trong `async with
+      active_agent.run_stream(prompt) as result:` (`streaming.py:114-126`),
+      ngay sau vòng `async for` kết thúc, trước khi context manager thoát
+- [x] Xác nhận **1 hook duy nhất** trong `model_router` gọi được callback
       "trước mỗi attempt" và "sau mỗi attempt" (cần cho Task 6 và Task 10), và
       hook đó cung cấp đủ toàn bộ: usage ở chunk cuối cùng của stream (không
       phải usage tích luỹ giữa chừng), provider/model **sau khi** failover xảy
@@ -71,7 +78,10 @@ Model Registry.
       request), và `chatModelId` snapshot tại thời điểm gọi. Nếu hook hiện có
       của Model Registry thiếu bất kỳ trường nào ở trên, spike phải đề xuất mở
       rộng chữ ký callback đó (đổi 1 chỗ, không thêm hook thứ hai) và ghi vào
-      DECISIONS.md
+      DECISIONS.md — **kết luận:** không có hook như vậy (chỉ có `on_failover`/
+      `record_failure`, cả hai chỉ chạy trên nhánh lỗi); quyết định mở rộng
+      `stream_agent_text()`/`run_agent_text_with_failover()` với tham số
+      `on_attempt` mới ở Task 6, xem DECISIONS.md mục "Vì sao không có hook..."
 
 **Verification:**
 - [ ] Human đọc bảng trong DECISIONS.md và approve
@@ -81,6 +91,8 @@ approved" hình thức — xem "Prerequisite" ở trên)
 
 **Files likely touched:**
 - `unisage-agent/docs/product/DECISIONS.md`
+- `unisage-agent/pyproject.toml` (thêm dependency `litellm`)
+- `unisage-agent/.env.example` (`LITELLM_LOCAL_MODEL_COST_MAP=True`)
 
 **Estimated scope:** S
 
@@ -296,15 +308,23 @@ tháng tính theo `app.timezone`.
 ### Task 5: `cost_calculator` (actual + estimate)
 
 **Acceptance criteria:**
-- [ ] `calculate_actual(response, model_info) -> CostResult` (`cost_usd`,
-      `estimated_cost_usd`, `cost_status`); LiteLLM không có giá → `UNPRICED`,
-      `cost_usd=None`, log warning kèm tên model
-- [ ] `estimate(model_info, input_tokens, max_output_tokens) -> Decimal` dùng
-      `litellm.cost_per_token`; không có giá → `BUDGET_RESERVATION_FALLBACK_USD`
-- [ ] SELF_HOSTED → `FREE`, cost 0, không gọi LiteLLM
+- [x] `calculate_actual(*, model_name, source_type, input_tokens, output_tokens,
+      cached_tokens=0) -> CostResult` (`cost_usd`, `estimated_cost_usd`,
+      `cost_status`) — nhận field rời thay vì object `response`/`model_info`
+      (Chat dùng PydanticAI `RunUsage`, Embedding/Extraction dùng OpenAI SDK
+      `response.usage`, hai hình dạng khác nhau — Task 6/8 tự chuẩn hoá trước
+      khi gọi); LiteLLM không có giá → `UNPRICED`, `cost_usd=None`, log warning
+      kèm tên model
+- [x] `estimate(*, model_name, source_type, input_tokens, max_output_tokens) ->
+      Decimal` dùng `litellm.cost_per_token`; không có giá →
+      `BUDGET_RESERVATION_FALLBACK_USD` (`Settings.BUDGET_RESERVATION_FALLBACK_USD`,
+      mới thêm vào `app/core/config.py`)
+- [x] SELF_HOSTED → `FREE`, cost 0, không gọi LiteLLM (test khẳng định bằng
+      `monkeypatch` raise nếu `litellm.cost_per_token` bị gọi)
 
 **Verification:**
-- [ ] pytest: model có giá, không có giá, SELF_HOSTED, embedding
+- [x] pytest: model có giá, không có giá, SELF_HOSTED, embedding (đủ 8 test
+      trong `test_cost_calculator.py`, gồm cả test không-network-call của Task 0)
 
 **Dependencies:** Task 0
 
