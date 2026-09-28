@@ -96,6 +96,9 @@ public enum ErrorCode {
     REGISTRY_RESET_JOB_RUNNING(HttpStatus.CONFLICT, 2520,
             "Còn job xác minh đang chạy với lease chưa hết hạn, thử lại sau."),
 
+    // Cost Tracking (26xx)
+    USAGE_LOG_INVALID_PAYLOAD(HttpStatus.BAD_REQUEST, 2600, "Payload usage log không hợp lệ."),
+
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),
     FILE_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2402, "Không thể xoá file khỏi hệ thống lưu trữ."),

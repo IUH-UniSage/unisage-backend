@@ -67,13 +67,14 @@ class InternalEndpointCoverageTest {
             }
         }
 
-        // Contract paths are relative to /internal/model-registry (matches the servlet mapping
-        // pattern, which excludes the /api/v1 context path).
+        // Each endpoint carries its own basePath (Cost Tracking's live under /internal, Model
+        // Registry's under /internal/model-registry) - both relative to the servlet mapping
+        // pattern, which excludes the /api/v1 context path.
         Set<String> contract = new HashSet<>();
         try (InputStream in = new FileInputStream("contracts/internal-endpoints.json")) {
             JsonNode root = new ObjectMapper().readTree(in);
             for (JsonNode endpoint : root.get("endpoints")) {
-                contract.add("/internal/model-registry" + endpoint.get("path").asText());
+                contract.add(endpoint.get("basePath").asText() + endpoint.get("path").asText());
             }
         }
 

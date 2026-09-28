@@ -81,7 +81,7 @@ class InternalNoStoreTest {
     @ParameterizedTest
     @MethodSource("implementedEndpoints")
     void implementedEndpoint_hasNoStore(JsonNode endpoint) {
-        String basePath = "/api/v1/internal/model-registry";
+        String basePath = "/api/v1" + endpoint.get("basePath").asText();
         String path = endpoint.get("path").asText()
                 .replace("{collection}", "unisage_chunks")
                 .replace("{id}", "00000000-0000-0000-0000-000000000000")
