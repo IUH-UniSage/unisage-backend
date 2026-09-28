@@ -314,42 +314,56 @@ quyền truy cập cho SA.
 tháng tính theo `app.timezone`.
 
 **Acceptance criteria:**
-- [ ] `GET /usage-logs/summary?from=&to=&groupBy=purpose|provider|model|user|day`
+- [x] `GET /usage-logs/summary?from=&to=&groupBy=purpose|provider|model|user|day`
       — `provider`/`model` group trên `request_usage_lines` (snapshot); trả riêng
       `pricedCostUsd` và `estimatedUnpricedCostUsd`
-- [ ] `GET /usage-logs?filters&page=` — danh sách parent, có cờ `hasFailover`
-- [ ] `GET /usage-logs/{id}` — parent + lines + query (user message) + answer và
+- [x] `GET /usage-logs?filters&page=` — danh sách parent, có cờ `hasFailover`
+      (1 batch query cho cả trang, không N+1); filter hiện có: `purpose`,
+      `status`, `from`, `to` — `provider`/`model` (line-level) chưa filter được
+      ở list, để dành khi Task 19 (web) thực sự cần, tránh join sớm không dùng
+- [x] `GET /usage-logs/{id}` — parent + lines + query (user message) + answer và
       `citations` (assistant message); message null → field null, không lỗi
-- [ ] `GET /internal/budgets/snapshot` — budget enabled + `configVersion`
-- [ ] `GET /internal/usage-logs/period-totals?period=&periodKey=` — committed
+- [x] `GET /internal/budgets/snapshot` — budget enabled + `configVersion` (tái
+      dùng `ModelRegistryVersionService.currentVersion()` có sẵn)
+- [x] `GET /internal/usage-logs/period-totals?period=&periodKey=` — committed
       theo SYSTEM/PURPOSE/PROVIDER cho kỳ đó, trả **micro-USD integer** (line
       PRICED lấy `costUsd`, UNPRICED lấy `estimatedCostUsd`, FREE bỏ qua — khớp
-      quy tắc settle ở Python; làm tròn half-up từng line trước khi cộng)
-- [ ] Mốc kỳ: tính đầu/cuối kỳ ở `app.timezone` rồi đổi sang UTC `LocalDateTime`
+      quy tắc settle ở Python; làm tròn half-up từng line trước khi cộng, dùng
+      `ROUND(... * 1000000)` ngay trong SQL trước khi `SUM`)
+- [x] Mốc kỳ: tính đầu/cuối kỳ ở `app.timezone` rồi đổi sang UTC `LocalDateTime`
       để lọc `started_at`/`occurred_at`; group theo ngày bằng
       `(col AT TIME ZONE 'UTC') AT TIME ZONE :tz`
-- [ ] Query dùng index đã tạo, không full scan theo khoảng thời gian
+- [x] Query dùng index đã tạo (`started_at`, `purpose+started_at`,
+      `provider+occurred_at`, `chat_model_id+occurred_at` từ V25) — không thêm
+      index mới, không full scan theo khoảng thời gian
 
 **Verification:**
-- [ ] `./mvnw test`, gồm test biên timezone: record 23:59:59 và 00:00:01
+- [x] `./mvnw test`, gồm test biên timezone: record 23:59:59 và 00:00:01
       (Asia/Ho_Chi_Minh) nằm ở 2 ngày khác nhau trong `groupBy=day`
+      (`RequestUsageLogServiceImplTest.dayGroupBy_splitsRecordsAcrossTheTimezoneBoundary`)
 - [ ] Manual: seed ~100k line, summary theo tháng < 1s; `EXPLAIN` dùng index
+      (chưa làm — cần seed dữ liệu lớn thủ công)
 
 **Dependencies:** Task 1, Task 3
 
 **Files likely touched:**
-- `backend-java/src/main/java/com/unisage/backend/controller/{RequestUsageLogController,InternalUsageLogController,InternalBudgetController}.java`
-- `backend-java/src/main/java/com/unisage/backend/repository/{RequestUsageLogRepository,RequestUsageLineRepository}.java`
-- `backend-java/src/main/java/com/unisage/backend/dto/response/Usage*.java`
+- `backend-java/src/main/java/com/unisage/backend/controller/{RequestUsageLogController,internal/InternalUsageLogController,internal/InternalBudgetController}.java`
+- `backend-java/src/main/java/com/unisage/backend/repository/{RequestUsageLogRepository,RequestUsageLineRepository,BudgetRepository}.java`
+- `backend-java/src/main/java/com/unisage/backend/dto/response/Usage*.java`, `dto/response/internal/Internal{BudgetSnapshot,UsagePeriodTotals}Response.java`
+- `backend-java/src/main/java/com/unisage/backend/service/usagelog/{UsagePeriodCalculator,InternalPeriodTotalsService,RequestUsageLogServiceImpl}.java`
+- `backend-java/src/test/java/com/unisage/backend/service/usagelog/*`
 
 **Estimated scope:** M
 
 ---
 
 ## Checkpoint: Phase 1
-- [ ] `./mvnw test` pass
+- [x] `./mvnw test` pass (full suite, Testcontainers Postgres, no regressions
+      across Task 0-4)
 - [ ] Postman: gửi payload usage (có 2 line failover) 2 lần → 1 record; summary
-      theo provider tách đúng 2 provider
+      theo provider tách đúng 2 provider (đã có test tự động tương đương —
+      `InternalUsageLogControllerTest`, `RequestUsageLogServiceImplTest` — chưa
+      làm thủ công qua Postman)
 - [ ] Review với human trước khi đụng Python
 
 ---
