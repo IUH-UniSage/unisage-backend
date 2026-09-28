@@ -409,33 +409,51 @@ tháng tính theo `app.timezone`.
 0) append 1 line — cả attempt lỗi trước khi failover.
 
 **Acceptance criteria:**
-- [ ] `requestId` sinh ở đầu `chat.py`, truyền xuyên graph
-- [ ] `chat.py` giữ lại id của USER message (hiện đang bỏ qua kết quả
+- [x] `requestId` sinh ở đầu `chat.py`, truyền xuyên graph (qua `UsageRecorder`,
+      không truyền riêng thành tham số thứ 2)
+- [x] `chat.py` giữ lại id của USER message (hiện đang bỏ qua kết quả
       `create_message` role USER) + `assistant_message_id` đã có → đưa vào payload
-- [ ] Mỗi line: `seq`, `nodeName` (tên node, vd `GenerationSynthesisNode`),
+- [x] Mỗi line: `seq`, `nodeName` (tên node, vd `GenerationSynthesisNode`),
       `attempt`, `chatModelId`, snapshot provider/model/sourceType, tokens, cost,
       latency, status, `errorCode`
-- [ ] Kết thúc graph (thành công, lỗi, client huỷ stream) → đóng recorder đúng 1
-      lần: settle budget (Task 9) rồi đẩy payload vào outbox (Task 7)
-- [ ] Không có line nào (request không gọi provider) → chỉ settle để trả
-      reservation, **không** đẩy payload
-- [ ] Thời gian trong payload là ISO-8601 UTC (`...Z`)
-- [ ] Parent `status`: SUCCESS / ERROR / PARTIAL (có line lỗi nhưng request vẫn
-      trả lời được)
+- [x] Kết thúc graph (thành công, lỗi, client huỷ stream) → đóng recorder đúng 1
+      lần (idempotent), đẩy payload vào outbox (Task 7). **Settle budget (Task 9)
+      chưa nối** — Task 9 chưa implement, `close()` chỉ enqueue, chưa reserve/settle
+      Redis; sẽ nối khi làm Task 9/10
+- [x] Không có line nào (request không gọi provider) → **không** đẩy payload
+      (test `test_no_lines_recorded_means_nothing_is_enqueued`)
+- [x] Thời gian trong payload là ISO-8601 UTC (`...Z`)
+- [x] Parent `status`: SUCCESS / ERROR / PARTIAL (có line lỗi nhưng request vẫn
+      trả lời được — downgrade tự động trong `close()`)
+- [x] **Phát hiện khi implement:** `result.usage()` trong spike Task 0 sai —
+      `usage` là **property**, không phải method, trên cả `AgentRunResult` lẫn
+      `StreamedRunResult` của bản `pydantic-ai-slim` đang cài; gọi như hàm ném
+      `TypeError`, bắt được ngay bởi test suite hiện có (`test_message_classification_node.py`
+      đỏ). Đã sửa `streaming.py` dùng `.usage` (không ngoặc) và cập nhật
+      DECISIONS.md
 
 **Verification:**
-- [ ] pytest: request có classification + transformation + generation → 3 line;
+- [x] pytest: request có classification + transformation + generation → 3 line;
       failover generation → 4 line, line lỗi `attempt=0`, line thành công `attempt=1`
-      khác provider
-- [ ] pytest: client disconnect giữa stream → payload vẫn được đẩy vào outbox
+      khác provider (`tests/graph/test_usage_recorder_wiring.py`)
+- [x] pytest: client disconnect giữa stream → payload vẫn được đẩy vào outbox
+      (mô phỏng bằng queue không ai đọc — `run_and_persist` chạy độc lập với
+      SSE consumer theo thiết kế sẵn có, xem `test_payload_still_enqueued_when_the_sse_consumer_never_reads_the_queue`)
 
 **Dependencies:** Task 5
 
 **Files likely touched:**
 - `unisage-agent/app/core/usage_recorder.py`
-- `unisage-agent/app/core/model_router.py`
+- `unisage-agent/app/core/usage_outbox.py` (enqueue-side của Task 7, làm cùng
+  vì `UsageRecorder.close()` cần chỗ để gửi payload tới)
+- `unisage-agent/app/graph/streaming.py` (thêm `on_attempt`/`AttemptOutcome`,
+  không sửa `model_router.py` như dự kiến ban đầu — hook nằm ở streaming.py,
+  không phải model_router.py)
+- `unisage-agent/app/graph/streaming_graph.py`, `streaming_session.py`
+- `unisage-agent/app/graph/nodes/{message_classification,query_transformation,ticket_fallback,generation_synthesis}.py`
 - `unisage-agent/app/api/v1/chat.py`
-- `unisage-agent/tests/core/test_usage_recorder.py`
+- `unisage-agent/tests/core/{test_usage_recorder,test_usage_outbox}.py`
+- `unisage-agent/tests/graph/test_usage_recorder_wiring.py`
 
 **Estimated scope:** M
 
@@ -444,7 +462,8 @@ tháng tính theo `app.timezone`.
 ### Task 7: Outbox Redis + worker drain về Java
 
 **Acceptance criteria:**
-- [ ] `enqueue(payload)` = `LPUSH usage:outbox` — không gọi HTTP trong request
+- [x] `enqueue(payload)` = `LPUSH usage:outbox` — không gọi HTTP trong request
+      (đã làm cùng Task 6, xem `app/core/usage_outbox.py`)
 - [ ] Celery task `drain_usage_outbox` (beat mỗi 5s) giữ lock
       `usage:outbox:lock` (`SET NX EX 60`) → chỉ 1 drainer; đầu lượt đưa toàn bộ
       `usage:outbox:processing` về outbox (reclaim item kẹt do worker chết)
