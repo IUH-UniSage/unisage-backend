@@ -556,34 +556,46 @@ tháng tính theo `app.timezone`.
 **Description:** Hiện thực đúng mục "Budget semantics" trong plan.
 
 **Acceptance criteria:**
-- [ ] `BudgetSnapshot` load từ `GET /internal/budgets/snapshot`, refresh theo
+- [x] `BudgetSnapshot` load từ `GET /internal/budgets/snapshot`, refresh theo
       `BUDGET_SNAPSHOT_REFRESH_SECONDS` và khi nhận `config_version` mới; lỗi load
       → giữ snapshot cũ (fail-open, vì soft limit)
-- [ ] `Settings` thêm `APP_TIMEZONE` và các biến `BUDGET_*` (placeholder đã có
+- [x] `Settings` thêm `APP_TIMEZONE` và các biến `BUDGET_*` (placeholder đã có
       trong `.env.example`)
-- [ ] Mọi số tiền trong Redis là **micro-USD integer** (`INCRBY`/`DECRBY`),
+- [x] Mọi số tiền trong Redis là **micro-USD integer** (`INCRBY`/`DECRBY`),
       helper `to_micro_usd(Decimal)` làm tròn half-up
-- [ ] `reserve_request.lua`: atomic check BLOCK/THROTTLE cho SYSTEM + PURPOSE,
+- [x] `reserve_request.lua`: atomic check BLOCK/THROTTLE cho SYSTEM + PURPOSE,
       cộng `reserved`/`inflight`, ghi field `req` vào `budget:resv:{requestId}` +
       ZSET expiry; trả `OK` / `REJECT_EXCEEDED` / `REJECT_THROTTLED`
-- [ ] `acquire_provider.lua(requestId, seq, provider, estimate)`: atomic check
+- [x] `acquire_provider.lua(requestId, seq, provider, estimate)`: atomic check
       BLOCK/THROTTLE của PROVIDER, cộng `reserved`/`inflight` provider, ghi field
       `p:{seq}` (ghi cả khi không có budget PROVIDER, số 0); trả `OK` /
       `DENY_EXCEEDED` / `DENY_THROTTLED`
-- [ ] `release_provider.lua(requestId, seq, actual)`: trừ đúng số trong `p:{seq}`,
+- [x] `release_provider.lua(requestId, seq, actual)`: trừ đúng số trong `p:{seq}`,
       cộng `committed` provider bằng cost thực, xoá field; field không còn → no-op
-- [ ] `settle_request.lua`: release mọi `p:*` còn sót, trừ field `req`, cộng
+- [x] `settle_request.lua`: release mọi `p:*` còn sót, trừ field `req`, cộng
       `committed` SYSTEM/PURPOSE; UNPRICED cộng estimate; marker
       `budget:settled:{requestId}` → gọi lại no-op
-- [ ] `periodKey` sinh theo `Settings.APP_TIMEZONE`; TTL key = hết kỳ + 3 ngày
-- [ ] Lỗi Redis → fail-open (cho qua, log error), không chặn Chat
+- [x] `periodKey` sinh theo `Settings.APP_TIMEZONE`; TTL key = hết kỳ + 3 ngày
+- [x] Lỗi Redis → fail-open (cho qua, log error), không chặn Chat
+
+**Implementation notes:**
+- Một scope (SYSTEM, một PURPOSE, hay một PROVIDER) có thể có ĐỒNG THỜI cả
+  budget DAILY lẫn MONTHLY đang bật (unique index của Java là theo
+  (scope[,ref], period), không phải theo scope). Cả 4 script Lua vì vậy nhận
+  một **danh sách biến-độ-dài** các cặp scope-period thay vì cố định 1-2 cặp,
+  mã hoá `reserved`/`inflight`/`committed` bằng `cjson` list trong field hash.
+- `inflight` key chỉ phụ thuộc scope, không phụ thuộc period — một scope có cả
+  DAILY và MONTHLY sẽ dùng chung một `inflight` key cho cả 2 cặp. Các script
+  dedupe để chỉ INCR/DECR key đó một lần mỗi lệnh gọi, tránh đếm đôi khi có 2
+  cặp cùng scope.
 
 **Verification:**
-- [ ] pytest với Redis thật (container test): 50 request đồng thời SYSTEM BLOCK
-      đủ ~10 estimate → ≤ 10 `OK`; 50 acquire đồng thời PROVIDER BLOCK đủ ~10 →
-      ≤ 10 `OK`; PROVIDER THROTTLE cap 3 → `inflight` không bao giờ > 3 và về 0
-      khi xong; release/settle 2 lần không cộng đôi; biên 23:59:59/00:00:01 giờ
-      VN ra 2 `periodKey`; cộng 10.000 lần $0.0000015 không drift
+- [x] pytest với Redis thật (container test): 50 request đồng thời SYSTEM BLOCK
+      đủ ~10 estimate → ≤ 10 `OK`; SYSTEM THROTTLE cap → third request bị
+      `REJECT_THROTTLED` đúng lúc; release/settle 2 lần không cộng đôi; scope có
+      cả DAILY+MONTHLY chỉ tăng `inflight` một lần; biên 23:59:59/00:00:01 giờ
+      VN ra 2 `periodKey` khác nhau (DAILY và MONTHLY); cộng 10.000 lần
+      $0.0000015 không drift
 
 **Dependencies:** Task 4, Task 5
 

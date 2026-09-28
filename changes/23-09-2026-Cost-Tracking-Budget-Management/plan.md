@@ -500,22 +500,22 @@ với `RequestUsageLog`. Để 2 hệ thống độc lập (xem Open Questions).
 ## Task List
 
 ### Phase 0: Gate
-- [ ] Task 0: Nghiệm thu Model Registry + spike chốt nguồn usage/token
+- [x] Task 0: Nghiệm thu Model Registry + spike chốt nguồn usage/token
 
 ### Phase 1: Java — Data model, internal API, RBAC
-- [ ] Task 1: Entity `RequestUsageLog` + `RequestUsageLine` + migration
-- [ ] Task 2: Internal auth whitelist + `POST /internal/usage-logs` idempotent
-- [ ] Task 3: `Budget` + `BudgetAlertSetting` + `BudgetAlertLog` + CRUD + RBAC
-- [ ] Task 4: API dashboard/lịch sử/chi tiết + internal snapshot/period-totals
+- [x] Task 1: Entity `RequestUsageLog` + `RequestUsageLine` + migration
+- [x] Task 2: Internal auth whitelist + `POST /internal/usage-logs` idempotent
+- [x] Task 3: `Budget` + `BudgetAlertSetting` + `BudgetAlertLog` + CRUD + RBAC
+- [x] Task 4: API dashboard/lịch sử/chi tiết + internal snapshot/period-totals
 
 ### Phase 2: Python — Đo usage & outbox
-- [ ] Task 5: `cost_calculator` (actual + estimate)
-- [ ] Task 6: `UsageRecorder` theo request, ghi line cho mọi call Chat
-- [ ] Task 7: Outbox Redis + worker drain về Java
-- [ ] Task 8: Extraction + Embedding ghi usage
+- [x] Task 5: `cost_calculator` (actual + estimate)
+- [x] Task 6: `UsageRecorder` theo request, ghi line cho mọi call Chat
+- [x] Task 7: Outbox Redis + worker drain về Java
+- [x] Task 8: Extraction + Embedding ghi usage
 
 ### Phase 3: Python — Budget enforcement (soft limit + reservation)
-- [ ] Task 9: Lua reserve/settle request + acquire/release provider + budget snapshot
+- [x] Task 9: Lua reserve/settle request + acquire/release provider + budget snapshot
 - [ ] Task 10: Gắn reservation vào Chat/Extraction/Embedding + acquire/release trong router
 - [ ] Task 11: Đối soát + release reservation treo
 - [ ] Task 11b: Deploy Celery worker/beat, Redis AOF, health outbox, replay dead-letter
