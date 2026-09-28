@@ -236,48 +236,73 @@ của Model Registry** (không phải `PredefinedPublicPaths`, đã sửa ở v�
 quyền truy cập cho SA.
 
 **Acceptance criteria:**
-- [ ] `Budget` theo plan: scope SYSTEM/PROVIDER/PURPOSE, `scopeProvider`,
+- [x] `Budget` theo plan: scope SYSTEM/PROVIDER/PURPOSE, `scopeProvider`,
       `scopePurpose`, `throttleMaxConcurrency`; validate ở service **và** `CHECK`
       constraint ở DB theo scope/action
-- [ ] 3 partial unique index riêng `ux_budgets_system`, `ux_budgets_provider`
+- [x] 3 partial unique index riêng `ux_budgets_system`, `ux_budgets_provider`
       (`lower(scope_provider)`), `ux_budgets_purpose` — không dùng 1 index gộp
       có cột nullable; vi phạm unique map sang `ErrorCode`, không trả 500
-- [ ] `BudgetAlertSetting` singleton: `id SMALLINT PRIMARY KEY DEFAULT 1 CHECK
+      (`BUDGET_ALREADY_ENABLED_FOR_PERIOD`, qua `saveAndFlush` + catch
+      `DataIntegrityViolationException` — an toàn vì không có query nào khác
+      chạy trong cùng transaction sau đó, khác với Task 2's ON CONFLICT case)
+- [x] `BudgetAlertSetting` singleton: `id SMALLINT PRIMARY KEY DEFAULT 1 CHECK
       (id = 1)`, seed trong migration (`[50,80,100]`, spike tắt, in-app bật); chỉ
-      có API `GET`/`PUT`; validate email và ngưỡng 1-200
-- [ ] `BudgetAlertLog` có `dedupeKey` UNIQUE, `attemptCount`, `lastAttemptAt`,
+      có API `GET`/`PUT`; validate email và ngưỡng 1-200 (service-level, map
+      lỗi theo field vào `errors`)
+- [x] `BudgetAlertLog` có `dedupeKey` UNIQUE, `attemptCount`, `lastAttemptAt`,
       `nextAttemptAt`, status gồm `GAVE_UP`, index (`status`, `next_attempt_at`),
       `dismissedAt`/`dismissedBy`
-- [ ] API: `GET/POST/PUT/DELETE /budgets` (response kèm "đã dùng kỳ hiện tại"
-      tính từ DB), `GET/PUT /budget-alert-settings` (response có
+- [x] API: `GET/POST/PUT/DELETE /budgets` (response kèm "đã dùng kỳ hiện tại"
+      tính từ DB qua `UsagePeriodTotalsService`, tự tính theo scope: SYSTEM/PURPOSE
+      đọc log-level, PROVIDER đọc line-level vì provider là snapshot theo line),
+      `GET/PUT /budget-alert-settings` (response có
       `slackConfigured` + `slackChannelLabel` đọc từ env, không bao giờ trả URL),
       `GET /budget-alerts?filters&page=`, `GET /budget-alerts/active`,
       `POST /budget-alerts/{id}/dismiss`
-- [ ] CRUD budget publish `config_version` mới (kênh pub/sub của Model Registry)
-      để Python reload snapshot
-- [ ] `ResourceType.USAGE_LOG` + `ResourceType.BUDGET`; permission trong
-      `PredefinedPermissions`; `DataInitializer` gán SYSTEM_ADMIN; migration insert
-      permission + role_permission cho DB đã có
-- [ ] `ErrorCode` mới cho validate budget/alert setting
+- [x] CRUD budget publish `config_version` mới (kênh pub/sub của Model Registry)
+      để Python reload snapshot — gọi lại `ModelRegistryVersionService.bump()`
+      có sẵn từ Model Registry, không cần cơ chế publish riêng
+- [x] `ResourceType.USAGE_LOG` + `ResourceType.BUDGET`; permission trong
+      `PredefinedPermissions`; `DataInitializer` gán SUPER_ADMIN (tên role thật
+      trong DB, không phải "SYSTEM_ADMIN" như mô tả ban đầu); migration insert
+      permission + role_permission cho DB đã có (V27, cũng phải nới CHECK
+      `resource_type` trên `permissions`/`audit_logs` — phát hiện khi implement,
+      không có trong plan gốc)
+- [x] `ErrorCode` mới cho validate budget/alert setting (2600-2606, block
+      "Cost Tracking (26xx)")
 
 **Verification:**
-- [ ] `./mvnw test` (Testcontainers): budget SYSTEM MONTHLY thứ 2 enabled → lỗi
-      validate; tạo đồng thời 2 cái → đúng 1 thành công; `INSERT` dòng
-      `BudgetAlertSetting` id=2 → DB từ chối; user không có permission → 403
+- [x] `./mvnw test` (Testcontainers): budget SYSTEM MONTHLY thứ 2 enabled → lỗi
+      validate; tạo đồng thời 2 cái → đúng 1 thành công (10 thread, đúng 1
+      `OK` + 9 `BUDGET_ALREADY_ENABLED_FOR_PERIOD`); `INSERT` dòng
+      `BudgetAlertSetting` id=2 → DB từ chối
+- [x] **Phạm vi thu hẹp cho "user không có permission → 403":** verify bằng
+      `CostTrackingPermissionSeedingTest` (Task 1) — xác nhận permission row
+      đúng path/method đã seed và gán SUPER_ADMIN — thay vì dựng test JWT
+      end-to-end cho riêng resource này, vì codebase chưa có tiền lệ test kiểu
+      đó cho bất kỳ resource nào khác (cơ chế chung `DynamicAuthorizationManager`
+      đã có test riêng ở nơi khác); nếu cần test 403 thật cho Budget cụ thể,
+      làm ở một task test-hardening riêng, không chặn Task 3
 - [ ] Manual: app khởi động trên DB cũ, migration chạy, SA thấy permission mới
+      (chưa làm — cần môi trường DB cũ thật để verify thủ công)
 
 **Dependencies:** None
 
 **Files likely touched:**
 - `backend-java/src/main/java/com/unisage/backend/entity/{Budget,BudgetAlertSetting,BudgetAlertLog}.java`
 - `backend-java/src/main/java/com/unisage/backend/entity/enums/{BudgetScope,BudgetPeriod,BudgetAction,AlertChannel,AlertType,AlertStatus,ResourceType}.java`
-- `backend-java/src/main/java/com/unisage/backend/controller/{BudgetController,BudgetAlertController}.java`
+- `backend-java/src/main/java/com/unisage/backend/controller/{BudgetController,BudgetAlertSettingController,BudgetAlertController}.java`
 - `backend-java/src/main/java/com/unisage/backend/service/budget/*`
+- `backend-java/src/main/java/com/unisage/backend/service/usagelog/{UsagePeriodCalculator,UsagePeriodTotalsService}.java`
 - `backend-java/src/main/java/com/unisage/backend/predefined/PredefinedPermissions.java`
 - `backend-java/src/main/java/com/unisage/backend/config/DataInitializer.java`
 - `backend-java/src/main/java/com/unisage/backend/exception/ErrorCode.java`
+- `backend-java/src/main/resources/application.properties` (Slack env mapping)
 - `backend-java/src/main/resources/db/migration/V26__add_budget_tables.sql`
 - `backend-java/src/main/resources/db/migration/V27__seed_cost_permissions.sql`
+- `backend-java/src/test/java/com/unisage/backend/migration/V26MigrationTest.java`
+- `backend-java/src/test/java/com/unisage/backend/config/CostTrackingPermissionSeedingTest.java`
+- `backend-java/src/test/java/com/unisage/backend/service/budget/{BudgetServiceImplTest,BudgetAlertSettingServiceImplTest}.java`
 
 **Estimated scope:** L — tách 3a (entity + migration + RBAC) và 3b (API) nếu dài
 
