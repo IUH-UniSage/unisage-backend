@@ -508,19 +508,34 @@ tháng tính theo `app.timezone`.
 ### Task 8: Extraction + Embedding ghi usage
 
 **Acceptance criteria:**
-- [ ] Extraction: 1 request nghiệp vụ = 1 lần enrich 1 chunk/batch, `purpose =
-      EXTRACTION`, line theo từng attempt (có failover)
-- [ ] Embedding: 1 request = 1 batch embed, `purpose = EMBEDDING`, message id null
-- [ ] Hook tại điểm đã chốt ở Task 0 (sau khi 2 file đã chuyển sang registry/LiteLLM)
+- [x] Extraction: 1 request nghiệp vụ = 1 lần enrich 1 chunk/batch, `purpose =
+      EXTRACTION`, line theo từng attempt (có failover) — response malformed
+      nhưng call thành công vẫn ghi line SUCCESS (lỗi dữ liệu, không phải lỗi
+      call)
+- [x] Embedding: 1 request = 1 batch embed, `purpose = EMBEDDING`, message id null
+- [x] Hook tại điểm đã chốt ở Task 0 — cả 2 file vẫn dùng OpenAI SDK trực tiếp
+      (chưa migrate sang PydanticAI, đúng như DECISIONS.md ghi), nên không tái
+      dùng `on_attempt`/`AttemptOutcome` của Task 6 mà gọi thẳng
+      `UsageRecorder.record()` (method mới, nhận token thô thay vì `RunUsage`)
+      — mỗi hàm `embed()`/`enrich()` tự tạo và tự đóng `UsageRecorder` của
+      riêng nó, người gọi (`embed_chunks` Celery task, vòng lặp trong đó) không
+      cần sửa gì
 
 **Verification:**
-- [ ] pytest cho cả 2 luồng: đúng purpose, đúng token từ usage của response
+- [x] pytest cho cả 2 luồng: đúng purpose, đúng token từ usage của response
+      (`tests/test_embedding_usage_recording.py`, thêm 3 test trong
+      `tests/test_multi_representation.py` — bao gồm cả kịch bản failover 2
+      line như Chat)
 
 **Dependencies:** Task 7
 
 **Files likely touched:**
 - `unisage-agent/app/rag/enrichment/multi_representation.py`
-- `unisage-agent/app/rag/embeddings/openai_embedder.py` (hoặc embedder mới của Model Registry)
+- `unisage-agent/app/rag/embeddings/openai_embedder.py`
+- `unisage-agent/app/core/usage_recorder.py` (thêm method `record()` dùng
+  chung cho cả 2 luồng, tách khỏi `_record_attempt()` chỉ dành cho PydanticAI)
+- `unisage-agent/tests/test_embedding_usage_recording.py`,
+  `unisage-agent/tests/test_multi_representation.py`
 
 **Estimated scope:** S
 
