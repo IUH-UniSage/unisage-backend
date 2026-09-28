@@ -110,31 +110,37 @@ Registry đã lên DB là V18 → file của task này là
 thời điểm viết bản sửa này, `main` có thể đã thêm migration mới).
 
 **Acceptance criteria:**
-- [ ] `RequestUsageLog` đủ field theo plan, có `userMessageId` +
+- [x] `RequestUsageLog` đủ field theo plan, có `userMessageId` +
       `assistantMessageId`, tổng denormalized, `unpricedLineCount`
-- [ ] `RequestUsageLine` đủ field theo plan, snapshot `provider`/`modelName`/
+- [x] `RequestUsageLine` đủ field theo plan, snapshot `provider`/`modelName`/
       `sourceType`, `costStatus` (PRICED/UNPRICED/FREE), `attempt`
-- [ ] Enum mới: `UsagePurpose`, `UsageRequestStatus`, `UsageCostStatus`
-- [ ] `V25__add_request_usage_logs.sql`: FK `conversation_id`, `user_message_id`,
+- [x] Enum mới: `UsagePurpose`, `UsageRequestStatus`, `UsageCostStatus`
+- [x] `V25__add_request_usage_logs.sql`: FK `conversation_id`, `user_message_id`,
       `assistant_message_id`, `user_id`, `chat_model_id` là **ON DELETE SET NULL**;
       `usage_log_id` ON DELETE CASCADE; UNIQUE `request_id`; **UNIQUE
       (`usage_log_id`, `seq`)** trên `request_usage_lines` ở tầng DB (không chỉ
-      validate ở service); đủ index ở plan
-- [ ] Cột thời gian `timestamp(6) without time zone` chứa UTC, entity dùng
-      `LocalDateTime`; `startedAt`/`finishedAt`/`occurredAt` set từ `Clock` bean
-      hoặc parse ISO-8601 UTC, không dựa vào `createdAt` của auditing
-- [ ] Tiền `NUMERIC(18,8)` ↔ `BigDecimal`
-- [ ] `ddl-auto=validate` khởi động được (entity khớp migration)
-- [ ] Thêm Testcontainers PostgreSQL (`org.testcontainers:postgresql`,
-      `junit-jupiter`) + base class `PostgresIntegrationTest` chạy Flyway thật —
-      repo chưa có test DB nào, mà các ràng buộc của plan (partial index, `ON
-      CONFLICT`, `SKIP LOCKED`, `ON DELETE SET NULL`) chỉ kiểm được trên
-      PostgreSQL
+      validate ở service); đủ index ở plan. Thêm `request_usage_lines_cost_usd_matches_status_check`
+      (CHECK `costStatus = PRICED ⇔ costUsd IS NOT NULL`) không có trong plan
+      gốc nhưng khớp quy tắc "costUsd = null" — DB chặn thay vì chỉ service
+- [x] Cột thời gian `timestamp(6) without time zone` chứa UTC, entity dùng
+      `LocalDateTime`; `startedAt`/`finishedAt`/`occurredAt` không có giá trị
+      mặc định DB (Java/Task 6 phải set tường minh từ `Clock`/parse ISO-8601
+      UTC), không dựa vào `createdAt` (dùng `@CreationTimestamp`, JVM-clock,
+      chỉ để bookkeeping — không dùng cho period query)
+- [x] Tiền `NUMERIC(18,8)` ↔ `BigDecimal`
+- [x] `ddl-auto=validate` khởi động được (entity khớp migration) — xác nhận
+      bằng `./mvnw test` chạy full suite dưới `ddl-auto=validate` (cấu hình
+      chuẩn của `application.properties`), pass toàn bộ
+- [x] Thêm Testcontainers PostgreSQL (đã có sẵn trong `pom.xml` từ Model
+      Registry, không cần thêm dependency mới) + base class
+      `PostgresIntegrationTest` (`src/test/java/.../support/`) chạy Flyway thật
 
 **Verification:**
-- [ ] `./mvnw test`
-- [ ] Test: xoá message/conversation theo đúng luồng
+- [x] `./mvnw test` — full suite pass (904 test trước đó + các test mới của
+      Task 1, không có regression)
+- [x] Test: xoá message/conversation theo đúng luồng
       `GuestSessionServiceImpl.purgeExpiredBatch` → usage log còn, 2 message id = null
+      (`GuestSessionCleanupUsageLogTest`, Postgres thật qua Testcontainers)
 
 **Dependencies:** Task 0
 
@@ -142,10 +148,13 @@ thời điểm viết bản sửa này, `main` có thể đã thêm migration m�
 - `backend-java/src/main/java/com/unisage/backend/entity/RequestUsageLog.java`
 - `backend-java/src/main/java/com/unisage/backend/entity/RequestUsageLine.java`
 - `backend-java/src/main/java/com/unisage/backend/entity/enums/Usage*.java`
+- `backend-java/src/main/java/com/unisage/backend/repository/RequestUsageLogRepository.java`
+- `backend-java/src/main/java/com/unisage/backend/repository/RequestUsageLineRepository.java`
 - `backend-java/src/main/resources/db/migration/V25__add_request_usage_logs.sql`
-- `backend-java/pom.xml`
 - `backend-java/src/test/java/com/unisage/backend/support/PostgresIntegrationTest.java`
+- `backend-java/src/test/java/com/unisage/backend/migration/V25MigrationTest.java`
 - `backend-java/src/test/java/com/unisage/backend/usagelog/GuestSessionCleanupUsageLogTest.java`
+- (`pom.xml` không cần sửa — Testcontainers đã có sẵn từ Model Registry)
 
 **Estimated scope:** M
 
