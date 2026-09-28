@@ -98,6 +98,16 @@ public enum ErrorCode {
 
     // Cost Tracking (26xx)
     USAGE_LOG_INVALID_PAYLOAD(HttpStatus.BAD_REQUEST, 2600, "Payload usage log không hợp lệ."),
+    BUDGET_NOT_FOUND(HttpStatus.NOT_FOUND, 2601, "Ngân sách không tồn tại."),
+    BUDGET_INVALID_SCOPE(HttpStatus.BAD_REQUEST, 2602,
+            "scopeProvider/scopePurpose không khớp với scope đã chọn."),
+    BUDGET_INVALID_THROTTLE(HttpStatus.BAD_REQUEST, 2603,
+            "throttleMaxConcurrency bắt buộc và phải > 0 khi action = THROTTLE, và phải để trống ở action khác."),
+    BUDGET_ALREADY_ENABLED_FOR_PERIOD(HttpStatus.CONFLICT, 2604,
+            "Đã có ngân sách khác đang bật cho cùng phạm vi và kỳ này."),
+    BUDGET_ALERT_SETTING_INVALID(HttpStatus.BAD_REQUEST, 2605,
+            "Cấu hình cảnh báo không hợp lệ (ngưỡng phải 1-200, email không đúng định dạng)."),
+    BUDGET_ALERT_NOT_FOUND(HttpStatus.NOT_FOUND, 2606, "Cảnh báo không tồn tại."),
 
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),

@@ -27,6 +27,10 @@ public enum ResourceType {
     // Usage
     USAGE_LIMIT_PLAN("Gói hạn mức"),
 
+    // Cost Tracking
+    USAGE_LOG("Nhật ký chi phí AI"),
+    BUDGET("Ngân sách AI"),
+
     // Support
     TICKET("Yêu cầu hỗ trợ"),
 
