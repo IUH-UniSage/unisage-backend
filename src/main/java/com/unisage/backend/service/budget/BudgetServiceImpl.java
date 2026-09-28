@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import com.unisage.backend.dto.request.BudgetRequest;
 import com.unisage.backend.dto.response.BudgetResponse;
+import com.unisage.backend.dto.response.internal.InternalBudgetSnapshotResponse;
 import com.unisage.backend.entity.Budget;
 import com.unisage.backend.entity.enums.BudgetAction;
 import com.unisage.backend.entity.enums.BudgetScope;
@@ -104,6 +105,27 @@ public class BudgetServiceImpl implements BudgetService {
         budget.setIsEnabled(false);
         budgetRepository.save(budget);
         modelRegistryVersionService.bump();
+    }
+
+    @Override
+    public InternalBudgetSnapshotResponse getSnapshot() {
+        List<InternalBudgetSnapshotResponse.BudgetEntry> entries = budgetRepository.findByIsEnabledTrueAndIsActiveTrue()
+                .stream()
+                .map(b -> InternalBudgetSnapshotResponse.BudgetEntry.builder()
+                        .scope(b.getScope())
+                        .scopeProvider(b.getScopeProvider())
+                        .scopePurpose(b.getScopePurpose())
+                        .period(b.getPeriod())
+                        .limitUsd(b.getLimitUsd())
+                        .action(b.getAction())
+                        .throttleMaxConcurrency(b.getThrottleMaxConcurrency())
+                        .build())
+                .toList();
+
+        return InternalBudgetSnapshotResponse.builder()
+                .version(modelRegistryVersionService.currentVersion())
+                .budgets(entries)
+                .build();
     }
 
     private Budget saveOrConflict(Budget budget) {

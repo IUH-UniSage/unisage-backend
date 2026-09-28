@@ -98,6 +98,7 @@ public enum ErrorCode {
 
     // Cost Tracking (26xx)
     USAGE_LOG_INVALID_PAYLOAD(HttpStatus.BAD_REQUEST, 2600, "Payload usage log không hợp lệ."),
+    USAGE_LOG_NOT_FOUND(HttpStatus.NOT_FOUND, 2607, "Nhật ký chi phí không tồn tại."),
     BUDGET_NOT_FOUND(HttpStatus.NOT_FOUND, 2601, "Ngân sách không tồn tại."),
     BUDGET_INVALID_SCOPE(HttpStatus.BAD_REQUEST, 2602,
             "scopeProvider/scopePurpose không khớp với scope đã chọn."),

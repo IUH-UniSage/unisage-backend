@@ -12,20 +12,30 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.unisage.backend.dto.request.internal.UsageLineIngestRequest;
 import com.unisage.backend.dto.request.internal.UsageLogIngestRequest;
+import com.unisage.backend.dto.response.PageResponse;
+import com.unisage.backend.dto.response.UsageLineResponse;
+import com.unisage.backend.dto.response.UsageLogDetailResponse;
+import com.unisage.backend.dto.response.UsageLogListItemResponse;
+import com.unisage.backend.dto.response.UsageLogSummaryResponse;
 import com.unisage.backend.dto.response.internal.UsageLogIngestResponse;
 import com.unisage.backend.entity.RequestUsageLine;
 import com.unisage.backend.entity.RequestUsageLog;
 import com.unisage.backend.entity.enums.UsageCostStatus;
+import com.unisage.backend.entity.enums.UsagePurpose;
 import com.unisage.backend.entity.enums.UsageRequestStatus;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.RequestUsageLineRepository;
+import com.unisage.backend.repository.RequestUsageLogRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -52,6 +62,10 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
 
     private final JdbcTemplate jdbcTemplate;
     private final RequestUsageLineRepository requestUsageLineRepository;
+    private final RequestUsageLogRepository requestUsageLogRepository;
+
+    @Value("${app.timezone:Asia/Ho_Chi_Minh}")
+    private String appTimezone;
 
     @Override
     @Transactional
@@ -95,6 +109,181 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
         requestUsageLineRepository.saveAll(lines);
 
         return new UsageLogIngestResponse(newId, false);
+    }
+
+    @Override
+    public UsageLogSummaryResponse summary(LocalDateTime from, LocalDateTime to, String groupBy) {
+        List<UsageLogSummaryResponse.Bucket> buckets = switch (groupBy) {
+            case "purpose" -> jdbcTemplate.query("""
+                    SELECT purpose AS bucket_key, SUM(total_cost_usd) AS priced, SUM(estimated_unpriced_cost_usd) AS unpriced,
+                           COUNT(*) AS request_count, SUM(total_input_tokens) AS input_tokens, SUM(total_output_tokens) AS output_tokens
+                    FROM request_usage_logs
+                    WHERE started_at >= ? AND started_at < ?
+                    GROUP BY purpose ORDER BY purpose
+                    """, this::mapSummaryRow, from, to);
+            case "user" -> jdbcTemplate.query("""
+                    SELECT COALESCE(user_id::text, guest_ip, 'unknown') AS bucket_key,
+                           SUM(total_cost_usd) AS priced, SUM(estimated_unpriced_cost_usd) AS unpriced,
+                           COUNT(*) AS request_count, SUM(total_input_tokens) AS input_tokens, SUM(total_output_tokens) AS output_tokens
+                    FROM request_usage_logs
+                    WHERE started_at >= ? AND started_at < ?
+                    GROUP BY bucket_key ORDER BY priced DESC
+                    """, this::mapSummaryRow, from, to);
+            case "day" -> jdbcTemplate.query("""
+                    SELECT to_char((started_at AT TIME ZONE 'UTC') AT TIME ZONE ?, 'YYYY-MM-DD') AS bucket_key,
+                           SUM(total_cost_usd) AS priced, SUM(estimated_unpriced_cost_usd) AS unpriced,
+                           COUNT(*) AS request_count, SUM(total_input_tokens) AS input_tokens, SUM(total_output_tokens) AS output_tokens
+                    FROM request_usage_logs
+                    WHERE started_at >= ? AND started_at < ?
+                    GROUP BY bucket_key ORDER BY bucket_key
+                    """, this::mapSummaryRow, appTimezone, from, to);
+            case "provider" -> jdbcTemplate.query("""
+                    SELECT l.provider AS bucket_key,
+                           SUM(CASE WHEN l.cost_status = 'PRICED' THEN l.cost_usd ELSE 0 END) AS priced,
+                           SUM(CASE WHEN l.cost_status = 'UNPRICED' THEN l.estimated_cost_usd ELSE 0 END) AS unpriced,
+                           COUNT(DISTINCT l.usage_log_id) AS request_count,
+                           SUM(l.input_tokens) AS input_tokens, SUM(l.output_tokens) AS output_tokens
+                    FROM request_usage_lines l
+                    JOIN request_usage_logs g ON g.id = l.usage_log_id
+                    WHERE g.started_at >= ? AND g.started_at < ?
+                    GROUP BY l.provider ORDER BY priced DESC
+                    """, this::mapSummaryRow, from, to);
+            case "model" -> jdbcTemplate.query("""
+                    SELECT l.model_name AS bucket_key,
+                           SUM(CASE WHEN l.cost_status = 'PRICED' THEN l.cost_usd ELSE 0 END) AS priced,
+                           SUM(CASE WHEN l.cost_status = 'UNPRICED' THEN l.estimated_cost_usd ELSE 0 END) AS unpriced,
+                           COUNT(DISTINCT l.usage_log_id) AS request_count,
+                           SUM(l.input_tokens) AS input_tokens, SUM(l.output_tokens) AS output_tokens
+                    FROM request_usage_lines l
+                    JOIN request_usage_logs g ON g.id = l.usage_log_id
+                    WHERE g.started_at >= ? AND g.started_at < ?
+                    GROUP BY l.model_name ORDER BY priced DESC
+                    """, this::mapSummaryRow, from, to);
+            default -> throw new AppException(ErrorCode.USAGE_LOG_INVALID_PAYLOAD,
+                    Map.of("groupBy", "Phải là một trong: purpose, provider, model, user, day"));
+        };
+
+        return UsageLogSummaryResponse.builder().groupBy(groupBy).buckets(buckets).build();
+    }
+
+    private UsageLogSummaryResponse.Bucket mapSummaryRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
+        return UsageLogSummaryResponse.Bucket.builder()
+                .key(rs.getString("bucket_key"))
+                .pricedCostUsd(rs.getBigDecimal("priced"))
+                .estimatedUnpricedCostUsd(rs.getBigDecimal("unpriced"))
+                .requestCount(rs.getLong("request_count"))
+                .totalInputTokens(rs.getLong("input_tokens"))
+                .totalOutputTokens(rs.getLong("output_tokens"))
+                .build();
+    }
+
+    @Override
+    public PageResponse<List<UsageLogListItemResponse>> search(
+            UsagePurpose purpose, UsageRequestStatus status, LocalDateTime from, LocalDateTime to, Pageable pageable) {
+        Page<RequestUsageLog> page = requestUsageLogRepository.findAll(buildSpec(purpose, status, from, to), pageable);
+
+        List<UUID> ids = page.getContent().stream().map(RequestUsageLog::getId).toList();
+        Set<UUID> withFailover = ids.isEmpty()
+                ? Set.of()
+                : new HashSet<>(requestUsageLineRepository.findUsageLogIdsWithFailover(ids));
+
+        return PageResponse.fromPage(page, log -> UsageLogListItemResponse.builder()
+                .id(log.getId())
+                .requestId(log.getRequestId())
+                .purpose(log.getPurpose())
+                .status(log.getStatus())
+                .userId(log.getUser() != null ? log.getUser().getId() : null)
+                .guestIp(log.getGuestIp())
+                .totalInputTokens(log.getTotalInputTokens())
+                .totalOutputTokens(log.getTotalOutputTokens())
+                .totalCostUsd(log.getTotalCostUsd())
+                .estimatedUnpricedCostUsd(log.getEstimatedUnpricedCostUsd())
+                .latencyMs(log.getLatencyMs())
+                .startedAt(log.getStartedAt())
+                .finishedAt(log.getFinishedAt())
+                .hasFailover(withFailover.contains(log.getId()))
+                .build());
+    }
+
+    /** Postgres' JDBC driver can't infer a bind parameter's type from a bare
+     * {@code (:x IS NULL OR col >= :x)} pattern for timestamp columns ("could not determine data
+     * type of parameter") - a dynamic {@link org.springframework.data.jpa.domain.Specification}
+     * that only adds a predicate when the filter is non-null avoids the problem entirely, same
+     * pattern as {@code AuditLogServiceImpl.buildSpec}. */
+    private org.springframework.data.jpa.domain.Specification<RequestUsageLog> buildSpec(
+            UsagePurpose purpose, UsageRequestStatus status, LocalDateTime from, LocalDateTime to) {
+        return (root, cq, cb) -> {
+            List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+            if (purpose != null) {
+                predicates.add(cb.equal(root.get("purpose"), purpose));
+            }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+            if (from != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("startedAt"), from));
+            }
+            if (to != null) {
+                predicates.add(cb.lessThan(root.get("startedAt"), to));
+            }
+            return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+    }
+
+    @Override
+    @Transactional
+    public UsageLogDetailResponse getDetail(UUID id) {
+        RequestUsageLog log = requestUsageLogRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.USAGE_LOG_NOT_FOUND));
+
+        List<UsageLineResponse> lines = requestUsageLineRepository.findByUsageLogIdOrderBySeq(id).stream()
+                .map(line -> UsageLineResponse.builder()
+                        .seq(line.getSeq())
+                        .nodeName(line.getNodeName())
+                        .attempt(line.getAttempt())
+                        .chatModelId(line.getChatModel() != null ? line.getChatModel().getId() : null)
+                        .provider(line.getProvider())
+                        .modelName(line.getModelName())
+                        .sourceType(line.getSourceType())
+                        .inputTokens(line.getInputTokens())
+                        .outputTokens(line.getOutputTokens())
+                        .cachedTokens(line.getCachedTokens())
+                        .costUsd(line.getCostUsd())
+                        .estimatedCostUsd(line.getEstimatedCostUsd())
+                        .costStatus(line.getCostStatus())
+                        .latencyMs(line.getLatencyMs())
+                        .status(line.getStatus())
+                        .errorCode(line.getErrorCode())
+                        .occurredAt(line.getOccurredAt())
+                        .build())
+                .toList();
+
+        String query = log.getUserMessage() != null ? log.getUserMessage().getContent() : null;
+        String answer = log.getAssistantMessage() != null ? log.getAssistantMessage().getContent() : null;
+        var citations = log.getAssistantMessage() != null ? log.getAssistantMessage().getCitations() : null;
+
+        return UsageLogDetailResponse.builder()
+                .id(log.getId())
+                .requestId(log.getRequestId())
+                .purpose(log.getPurpose())
+                .status(log.getStatus())
+                .userId(log.getUser() != null ? log.getUser().getId() : null)
+                .guestIp(log.getGuestIp())
+                .totalInputTokens(log.getTotalInputTokens())
+                .totalOutputTokens(log.getTotalOutputTokens())
+                .totalCachedTokens(log.getTotalCachedTokens())
+                .totalCostUsd(log.getTotalCostUsd())
+                .estimatedUnpricedCostUsd(log.getEstimatedUnpricedCostUsd())
+                .unpricedLineCount(log.getUnpricedLineCount())
+                .lineCount(log.getLineCount())
+                .latencyMs(log.getLatencyMs())
+                .startedAt(log.getStartedAt())
+                .finishedAt(log.getFinishedAt())
+                .query(query)
+                .answer(answer)
+                .citations(citations)
+                .lines(lines)
+                .build();
     }
 
     private void validate(UsageLogIngestRequest request) {

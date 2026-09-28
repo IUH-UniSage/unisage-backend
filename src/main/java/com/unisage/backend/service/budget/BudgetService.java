@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import com.unisage.backend.dto.request.BudgetRequest;
 import com.unisage.backend.dto.response.BudgetResponse;
+import com.unisage.backend.dto.response.internal.InternalBudgetSnapshotResponse;
 
 public interface BudgetService {
 
@@ -17,4 +18,7 @@ public interface BudgetService {
     List<BudgetResponse> getAll();
 
     void delete(UUID id);
+
+    /** {@code GET /internal/budgets/snapshot} - enabled budgets only, plus the current config version. */
+    InternalBudgetSnapshotResponse getSnapshot();
 }
