@@ -7,11 +7,13 @@ import jakarta.validation.Valid;
 import com.unisage.backend.dto.request.UpdateUserRequest;
 import com.unisage.backend.dto.response.ApiResponse;
 import com.unisage.backend.dto.response.PageResponse;
+import com.unisage.backend.dto.response.UsageLimitResponse;
 import com.unisage.backend.dto.response.UserResponse;
 import com.unisage.backend.dto.response.UserDetailResponse;
 
 import java.util.List;
 
+import com.unisage.backend.service.usagelimit.UsageLimitService;
 import com.unisage.backend.service.user.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -27,6 +29,7 @@ import java.util.UUID;
 public class UserController {
 
     private final UserService userService;
+    private final UsageLimitService usageLimitService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<UserResponse>> create(@Valid @RequestBody CreateUserRequest request) {
@@ -41,6 +44,12 @@ public class UserController {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<UserDetailResponse>> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id)));
+    }
+
+    @GetMapping("/{id}/usage-limit")
+    public ResponseEntity<ApiResponse<UsageLimitResponse>> getUsageLimit(@PathVariable UUID id) {
+        userService.getUserById(id);
+        return ResponseEntity.ok(ApiResponse.success(usageLimitService.getUsage(id, null)));
     }
 
     @GetMapping
