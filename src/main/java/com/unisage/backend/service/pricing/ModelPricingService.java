@@ -9,6 +9,7 @@ import com.unisage.backend.dto.request.ModelPriceRequest;
 import com.unisage.backend.dto.response.ModelPriceChangeResponse;
 import com.unisage.backend.dto.response.ModelPriceResponse;
 import com.unisage.backend.dto.response.PageResponse;
+import com.unisage.backend.dto.response.internal.InternalModelPricingSnapshotResponse;
 
 public interface ModelPricingService {
 
@@ -24,4 +25,6 @@ public interface ModelPricingService {
 
     /** Newest first. */
     PageResponse<List<ModelPriceChangeResponse>> getHistory(ModelPriceHistoryFilter filter, Pageable pageable);
+
+    InternalModelPricingSnapshotResponse getSnapshot();
 }

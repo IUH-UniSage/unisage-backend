@@ -10,6 +10,7 @@
     { "method": "PUT", "basePath": "/internal/model-registry", "path": "/embedding-index/{collection}/identity", "returnsSecret": false, "implemented": true },
     { "method": "POST", "basePath": "/internal", "path": "/usage-logs", "returnsSecret": false, "implemented": true },
     { "method": "GET", "basePath": "/internal", "path": "/budgets/snapshot", "returnsSecret": false, "implemented": true },
-    { "method": "GET", "basePath": "/internal", "path": "/usage-logs/period-totals", "returnsSecret": false, "implemented": true }
+    { "method": "GET", "basePath": "/internal", "path": "/usage-logs/period-totals", "returnsSecret": false, "implemented": true },
+    { "method": "GET", "basePath": "/internal", "path": "/model-pricing/snapshot", "returnsSecret": false, "implemented": true }
   ]
 }

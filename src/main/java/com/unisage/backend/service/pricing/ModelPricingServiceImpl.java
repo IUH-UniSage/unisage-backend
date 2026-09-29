@@ -23,6 +23,7 @@ import com.unisage.backend.dto.request.ModelPriceRequest;
 import com.unisage.backend.dto.response.ModelPriceChangeResponse;
 import com.unisage.backend.dto.response.ModelPriceResponse;
 import com.unisage.backend.dto.response.PageResponse;
+import com.unisage.backend.dto.response.internal.InternalModelPricingSnapshotResponse;
 import com.unisage.backend.entity.ModelPrice;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.entity.enums.ModelPriceChangeType;
@@ -196,6 +197,24 @@ public class ModelPricingServiceImpl implements ModelPricingService {
                         .build(),
                 pageParams.toArray());
         return PageResponse.fromPageData(new PageImpl<>(rows, pageable, total == null ? 0 : total), rows);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InternalModelPricingSnapshotResponse getSnapshot() {
+        // Version first: a change committed between the two reads makes the agent poll again,
+        // never keep a newer version with older prices.
+        long version = modelRegistryVersionService.currentVersion();
+        List<InternalModelPricingSnapshotResponse.PriceEntry> prices = modelPriceRepository.findAll().stream()
+                .map(price -> InternalModelPricingSnapshotResponse.PriceEntry.builder()
+                        .provider(price.getProvider())
+                        .modelName(price.getModelName())
+                        .inputPerMillion(price.getInputPerMillion())
+                        .outputPerMillion(price.getOutputPerMillion())
+                        .cachedInputPerMillion(price.getCachedInputPerMillion())
+                        .build())
+                .toList();
+        return InternalModelPricingSnapshotResponse.builder().version(version).prices(prices).build();
     }
 
     static ModelPriceResponse toResponse(ModelPrice price) {
