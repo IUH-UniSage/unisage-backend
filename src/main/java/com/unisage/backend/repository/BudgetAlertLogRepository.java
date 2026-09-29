@@ -14,12 +14,22 @@ import org.springframework.data.repository.query.Param;
 
 import com.unisage.backend.entity.BudgetAlertLog;
 import com.unisage.backend.entity.enums.AlertChannel;
+import com.unisage.backend.entity.enums.AlertStatus;
+import com.unisage.backend.entity.enums.AlertType;
 
 public interface BudgetAlertLogRepository extends JpaRepository<BudgetAlertLog, UUID> {
 
-    Page<BudgetAlertLog> findAllByOrderByCreatedAtDesc(Pageable pageable);
-
     List<BudgetAlertLog> findByChannelAndDismissedAtIsNull(AlertChannel channel);
+
+    @Query("""
+            SELECT b FROM BudgetAlertLog b
+            WHERE (:alertType IS NULL OR b.alertType = :alertType)
+              AND (:channel IS NULL OR b.channel = :channel)
+              AND (:status IS NULL OR b.status = :status)
+            ORDER BY b.createdAt DESC
+            """)
+    Page<BudgetAlertLog> search(@Param("alertType") AlertType alertType,
+            @Param("channel") AlertChannel channel, @Param("status") AlertStatus status, Pageable pageable);
 
     /**
      * Atomic claim: inserts a PENDING row for {@code dedupeKey}, or does nothing if a row with

@@ -13,6 +13,8 @@ import com.unisage.backend.dto.response.PageResponse;
 import com.unisage.backend.entity.BudgetAlertLog;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.entity.enums.AlertChannel;
+import com.unisage.backend.entity.enums.AlertStatus;
+import com.unisage.backend.entity.enums.AlertType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.BudgetAlertLogRepository;
@@ -31,8 +33,9 @@ public class BudgetAlertLogServiceImpl implements BudgetAlertLogService {
     private final SecurityUtil securityUtil;
 
     @Override
-    public PageResponse<List<BudgetAlertLogResponse>> getAll(Pageable pageable) {
-        Page<BudgetAlertLog> page = budgetAlertLogRepository.findAllByOrderByCreatedAtDesc(pageable);
+    public PageResponse<List<BudgetAlertLogResponse>> getAll(Pageable pageable, AlertType alertType,
+            AlertChannel channel, AlertStatus status) {
+        Page<BudgetAlertLog> page = budgetAlertLogRepository.search(alertType, channel, status, pageable);
         return PageResponse.fromPage(page, this::mapToResponse);
     }
 
