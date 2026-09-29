@@ -674,22 +674,40 @@ tháng tính theo `app.timezone`.
 ### Task 11: Đối soát + release reservation treo
 
 **Acceptance criteria:**
-- [ ] `release_expired_reservations` (beat mỗi 1 phút): release reservation có
+- [x] `release_expired_reservations` (beat mỗi 1 phút): release reservation có
       score ZSET quá hạn — trả `reserved`/`inflight` của `req` và mọi `p:*`, không
       cộng `committed`, xoá hash
-- [ ] `reconcile_budget_committed` (beat mỗi 1 giờ): Lua đọc atomic độ dài
+- [x] `reconcile_budget_committed` (beat mỗi 1 giờ): Lua đọc atomic độ dài
       outbox/processing + `committed` (`C0`); còn item → bỏ lượt; lấy `dbTotal` từ
       `period-totals`; `INCRBY committed (dbTotal − C0)` (không `SET`); lệch > 5%
       → log warning
 
+**Implementation notes:**
+- Phát hiện `refresh_budget_snapshot()` (Task 9) chưa từng được gọi ở đâu cả —
+  toàn bộ hệ thống budget im lặng không hoạt động (snapshot rỗng → mọi
+  reserve/acquire fail-open thành OK). Đã nối load lần đầu + poll định kỳ vào
+  cả FastAPI lifespan (asyncio task nền) lẫn Celery worker (load lúc worker
+  start + beat task), cùng cờ `MODEL_REGISTRY_ENABLED` như model registry
+  đang dùng.
+- `GET /internal/usage-logs/period-totals` trả về totals của TẤT CẢ scope
+  (SYSTEM + mọi PURPOSE + mọi PROVIDER có budget bật) trong MỘT response cho
+  một cặp (period, periodKey) — `reconcile_budget_committed_once` group các
+  entry trong snapshot theo (period, periodKey) để gọi Java một lần cho mỗi
+  cặp thay vì một lần cho mỗi scope.
+
 **Verification:**
-- [ ] pytest: reservation treo được release; outbox còn item → không ghi đè
+- [x] pytest với Redis thật: reservation quá hạn được release đúng
+      reserved/inflight; reservation chưa hết hạn không bị đụng vào; outbox
+      còn item → bỏ qua, không gọi Java; drift được sửa đúng và log warning
 
 **Dependencies:** Task 9, Task 7
 
 **Files likely touched:**
-- `unisage-agent/app/worker/tasks/budget_reconciliation.py`
-- `unisage-agent/tests/worker/test_budget_reconciliation.py`
+- `unisage-agent/app/worker/budget_reconciliation_tasks.py`
+- `unisage-agent/app/core/budget/lua/{release_expired_reservations,reconcile_check}.lua`
+- `unisage-agent/app/core/budget/poller.py`
+- `unisage-agent/app/main.py`, `unisage-agent/app/worker/celery_app.py`
+- `unisage-agent/tests/worker/test_budget_reconciliation_tasks.py`
 
 **Estimated scope:** S
 

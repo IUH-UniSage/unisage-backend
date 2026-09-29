@@ -517,7 +517,7 @@ với `RequestUsageLog`. Để 2 hệ thống độc lập (xem Open Questions).
 ### Phase 3: Python — Budget enforcement (soft limit + reservation)
 - [x] Task 9: Lua reserve/settle request + acquire/release provider + budget snapshot
 - [x] Task 10: Gắn reservation vào Chat/Extraction/Embedding + acquire/release trong router
-- [ ] Task 11: Đối soát + release reservation treo
+- [x] Task 11: Đối soát + release reservation treo
 - [ ] Task 11b: Deploy Celery worker/beat, Redis AOF, health outbox, replay dead-letter
 
 ### Phase 4: Cảnh báo (Java)
