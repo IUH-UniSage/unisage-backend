@@ -27,6 +27,7 @@ public class DataInitializer implements CommandLineRunner {
     private final RolePermissionRepository  rolePermissionRepository;
     private final UserRepository            userRepository;
     private final DepartmentRepository      departmentRepository;
+    private final CategoryRepository        categoryRepository;
     private final AccessLevelRepository     accessLevelRepository;
     private final UserDepartmentAccessRepository userDepartmentAccessRepository;
     private final UsageLimitPlanRepository usageLimitPlanRepository;
@@ -46,8 +47,9 @@ public class DataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         // Runs independently of the RBAC skip-guard below, so re-running on an already
-        // initialised system still fills in any department still missing.
+        // initialised system still fills in any department/category still missing.
         seedDepartments();
+        seedCategories();
         Map<Integer, AccessLevel> accessLevels = seedAccessLevels();
 
         if (roleRepository.findByName(PredefinedRoles.SUPER_ADMIN).isPresent()) {
@@ -757,6 +759,24 @@ public class DataInitializer implements CommandLineRunner {
             log.info("  Department seeded: {}", name);
             return d;
         });
+    }
+
+    // ─── Category seeding ──────────────────────────────────────────────────
+    private void seedCategories() {
+        seedCategory("Test", "Danh mục dùng để kiểm thử.");
+        log.info("  Categories ready.");
+    }
+
+    private void seedCategory(String name, String description) {
+        if (categoryRepository.existsByName(name)) {
+            return;
+        }
+        Category c = Category.builder()
+                .name(name)
+                .description(description)
+                .build();
+        categoryRepository.save(c);
+        log.info("  Category seeded: {}", name);
     }
 
     // ─── Compact builder record ──────────────────────────────────────────
