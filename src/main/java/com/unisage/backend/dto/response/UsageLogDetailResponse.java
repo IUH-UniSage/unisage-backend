@@ -21,6 +21,7 @@ public record UsageLogDetailResponse(
     UsagePurpose purpose,
     UsageRequestStatus status,
     UUID userId,
+    String userEmail,
     String guestIp,
     Integer totalInputTokens,
     Integer totalOutputTokens,

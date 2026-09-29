@@ -13,7 +13,6 @@ import com.unisage.backend.dto.response.UsageLogListItemResponse;
 import com.unisage.backend.dto.response.UsageLogSummaryResponse;
 import com.unisage.backend.dto.response.internal.UsageLogIngestResponse;
 import com.unisage.backend.entity.enums.UsagePurpose;
-import com.unisage.backend.entity.enums.UsageRequestStatus;
 
 public interface RequestUsageLogService {
 
@@ -22,8 +21,7 @@ public interface RequestUsageLogService {
     UsageLogSummaryResponse summary(LocalDateTime from, LocalDateTime to, String groupBy,
             UsagePurpose purposeFilter, String providerFilter);
 
-    PageResponse<List<UsageLogListItemResponse>> search(
-            UsagePurpose purpose, UsageRequestStatus status, LocalDateTime from, LocalDateTime to, Pageable pageable);
+    PageResponse<List<UsageLogListItemResponse>> search(UsageLogSearchFilter filter, Pageable pageable);
 
     UsageLogDetailResponse getDetail(UUID id);
 }

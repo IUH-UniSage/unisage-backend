@@ -61,6 +61,14 @@ class RequestUsageLogServiceImplTest extends PostgresIntegrationTest {
         return response.id();
     }
 
+    private UUID ingestGuestChat(OffsetDateTime startedAt, String guestIp) {
+        var response = service.ingest(new UsageLogIngestRequest(
+                UUID.randomUUID(), UsagePurpose.CHAT, null, null, null, null, guestIp,
+                UsageRequestStatus.SUCCESS, startedAt, startedAt,
+                List.of(line(0, "openai", "gpt-4o-mini", startedAt, 0, UsageRequestStatus.SUCCESS))));
+        return response.id();
+    }
+
     @Test
     void dayGroupBy_splitsRecordsAcrossTheTimezoneBoundary() {
         // 23:59:59 and 00:00:01 in Asia/Ho_Chi_Minh, one second apart in wall-clock VN time but
@@ -89,13 +97,59 @@ class RequestUsageLogServiceImplTest extends PostgresIntegrationTest {
                 line(1, "anthropic", "claude-3-haiku", now, 1, UsageRequestStatus.SUCCESS)));
         UUID cleanId = ingestChat(now, "openai", List.of(line(0, "openai", "gpt-4o-mini", now, 0, UsageRequestStatus.SUCCESS)));
 
-        var page = service.search(null, null, now.minusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(),
-                now.plusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(), Pageable.unpaged());
+        var page = service.search(new UsageLogSearchFilter(null, null,
+                now.minusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(),
+                now.plusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(), null, null, null),
+                Pageable.unpaged());
 
         var byId = page.data().stream()
                 .collect(java.util.stream.Collectors.toMap(item -> item.id(), item -> item));
         assertThat(byId.get(failedOverId).hasFailover()).isTrue();
         assertThat(byId.get(cleanId).hasFailover()).isFalse();
+        assertThat(byId.get(failedOverId).models()).containsExactly("claude-3-haiku", "gpt-4o-mini");
+    }
+
+    @Test
+    void search_providerAndModelFilters_matchAnyLineWithoutDuplicatingRows() {
+        OffsetDateTime now = OffsetDateTime.now();
+        UUID failedOverId = ingestChat(now, "openai", List.of(
+                line(0, "openai", "gpt-4o-mini", now, 0, UsageRequestStatus.ERROR),
+                line(1, "anthropic", "claude-3-haiku", now, 1, UsageRequestStatus.SUCCESS),
+                line(2, "anthropic", "claude-3-haiku", now, 0, UsageRequestStatus.SUCCESS)));
+        ingestChat(now, "openai", List.of(line(0, "openai", "gpt-4o-mini", now, 0, UsageRequestStatus.SUCCESS)));
+
+        var byProvider = service.search(
+                new UsageLogSearchFilter(null, null, null, null, "anthropic", null, null), Pageable.unpaged());
+        var byModel = service.search(
+                new UsageLogSearchFilter(null, null, null, null, null, "gpt-4o-mini", null), Pageable.unpaged());
+
+        assertThat(byProvider.data()).extracting(item -> item.id()).containsExactly(failedOverId);
+        assertThat(byModel.data()).hasSize(2);
+    }
+
+    @Test
+    void search_userOrIpFilter_matchesGuestIpSubstring() {
+        OffsetDateTime now = OffsetDateTime.now();
+        UUID guestId = ingestGuestChat(now, "203.0.113.7");
+        ingestGuestChat(now, "198.51.100.2");
+
+        var page = service.search(
+                new UsageLogSearchFilter(null, null, null, null, null, null, "113.7"), Pageable.unpaged());
+
+        assertThat(page.data()).extracting(item -> item.id()).containsExactly(guestId);
+    }
+
+    @Test
+    void search_unsortedPage_returnsNewestFirst() {
+        OffsetDateTime now = OffsetDateTime.now();
+        UUID older = ingestChat(now.minusMinutes(5), "openai",
+                List.of(line(0, "openai", "gpt-4o-mini", now.minusMinutes(5), 0, UsageRequestStatus.SUCCESS)));
+        UUID newer = ingestChat(now, "openai", List.of(line(0, "openai", "gpt-4o-mini", now, 0, UsageRequestStatus.SUCCESS)));
+
+        var page = service.search(
+                new UsageLogSearchFilter(null, null, null, null, null, null, null), PageRequest.of(0, 10));
+
+        assertThat(page.data()).extracting(item -> item.id()).containsExactly(newer, older);
     }
 
     @Test

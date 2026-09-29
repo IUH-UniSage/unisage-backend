@@ -15,10 +15,13 @@ import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import com.unisage.backend.dto.request.internal.UsageLineIngestRequest;
 import com.unisage.backend.dto.request.internal.UsageLogIngestRequest;
@@ -37,6 +40,7 @@ import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.RequestUsageLineRepository;
 import com.unisage.backend.repository.RequestUsageLogRepository;
+import com.unisage.backend.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -61,9 +65,12 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
             ON CONFLICT (request_id) DO NOTHING
             """;
 
+    private static final Sort DEFAULT_LIST_SORT = Sort.by(Sort.Direction.DESC, "startedAt");
+
     private final JdbcTemplate jdbcTemplate;
     private final RequestUsageLineRepository requestUsageLineRepository;
     private final RequestUsageLogRepository requestUsageLogRepository;
+    private final UserRepository userRepository;
 
     @Value("${app.timezone:Asia/Ho_Chi_Minh}")
     private String appTimezone;
@@ -208,31 +215,40 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
     }
 
     @Override
-    public PageResponse<List<UsageLogListItemResponse>> search(
-            UsagePurpose purpose, UsageRequestStatus status, LocalDateTime from, LocalDateTime to, Pageable pageable) {
-        Page<RequestUsageLog> page = requestUsageLogRepository.findAll(buildSpec(purpose, status, from, to), pageable);
+    public PageResponse<List<UsageLogListItemResponse>> search(UsageLogSearchFilter filter, Pageable pageable) {
+        Pageable sorted = pageable.isPaged() && pageable.getSort().isUnsorted()
+                ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), DEFAULT_LIST_SORT)
+                : pageable;
+        Page<RequestUsageLog> page = requestUsageLogRepository.findAll(buildSpec(filter), sorted);
 
         List<UUID> ids = page.getContent().stream().map(RequestUsageLog::getId).toList();
         Set<UUID> withFailover = ids.isEmpty()
                 ? Set.of()
                 : new HashSet<>(requestUsageLineRepository.findUsageLogIdsWithFailover(ids));
+        Map<UUID, List<String>> modelsByLog = ids.isEmpty() ? Map.of() : loadModelNames(ids);
+        Map<UUID, String> emails = loadUserEmails(page.getContent());
 
-        return PageResponse.fromPage(page, log -> UsageLogListItemResponse.builder()
-                .id(log.getId())
-                .requestId(log.getRequestId())
-                .purpose(log.getPurpose())
-                .status(log.getStatus())
-                .userId(log.getUser() != null ? log.getUser().getId() : null)
-                .guestIp(log.getGuestIp())
-                .totalInputTokens(log.getTotalInputTokens())
-                .totalOutputTokens(log.getTotalOutputTokens())
-                .totalCostUsd(log.getTotalCostUsd())
-                .estimatedUnpricedCostUsd(log.getEstimatedUnpricedCostUsd())
-                .latencyMs(log.getLatencyMs())
-                .startedAt(log.getStartedAt())
-                .finishedAt(log.getFinishedAt())
-                .hasFailover(withFailover.contains(log.getId()))
-                .build());
+        return PageResponse.fromPage(page, log -> {
+            UUID userId = log.getUser() != null ? log.getUser().getId() : null;
+            return UsageLogListItemResponse.builder()
+                    .id(log.getId())
+                    .requestId(log.getRequestId())
+                    .purpose(log.getPurpose())
+                    .status(log.getStatus())
+                    .userId(userId)
+                    .userEmail(userId != null ? emails.get(userId) : null)
+                    .guestIp(log.getGuestIp())
+                    .totalInputTokens(log.getTotalInputTokens())
+                    .totalOutputTokens(log.getTotalOutputTokens())
+                    .totalCostUsd(log.getTotalCostUsd())
+                    .estimatedUnpricedCostUsd(log.getEstimatedUnpricedCostUsd())
+                    .latencyMs(log.getLatencyMs())
+                    .startedAt(log.getStartedAt())
+                    .finishedAt(log.getFinishedAt())
+                    .hasFailover(withFailover.contains(log.getId()))
+                    .models(modelsByLog.getOrDefault(log.getId(), List.of()))
+                    .build();
+        });
     }
 
     /** Postgres' JDBC driver can't infer a bind parameter's type from a bare
@@ -240,21 +256,42 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
      * type of parameter") - a dynamic {@link org.springframework.data.jpa.domain.Specification}
      * that only adds a predicate when the filter is non-null avoids the problem entirely, same
      * pattern as {@code AuditLogServiceImpl.buildSpec}. */
-    private org.springframework.data.jpa.domain.Specification<RequestUsageLog> buildSpec(
-            UsagePurpose purpose, UsageRequestStatus status, LocalDateTime from, LocalDateTime to) {
+    private org.springframework.data.jpa.domain.Specification<RequestUsageLog> buildSpec(UsageLogSearchFilter filter) {
         return (root, cq, cb) -> {
             List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
-            if (purpose != null) {
-                predicates.add(cb.equal(root.get("purpose"), purpose));
+            if (filter.purpose() != null) {
+                predicates.add(cb.equal(root.get("purpose"), filter.purpose()));
             }
-            if (status != null) {
-                predicates.add(cb.equal(root.get("status"), status));
+            if (filter.status() != null) {
+                predicates.add(cb.equal(root.get("status"), filter.status()));
             }
-            if (from != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("startedAt"), from));
+            if (filter.from() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("startedAt"), filter.from()));
             }
-            if (to != null) {
-                predicates.add(cb.lessThan(root.get("startedAt"), to));
+            if (filter.to() != null) {
+                predicates.add(cb.lessThan(root.get("startedAt"), filter.to()));
+            }
+            // EXISTS rather than a join so one request with several matching lines stays one row.
+            if (StringUtils.hasText(filter.provider()) || StringUtils.hasText(filter.model())) {
+                var sub = cq.subquery(Integer.class);
+                var line = sub.from(RequestUsageLine.class);
+                List<jakarta.persistence.criteria.Predicate> linePredicates = new java.util.ArrayList<>();
+                linePredicates.add(cb.equal(line.get("usageLog"), root));
+                if (StringUtils.hasText(filter.provider())) {
+                    linePredicates.add(cb.equal(line.get("provider"), filter.provider().trim()));
+                }
+                if (StringUtils.hasText(filter.model())) {
+                    linePredicates.add(cb.equal(line.get("modelName"), filter.model().trim()));
+                }
+                sub.select(cb.literal(1)).where(linePredicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+                predicates.add(cb.exists(sub));
+            }
+            if (StringUtils.hasText(filter.userOrIp())) {
+                String pattern = "%" + filter.userOrIp().trim().toLowerCase(java.util.Locale.ROOT) + "%";
+                var user = root.join("user", jakarta.persistence.criteria.JoinType.LEFT);
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("guestIp")), pattern),
+                        cb.like(cb.lower(user.get("email")), pattern)));
             }
             return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
         };
@@ -298,6 +335,7 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
                 .purpose(log.getPurpose())
                 .status(log.getStatus())
                 .userId(log.getUser() != null ? log.getUser().getId() : null)
+                .userEmail(log.getUser() != null ? log.getUser().getEmail() : null)
                 .guestIp(log.getGuestIp())
                 .totalInputTokens(log.getTotalInputTokens())
                 .totalOutputTokens(log.getTotalOutputTokens())
@@ -314,6 +352,32 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
                 .citations(citations)
                 .lines(lines)
                 .build();
+    }
+
+    private Map<UUID, List<String>> loadModelNames(List<UUID> usageLogIds) {
+        Map<UUID, java.util.TreeSet<String>> byLog = new HashMap<>();
+        for (Object[] row : requestUsageLineRepository.findModelNamesByUsageLogIds(usageLogIds)) {
+            byLog.computeIfAbsent((UUID) row[0], id -> new java.util.TreeSet<>()).add((String) row[1]);
+        }
+        Map<UUID, List<String>> result = new HashMap<>();
+        byLog.forEach((id, names) -> result.put(id, List.copyOf(names)));
+        return result;
+    }
+
+    /** Batch lookup - {@code log.getUser()} is a lazy proxy and this method runs outside a transaction. */
+    private Map<UUID, String> loadUserEmails(List<RequestUsageLog> logs) {
+        Set<UUID> userIds = new HashSet<>();
+        for (RequestUsageLog log : logs) {
+            if (log.getUser() != null) {
+                userIds.add(log.getUser().getId());
+            }
+        }
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> emails = new HashMap<>();
+        userRepository.findAllById(userIds).forEach(user -> emails.put(user.getId(), user.getEmail()));
+        return emails;
     }
 
     private void validate(UsageLogIngestRequest request) {
