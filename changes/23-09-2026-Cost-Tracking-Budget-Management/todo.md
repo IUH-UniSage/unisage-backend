@@ -788,20 +788,32 @@ bật persistence.
 ### Task 12: Job phát hiện ngưỡng + spike, claim atomic
 
 **Acceptance criteria:**
-- [ ] `@Scheduled` (cron env `BUDGET_ALERT_CHECK_CRON`, mặc định mỗi 2 phút): mỗi
+- [x] `@Scheduled` (cron env `BUDGET_ALERT_CHECK_CRON`, mặc định mỗi 2 phút): mỗi
       budget enabled, tính spend kỳ hiện tại từ DB (cùng quy tắc period-totals),
       mỗi ngưỡng trong `BudgetAlertSetting` đã đạt × mỗi kênh đang bật → claim
-- [ ] Spike (chạy 1 lần/ngày sau 00:05 giờ VN): spend hôm qua so trung bình 7
+- [x] Spike (chạy 1 lần/ngày sau 00:05 giờ VN): spend hôm qua so trung bình 7
       ngày trước đó, vượt `spikeThresholdPercent` → claim `SPIKE:{date}:{channel}`
-- [ ] Claim = `INSERT ... ON CONFLICT (dedupe_key) DO NOTHING` với status
+- [x] Claim = `INSERT ... ON CONFLICT (dedupe_key) DO NOTHING` với status
       `PENDING`, `attemptCount = 0`, `nextAttemptAt = now`
 - [ ] Bước gửi lấy dòng `PENDING`/`FAILED` có `next_attempt_at <= now` bằng
-      `SELECT ... FOR UPDATE SKIP LOCKED LIMIT n` → 2 instance không gửi trùng
-- [ ] Thêm ngưỡng mới giữa kỳ → chỉ gửi ngưỡng mới, không gửi lại ngưỡng cũ
+      `SELECT ... FOR UPDATE SKIP LOCKED LIMIT n` → 2 instance không gửi trùng —
+      đây là phần của bước GỬI (Task 13's dispatcher), không phải phần
+      detection/claim của Task 12, nên triển khai ở Task 13.
+- [x] Thêm ngưỡng mới giữa kỳ → chỉ gửi ngưỡng mới, không gửi lại ngưỡng cũ
+
+**Implementation notes:**
+- `BudgetAlertJob` chỉ gọi `BudgetAlertDetectionService`, không tự query DB —
+  giữ đúng convention scheduler mỏng + logic nằm ở service, giống
+  `ConversationRetentionJob`.
+- Claim query native SQL thêm trực tiếp vào `BudgetAlertLogRepository`
+  (chưa có sẵn), vì entity dùng Hibernate UUID generator phía Java (không
+  phải `gen_random_uuid()` phía DB) nên phải truyền `UUID.randomUUID()` làm
+  tham số.
 
 **Verification:**
-- [ ] `./mvnw test` (Testcontainers): 2 thread chạy job cùng lúc → mỗi
-      `dedupeKey` 1 dòng và gửi đúng 1 lần; qua kỳ mới → gửi lại được
+- [x] `./mvnw test` (Testcontainers): 2 thread chạy job cùng lúc → mỗi
+      `dedupeKey` 1 dòng, không double-claim; qua kỳ mới/thêm ngưỡng mới giữa
+      kỳ → gửi lại đúng phần mới; spike so đúng hôm qua với trung bình 7 ngày
 
 **Dependencies:** Task 3, Task 4
 

@@ -521,7 +521,7 @@ với `RequestUsageLog`. Để 2 hệ thống độc lập (xem Open Questions).
 - [x] Task 11b: Deploy Celery worker/beat, Redis AOF, health outbox, replay dead-letter
 
 ### Phase 4: Cảnh báo (Java)
-- [ ] Task 12: Job phát hiện ngưỡng + spike, claim atomic
+- [x] Task 12: Job phát hiện ngưỡng + spike, claim atomic
 - [ ] Task 13: Gửi In-app/Email/Slack (env)
 
 ### Phase 5: unisage-web
