@@ -1,8 +1,11 @@
 package com.unisage.backend.controller;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -17,7 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.unisage.backend.dto.request.ModelPriceRequest;
 import com.unisage.backend.dto.response.ApiResponse;
+import com.unisage.backend.dto.response.ModelPriceChangeResponse;
 import com.unisage.backend.dto.response.ModelPriceResponse;
+import com.unisage.backend.dto.response.PageResponse;
+import com.unisage.backend.entity.enums.ModelPriceChangeType;
+import com.unisage.backend.service.pricing.ModelPriceHistoryFilter;
 import com.unisage.backend.dto.response.ModelPricingSyncResponse;
 import com.unisage.backend.service.pricing.ModelPricingService;
 import com.unisage.backend.service.pricing.ModelPricingSyncService;
@@ -40,6 +47,19 @@ public class ModelPricingController {
         return ResponseEntity.ok(ApiResponse.success(modelPricingService.getAll(provider, query)));
     }
 
+    @GetMapping("/history")
+    public ResponseEntity<ApiResponse<PageResponse<List<ModelPriceChangeResponse>>>> getHistory(
+            @RequestParam(required = false) String provider,
+            @RequestParam(required = false) String model,
+            @RequestParam(name = "q", required = false) String query,
+            @RequestParam(required = false) ModelPriceChangeType changeType,
+            @RequestParam(required = false) OffsetDateTime from,
+            @RequestParam(required = false) OffsetDateTime to,
+            Pageable pageable) {
+        var filter = new ModelPriceHistoryFilter(provider, model, query, changeType, toUtc(from), toUtc(to));
+        return ResponseEntity.ok(ApiResponse.success(modelPricingService.getHistory(filter, pageable)));
+    }
+
     @PostMapping("/sync")
     public ResponseEntity<ApiResponse<ModelPricingSyncResponse>> sync() {
         return ResponseEntity.ok(ApiResponse.success(modelPricingSyncService.sync()));
@@ -60,5 +80,9 @@ public class ModelPricingController {
     public ResponseEntity<ApiResponse<Void>> reset(@PathVariable UUID id) {
         modelPricingService.reset(id);
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    private static java.time.LocalDateTime toUtc(OffsetDateTime value) {
+        return value == null ? null : value.withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
     }
 }

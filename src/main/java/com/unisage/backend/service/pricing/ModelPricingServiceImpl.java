@@ -6,18 +6,23 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import com.unisage.backend.dto.request.ModelPriceRequest;
+import com.unisage.backend.dto.response.ModelPriceChangeResponse;
 import com.unisage.backend.dto.response.ModelPriceResponse;
+import com.unisage.backend.dto.response.PageResponse;
 import com.unisage.backend.entity.ModelPrice;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.entity.enums.ModelPriceChangeType;
@@ -132,6 +137,65 @@ public class ModelPricingServiceImpl implements ModelPricingService {
         recordChange(removed, snapshot(price), ModelPriceChangeType.MANUAL_RESET, currentUser(), now);
         modelPriceRepository.delete(price);
         modelRegistryVersionService.bump();
+    }
+
+    @Override
+    public PageResponse<List<ModelPriceChangeResponse>> getHistory(ModelPriceHistoryFilter filter, Pageable pageable) {
+        // Only filters that were actually passed become predicates - Postgres can't type a bare
+        // "? IS NULL" bind for timestamp columns.
+        StringBuilder where = new StringBuilder(" WHERE 1 = 1");
+        List<Object> params = new ArrayList<>();
+        if (StringUtils.hasText(filter.provider())) {
+            where.append(" AND c.provider = ?");
+            params.add(filter.provider().trim().toLowerCase(Locale.ROOT));
+        }
+        if (StringUtils.hasText(filter.model())) {
+            where.append(" AND c.model_name = ?");
+            params.add(filter.model().trim());
+        }
+        if (StringUtils.hasText(filter.query())) {
+            where.append(" AND lower(c.model_name) LIKE ?");
+            params.add("%" + filter.query().trim().toLowerCase(Locale.ROOT) + "%");
+        }
+        if (filter.changeType() != null) {
+            where.append(" AND c.change_type = ?");
+            params.add(filter.changeType().name());
+        }
+        if (filter.from() != null) {
+            where.append(" AND c.changed_at >= ?");
+            params.add(Timestamp.valueOf(filter.from()));
+        }
+        if (filter.to() != null) {
+            where.append(" AND c.changed_at < ?");
+            params.add(Timestamp.valueOf(filter.to()));
+        }
+
+        Long total = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM model_price_changes c" + where, Long.class, params.toArray());
+        List<Object> pageParams = new ArrayList<>(params);
+        pageParams.add(pageable.getPageSize());
+        pageParams.add(pageable.getOffset());
+        List<ModelPriceChangeResponse> rows = jdbcTemplate.query("""
+                SELECT c.*, u.email AS changed_by_email
+                FROM model_price_changes c
+                LEFT JOIN users u ON u.id = c.changed_by
+                """ + where + " ORDER BY c.changed_at DESC, c.id LIMIT ? OFFSET ?",
+                (rs, rowNum) -> ModelPriceChangeResponse.builder()
+                        .id(rs.getObject("id", UUID.class))
+                        .provider(rs.getString("provider"))
+                        .modelName(rs.getString("model_name"))
+                        .changeType(ModelPriceChangeType.valueOf(rs.getString("change_type")))
+                        .oldInputPerMillion(rs.getBigDecimal("old_input_per_million"))
+                        .newInputPerMillion(rs.getBigDecimal("new_input_per_million"))
+                        .oldOutputPerMillion(rs.getBigDecimal("old_output_per_million"))
+                        .newOutputPerMillion(rs.getBigDecimal("new_output_per_million"))
+                        .oldCachedInputPerMillion(rs.getBigDecimal("old_cached_input_per_million"))
+                        .newCachedInputPerMillion(rs.getBigDecimal("new_cached_input_per_million"))
+                        .changedByEmail(rs.getString("changed_by_email"))
+                        .changedAt(utc(rs.getTimestamp("changed_at").toLocalDateTime()))
+                        .build(),
+                pageParams.toArray());
+        return PageResponse.fromPageData(new PageImpl<>(rows, pageable, total == null ? 0 : total), rows);
     }
 
     static ModelPriceResponse toResponse(ModelPrice price) {

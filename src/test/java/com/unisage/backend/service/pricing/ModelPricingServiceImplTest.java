@@ -9,12 +9,14 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.unisage.backend.dto.request.ModelPriceRequest;
 import com.unisage.backend.entity.ModelPrice;
+import com.unisage.backend.entity.enums.ModelPriceChangeType;
 import com.unisage.backend.entity.enums.ModelPriceSource;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
@@ -113,6 +115,43 @@ class ModelPricingServiceImplTest extends PostgresIntegrationTest {
         assertThat(jdbcTemplate.queryForList(
                 "SELECT change_type FROM model_price_changes ORDER BY changed_at", String.class))
                 .containsExactly("MANUAL_CREATE", "MANUAL_RESET");
+    }
+
+    @Test
+    void getHistory_filtersAndPagesNewestFirst() {
+        LocalDateTime base = LocalDateTime.of(2026, 9, 1, 0, 0);
+        insertChange("openai", "gpt-4o", "SYNC_CREATE", base);
+        insertChange("openai", "gpt-4o-mini", "SYNC_CREATE", base.plusDays(1));
+        insertChange("google", "gemini-2.5-flash", "SYNC_CREATE", base.plusDays(2));
+        insertChange("openai", "gpt-4o-mini", "SYNC_UPDATE", base.plusDays(3));
+
+        var all = service.getHistory(filter(null, null, null, null, null, null), PageRequest.of(0, 3));
+        assertThat(all.totalItems()).isEqualTo(4);
+        assertThat(all.data()).extracting(c -> c.changedAt().toLocalDateTime())
+                .containsExactly(base.plusDays(3), base.plusDays(2), base.plusDays(1));
+
+        assertThat(service.getHistory(filter(null, "gpt-4o", null, null, null, null), PageRequest.of(0, 10))
+                .totalItems()).isEqualTo(1);
+        assertThat(service.getHistory(filter(null, null, "4O-", null, null, null), PageRequest.of(0, 10))
+                .totalItems()).isEqualTo(2);
+        assertThat(service.getHistory(filter("GOOGLE", null, null, null, null, null), PageRequest.of(0, 10))
+                .totalItems()).isEqualTo(1);
+        assertThat(service.getHistory(
+                filter(null, null, null, ModelPriceChangeType.SYNC_UPDATE, null, null), PageRequest.of(0, 10))
+                .totalItems()).isEqualTo(1);
+        assertThat(service.getHistory(
+                filter(null, null, null, null, base.plusDays(1), base.plusDays(3)), PageRequest.of(0, 10))
+                .data()).extracting(c -> c.modelName()).containsExactly("gemini-2.5-flash", "gpt-4o-mini");
+    }
+
+    private static ModelPriceHistoryFilter filter(String provider, String model, String query,
+            ModelPriceChangeType type, LocalDateTime from, LocalDateTime to) {
+        return new ModelPriceHistoryFilter(provider, model, query, type, from, to);
+    }
+
+    private void insertChange(String provider, String model, String type, LocalDateTime at) {
+        jdbcTemplate.update(ModelPricingSyncServiceImpl.INSERT_CHANGE_SQL, UUID.randomUUID(), provider, model, type,
+                null, new BigDecimal("0.1"), null, null, null, null, null, java.sql.Timestamp.valueOf(at));
     }
 
     private UUID signInAsAdmin() {
