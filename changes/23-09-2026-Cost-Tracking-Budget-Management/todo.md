@@ -1087,7 +1087,7 @@ bật persistence.
 ### Task 18: Tab Bảng giá
 
 **Acceptance criteria:**
-- [ ] Bảng tĩnh các model đang đăng ký trong Model Registry; SELF_HOSTED "Không
+- [x] Bảng tĩnh các model đang đăng ký trong Model Registry; SELF_HOSTED "Không
       tính phí"; ghi chú "chỉ tham khảo"
 
 **Verification:** Manual
@@ -1099,13 +1099,17 @@ bật persistence.
 
 **Estimated scope:** S
 
+**Implementation notes:**
+- Giá lấy từ bảng LiteLLM, lưu tĩnh ở FE theo tên model; model không có giá hiện
+  "Chưa có giá". Chỉ verify tĩnh (typecheck/lint/build), chưa manual.
+
 ---
 
 ### Task 19: Tab Lịch sử sử dụng + drawer
 
 **Acceptance criteria:**
-- [ ] Bảng parent có filter + phân trang, badge failover
-- [ ] Drawer: query, answer, chunks trích dẫn, bảng line (node, provider/model,
+- [x] Bảng parent có filter + phân trang, badge failover
+- [x] Drawer: query, answer, chunks trích dẫn, bảng line (node, provider/model,
       attempt, tokens, cost/costStatus, latency, lỗi), tổng cost, user/IP,
       Request ID; message đã xoá → "Nội dung đã bị xoá"
 
@@ -1116,6 +1120,10 @@ bật persistence.
 **Files likely touched:** `unisage-web/src/features/cost-management/usage-history/`
 
 **Estimated scope:** L — tách bảng và drawer nếu quá lớn
+
+**Implementation notes:**
+- `GET /usage-logs` thêm filter provider/model/userOrIp, trả `models` + `userEmail`,
+  mặc định mới nhất trước. Full `./mvnw test` pass; FE chỉ verify tĩnh, chưa manual.
 
 ---
 

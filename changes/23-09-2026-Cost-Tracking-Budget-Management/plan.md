@@ -529,8 +529,8 @@ với `RequestUsageLog`. Để 2 hệ thống độc lập (xem Open Questions).
 - [x] Task 15: Tab Tổng quan
 - [x] Task 16: Tab Ngân sách & Giới hạn
 - [x] Task 17: Tab Cảnh báo + `BudgetAlertBanner`
-- [ ] Task 18: Tab Bảng giá
-- [ ] Task 19: Tab Lịch sử sử dụng + drawer
+- [x] Task 18: Tab Bảng giá
+- [x] Task 19: Tab Lịch sử sử dụng + drawer
 
 ### Checkpoint: Hoàn chỉnh
 - [ ] Toàn bộ test ở mục "Test bắt buộc" pass
