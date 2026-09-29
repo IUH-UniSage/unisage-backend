@@ -14,19 +14,20 @@ thêm co-author.
 ### Task 1: Backend: allowlist + vô hiệu hoá model groq/mistral
 
 **Acceptance criteria:**
-- [ ] `SUPPORTED_LLM_PROVIDERS` chỉ còn `openai`, `google`; tạo/sửa model CLOUD_API với
+- [x] `SUPPORTED_LLM_PROVIDERS` chỉ còn `openai`, `google`; tạo/sửa model CLOUD_API với
       provider `groq`/`mistral` → `CHAT_MODEL_PROVIDER_UNSUPPORTED`
-- [ ] `V28__deactivate_unsupported_providers.sql`: model CLOUD_API có provider groq/mistral
+- [x] `V28__deactivate_unsupported_providers.sql`: model CLOUD_API có provider groq/mistral
       (không phân biệt hoa thường) → INACTIVE, không xoá dòng (chưa có prod/staging, chỉ ảnh
       hưởng DB dev)
-- [ ] Bump `config_version` sau migration không cần; agent tự bỏ credential INACTIVE ở lần
+- [x] Bump `config_version` sau migration không cần; agent tự bỏ credential INACTIVE ở lần
       snapshot kế tiếp (xác nhận bằng đọc code snapshot Java)
 
-**Ghi chú:** phần allowlist + test tham số hoá đã sửa sẵn, chưa commit, chưa chạy test.
+**Ghi chú:** V28 còn huỷ verification job đang mở của model groq/mistral (kể cả job xoay
+credential sang groq/mistral) và bump `model_registry_version` để agent tải lại snapshot.
 
 **Verification:**
-- [ ] `./mvnw test` full pass; test tham số hoá 3 provider bị từ chối
-- [ ] Test migration: seed 1 model groq ACTIVE trước V28 → sau V28 là INACTIVE
+- [x] `./mvnw test` full pass; test tham số hoá 3 provider bị từ chối
+- [x] Test migration: seed 1 model groq ACTIVE trước V28 → sau V28 là INACTIVE
 
 **Dependencies:** None
 
@@ -42,18 +43,24 @@ thêm co-author.
 ### Task 2: Agent: gỡ factory, error classifier, dependency extra
 
 **Acceptance criteria:**
-- [ ] `provider_models.py` bỏ `groq`, `mistral`; provider lạ → lỗi như hiện tại với provider
+- [x] `provider_models.py` bỏ `groq`, `mistral`; provider lạ → lỗi như hiện tại với provider
       không hỗ trợ
-- [ ] `llm_error_classifier.py` bỏ nhánh `groq`/`MistralError` và import tương ứng
-- [ ] Test tương ứng trong `test_provider_models.py`, `test_llm_error_classifier.py` được gỡ;
+- [x] `llm_error_classifier.py` bỏ nhánh `groq`/`MistralError` và import tương ứng
+- [x] Test tương ứng trong `test_provider_models.py`, `test_llm_error_classifier.py` được gỡ;
       không còn `import groq`/`mistralai` trong `app/` và `tests/`
-- [ ] `pydantic-ai-slim` bỏ extra `groq,mistral` bằng `uv` (không sửa tay `pyproject.toml`),
-      `uv.lock` cập nhật
-- [ ] `PRODUCT.md` và `DECISIONS.md` cập nhật theo mục "Cập nhật tài liệu sản phẩm" của plan
+- [x] `pydantic-ai-slim` bỏ extra `groq,mistral` bằng `uv` (không sửa tay `pyproject.toml`);
+      `uv.lock` chưa lock lại, xem ghi chú
+- [x] `PRODUCT.md` và `DECISIONS.md` cập nhật theo mục "Cập nhật tài liệu sản phẩm" của plan
+
+**Ghi chú:** `uv.lock` trên nhánh đã lệch từ trước (`litellm` có trong `pyproject.toml` nhưng
+không có trong lock, nên `uv sync --frozen` của Dockerfile không cài `litellm`). Lock lại lúc này
+kéo `litellm` vào và hạ `pydantic-ai-slim` 2.49 → 2.31. Vì vậy chỉ đổi `pyproject.toml`
+(`uv ... --frozen`); lock lại một lần ở Task 9 sau khi gỡ `litellm`.
 
 **Verification:**
-- [ ] `pytest` full pass
-- [ ] `rg -i "groq|mistral" app tests` chỉ còn tên model self-hosted (nếu có), không còn provider
+- [x] `pytest` full pass (trừ 3 test đã fail sẵn trên nhánh và 1 test SSRF chập chờn khi chạy
+      cả suite, chạy riêng pass)
+- [x] `rg -i "groq|mistral" app tests` chỉ còn tên model self-hosted (nếu có), không còn provider
 
 **Dependencies:** Task 1
 
@@ -71,13 +78,13 @@ thêm co-author.
 ### Task 3: Web: gỡ khỏi danh sách provider
 
 **Acceptance criteria:**
-- [ ] `chat-model-providers.json` chỉ còn OpenAI, Google (Gemini)
-- [ ] `chat-model-list.tsx` bỏ icon groq/mistral; xoá `public/providers/{groq,mistral}.png`
-- [ ] Bảng giá tĩnh `model-pricing.ts` bỏ các model mistral (file này sẽ bị xoá hẳn ở Task 10)
+- [x] `chat-model-providers.json` chỉ còn OpenAI, Google (Gemini)
+- [x] `chat-model-list.tsx` bỏ icon groq/mistral; xoá `public/providers/{groq,mistral}.png`
+- [x] Bảng giá tĩnh `model-pricing.ts` bỏ các model mistral (file này sẽ bị xoá hẳn ở Task 10)
 
 **Verification:**
-- [ ] `pnpm typecheck`, `eslint`, `pnpm build`, `vitest run` pass
-- [ ] Manual: form tạo model chỉ còn 2 provider cloud
+- [x] `pnpm typecheck`, `eslint`, `pnpm build`, `vitest run` pass
+- [x] Manual: form tạo model chỉ còn 2 provider cloud
 
 **Dependencies:** Task 1
 
@@ -92,9 +99,9 @@ thêm co-author.
 ---
 
 ## Checkpoint: Phase 1
-- [ ] Full test 3 repo pass
-- [ ] UI/API không tạo được model groq/mistral; model cũ (nếu có) đã INACTIVE
-- [ ] Review với human trước khi làm Phase 2
+- [x] Full test 3 repo pass
+- [x] UI/API không tạo được model groq/mistral; model cũ (nếu có) đã INACTIVE
+- [x] Review với human trước khi làm Phase 2 — user yêu cầu implement liền cả plan
 
 ---
 
@@ -274,7 +281,8 @@ thêm co-author.
       `Decimal`; không có giá hoặc snapshot `None` → UNPRICED + fallback như hiện tại;
       SELF_HOSTED → FREE
 - [ ] Cập nhật caller: `usage_recorder.py`, `app/api/v1/chat.py`, luồng Extraction/Embedding
-- [ ] Gỡ `litellm` bằng `uv remove`; bỏ ngoại lệ `litellm` trong
+- [ ] Gỡ `litellm` bằng `uv remove`, rồi `uv lock` cho lock khớp `pyproject.toml` (sửa luôn lỗi
+      lock lệch từ trước, xem ghi chú Task 2); bỏ ngoại lệ `litellm` trong
       `tests/core/test_no_raw_provider_clients.py` (giữ lệnh cấm import)
 - [ ] `DECISIONS.md` và `PRODUCT.md` cập nhật theo mục "Cập nhật tài liệu sản phẩm" của plan
 
