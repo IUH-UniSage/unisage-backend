@@ -947,8 +947,8 @@ bật persistence.
 ### Task 15: Tab Tổng quan
 
 **Acceptance criteria:**
-- [ ] 4 KPI card + card "Chưa định giá"; progress đổi màu 50/80%
-- [ ] Donut purpose, bar provider/model, line theo ngày, top 10 user/IP; filter
+- [x] 4 KPI card + card "Chưa định giá"; progress đổi màu 50/80%
+- [x] Donut purpose, bar provider/model, line theo ngày, top 10 user/IP; filter
       thời gian/purpose/provider
 
 **Verification:** Manual trong browser với dữ liệu seed
@@ -959,7 +959,35 @@ bật persistence.
 
 **Estimated scope:** M
 
----
+**Implementation notes:**
+- `GET /usage-logs/summary` only accepted `from`/`to`/`groupBy` before this
+  task, but the Overview tab's filter bar needs purpose/provider too. Extended
+  `RequestUsageLogService`/`RequestUsageLogServiceImpl`/`RequestUsageLogController`
+  with optional `purpose`/`provider` query params (purpose as a direct column
+  filter on all 5 groupBy branches; provider as a direct filter on the
+  already-line-based provider/model branches, and an `EXISTS` subquery against
+  `request_usage_lines` for the purpose/user/day branches so their
+  GROUP BY/aggregation cardinality doesn't change). Covered by two new tests
+  in `RequestUsageLogServiceImplTest`, committed separately from the frontend
+  work since it's a backend API change.
+- The `usageLogSummaryBucket` shape only carries `estimatedUnpricedCostUsd`
+  (a dollar total), not a request count broken out by cost status - so the
+  "Chưa định giá" card shows the estimated $ amount only, not a call count.
+  Extending the bucket with an unpriced-call-count field would need its own
+  backend change; left out of scope for this task.
+- Month-over-month comparison for the "Chi phí tháng này" KPI compares the
+  full previous calendar month's total against the current (partial) month's
+  running total, not a day-aligned comparison - a common dashboard
+  simplification, noted here since it means the delta % is directionally
+  useful but not an apples-to-apples daily rate comparison.
+- Verification actually run: `npm run typecheck`, `npx eslint`, `npm run
+  build` (unisage-web) and the full `./mvnw test` suite (backend-java), all
+  green. Did not do the "manual trong browser với dữ liệu seed" check from
+  this task's verification line - the local dev environment has no seeded
+  usage-log rows to exercise the charts against, so the empty/loading/error
+  states were verified by reading the render logic, not by clicking through
+  real data. Recommend a manual pass once seed data or a staging environment
+  with real usage logs is available.
 
 ### Task 16: Tab Ngân sách & Giới hạn
 
