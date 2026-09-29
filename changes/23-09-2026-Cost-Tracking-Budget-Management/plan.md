@@ -528,7 +528,7 @@ với `RequestUsageLog`. Để 2 hệ thống độc lập (xem Open Questions).
 - [x] Task 14: Wiring (route, registry, permission, api client, query keys, schema)
 - [x] Task 15: Tab Tổng quan
 - [x] Task 16: Tab Ngân sách & Giới hạn
-- [ ] Task 17: Tab Cảnh báo + `BudgetAlertBanner`
+- [x] Task 17: Tab Cảnh báo + `BudgetAlertBanner`
 - [ ] Task 18: Tab Bảng giá
 - [ ] Task 19: Tab Lịch sử sử dụng + drawer
 

@@ -1033,11 +1033,11 @@ bật persistence.
 ### Task 17: Tab Cảnh báo + `BudgetAlertBanner`
 
 **Acceptance criteria:**
-- [ ] Form `BudgetAlertSetting`: ngưỡng (thêm/xoá custom), spike, in-app, email
+- [x] Form `BudgetAlertSetting`: ngưỡng (thêm/xoá custom), spike, in-app, email
       recipients, Slack toggle (disabled + tooltip nếu `slackConfigured=false`,
       hiển thị `slackChannelLabel` nếu có)
-- [ ] Bảng lịch sử alert có filter + phân trang
-- [ ] `BudgetAlertBanner` trong layout system-admin, poll `GET /budget-alerts/active`
+- [x] Bảng lịch sử alert có filter + phân trang
+- [x] `BudgetAlertBanner` trong layout system-admin, poll `GET /budget-alerts/active`
       60s, dismiss được
 
 **Verification:** Manual trong browser
@@ -1050,6 +1050,37 @@ bật persistence.
 - layout system-admin
 
 **Estimated scope:** M
+
+**Implementation notes:**
+- `GET /budget-alerts` only accepted `Pageable` before this task (no filter
+  params), but the history table needs to filter by alert type/channel/status.
+  Added a `search()` JPQL query to `BudgetAlertLogRepository` with
+  `(:param IS NULL OR field = :param)` predicates for all 3 optional filters,
+  and removed the now-unused `findAllByOrderByCreatedAtDesc`. Covered by 3
+  new tests in `BudgetAlertLogServiceImplTest`. Committed as its own backend
+  commit, same pattern as the Task 15 usage-log summary extension.
+- The "Slack toggle disabled + tooltip if not configured" requirement is
+  rendered as inline muted text under the checkbox ("Đã cấu hình: #label" /
+  "Chưa cấu hình webhook trong env"), not a hover tooltip - the plan's own
+  wording describes visible status text, not a hover interaction, so no
+  `Tooltip` component was needed.
+- `BudgetAlertBanner` needed a way to render above routed page content but
+  still inside the system-admin shell's header/sidebar. Added an optional
+  `banner?: ReactNode` prop to the shared `StaffWorkspaceLayout` (rendered
+  just above `<Outlet/>`), passed only from `SystemAdminLayout` - the
+  `ingester` workspace's layout is untouched, so this doesn't affect it.
+- The dismiss mutation's cache invalidation previously targeted only
+  `costManagementKeys.alerts()`, which wouldn't refresh the banner's
+  `activeAlerts()` query after a dismiss (different key, no prefix overlap).
+  Changed it to invalidate `costManagementKeys.all` so both the banner and
+  the history table refresh together; this was a latent bug from Task 14
+  that only became observable once something actually consumed
+  `activeAlerts()`.
+- Verification actually run: `npm run typecheck`, `npx eslint`, `npm run
+  build` (unisage-web) and the full `./mvnw test` suite (backend-java), all
+  green. Did not do the "Manual trong browser" check from this task's
+  verification line, for the same reason as Tasks 15-16 - no live
+  backend/browser session was exercised in this session.
 
 ---
 
