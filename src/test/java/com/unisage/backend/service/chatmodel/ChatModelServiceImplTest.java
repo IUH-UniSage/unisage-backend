@@ -14,6 +14,8 @@ import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionServ
 import com.unisage.backend.utils.SsrfGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.net.InetAddress;
@@ -232,12 +234,13 @@ class ChatModelServiceImplTest {
         assertThat(response.verifiedAt()).isNull();
     }
 
-    @Test
-    void create_cloudApiWithUnsupportedProvider_throwsProviderUnsupported() {
+    @ParameterizedTest
+    @ValueSource(strings = {"some-random-provider", "groq", "mistral"})
+    void create_cloudApiWithUnsupportedProvider_throwsProviderUnsupported(String provider) {
         ChatModelRequest request = ChatModelRequest.builder()
                 .modelPurpose(ChatModelPurpose.CHAT)
                 .sourceType(ChatModelSourceType.CLOUD_API)
-                .llmProvider("some-random-provider")
+                .llmProvider(provider)
                 .llmModelName("model-x")
                 .apiKey("sk-abc123")
                 .apiBaseUrl("https://api.openai.com/v1")
