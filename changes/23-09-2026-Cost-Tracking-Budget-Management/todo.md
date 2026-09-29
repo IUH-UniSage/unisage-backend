@@ -720,23 +720,37 @@ trong README, chưa có beat, chưa có task định kỳ nào, Redis devcontain
 bật persistence.
 
 **Acceptance criteria:**
-- [ ] `celery_app.py` cấu hình `beat_schedule` cho `drain_usage_outbox` (5s),
+- [x] `celery_app.py` cấu hình `beat_schedule` cho `drain_usage_outbox` (5s),
       `release_expired_reservations` (1 phút), `reconcile_budget_committed` (1 giờ)
-- [ ] Taskfile thêm `worker` và `beat`; README cập nhật lệnh chạy (Windows +
+- [x] Taskfile thêm `worker` và `beat`; README cập nhật lệnh chạy (Windows +
       Linux)
-- [ ] `.devcontainer/docker-compose.yml`: service `celery-worker`, `celery-beat`;
+- [x] `.devcontainer/docker-compose.yml`: service `celery-worker`, `celery-beat`;
       Redis `command: redis-server --appendonly yes --appendfsync everysec` +
       volume `redis_data`
-- [ ] `GET /api/v1/health` trả `usageOutbox.pending`/`usageOutbox.dead`;
+- [x] `GET /api/v1/health` trả `usageOutbox.pending`/`usageOutbox.dead`;
       `dead > 0` → `status = degraded`
-- [ ] Lệnh `task usage:replay-dead` (script) chuyển toàn bộ
+- [x] Lệnh `task usage:replay-dead` (script) chuyển toàn bộ
       `usage:outbox:dead` về outbox, in số item đã chuyển
 
+**Implementation notes:**
+- Taskfile dùng namespace có sẵn của repo (`be:worker`/`be:beat`, không phải
+  `worker`/`beat` trần) để nhất quán với `be:dev`/`be:prod` đang có.
+- `celery-worker`/`celery-beat` trong devcontainer dùng `sleep infinity`
+  giống service `app` hiện tại, không tự chạy lệnh celery thật — venv
+  Windows/Linux khác layout (`Scripts/` và `bin/`) nên không có đường dẫn
+  nào an toàn để hardcode; dev tự attach và chạy `task be:worker`/`be:beat`
+  bên trong, đúng cách `app` đang yêu cầu `task be:dev`.
+
 **Verification:**
-- [ ] `docker compose restart redis` → outbox, dead-letter, counter còn nguyên
-- [ ] Tắt beat → outbox tăng; bật lại → drain hết
-- [ ] Đẩy 1 payload sai schema → vào dead, health `degraded`; replay sau khi sửa
-      → Java nhận
+- [x] pytest: health trả `degraded` đúng khi `usage_outbox.dead > 0` (mock
+      `outbox_health`); `task usage:replay-dead`/`replay_dead_letter()` di
+      chuyển toàn bộ item và là no-op an toàn khi hàng rỗng (Redis thật)
+- [ ] Không chạy được trên môi trường hiện tại (không có Docker daemon):
+      `docker compose restart redis` giữ nguyên outbox/dead-letter/counter,
+      tắt/bật beat làm outbox tăng rồi drain hết, và luồng
+      "payload sai schema → dead → health degraded → sửa → replay → Java
+      nhận" đầu-cuối qua container thật — cần verify thủ công khi có
+      Docker.
 
 **Dependencies:** Task 7, Task 11
 
@@ -746,7 +760,7 @@ bật persistence.
 - `unisage-agent/README.md`
 - `unisage-agent/.devcontainer/docker-compose.yml`
 - `unisage-agent/app/api/v1/health.py`
-- `unisage-agent/scripts/replay_usage_dead_letter.py`
+- `unisage-agent/app/tools/replay_dead_letter.py`
 
 **Estimated scope:** M
 
