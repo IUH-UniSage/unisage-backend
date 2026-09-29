@@ -612,32 +612,60 @@ tháng tính theo `app.timezone`.
 ### Task 10: Gắn reservation vào luồng + acquire/release trong router
 
 **Acceptance criteria:**
-- [ ] Chat: reserve trước node LLM đầu tiên với estimate × multiplier Chat;
+- [x] Chat: reserve trước node LLM đầu tiên với estimate × multiplier Chat;
       `REJECT_EXCEEDED` → lỗi `BUDGET_EXCEEDED`, `REJECT_THROTTLED` →
       `BUDGET_THROTTLED` (429), **0** call provider; message lỗi thân thiện
       cho user
-- [ ] Extraction/Embedding: reserve mỗi call/batch; bị từ chối → job ingest đánh
+- [x] Extraction/Embedding: reserve mỗi call/batch; bị từ chối → job ingest đánh
       dấu lỗi retry được, không retry ngay
-- [ ] `model_router` gọi `acquire_provider` trước mỗi candidate; `DENY_*` → bỏ
+- [x] `model_router` gọi `acquire_provider` trước mỗi candidate; `DENY_*` → bỏ
       credential, thử candidate kế tiếp; hết candidate → lỗi budget tương ứng
-- [ ] Mỗi attempt kết thúc (thành công, lỗi, huỷ stream) → `release_provider`
+- [x] Mỗi attempt kết thúc (thành công, lỗi, huỷ stream) → `release_provider`
       với cost thực của line đó, **trước** khi failover acquire provider mới
-- [ ] Mọi nhánh kết thúc (kể cả exception) đều gọi settle — dùng
+- [x] Mọi nhánh kết thúc (kể cả exception) đều gọi settle — dùng
       `try/finally` trong `UsageRecorder`
 
+**Implementation notes:**
+- Acquire/release cho PROVIDER sống trong `stream_agent_text`/
+  `run_agent_text_with_failover` (`streaming.py`) qua `BudgetContext` mới,
+  chứ không chỉ trong `model_router.get_next_credential` — vì credential
+  dùng chung cho cả 3 node/request nên phải acquire tại đúng điểm gọi
+  provider thật (mỗi attempt), không phải một lần lúc chọn credential.
+  `model_router.select_credential_with_budget` là helper dùng chung cho cả
+  Chat (qua `streaming.py`) và Extraction (`multi_representation.py`), thử
+  từng candidate cho tới khi acquire OK hoặc hết candidate.
+- Budget gate trong `streaming.py` được canh đúng cùng điều kiện
+  all-or-nothing mà `has_failover_wiring` đã dùng (purpose/credential/
+  agent_factory/snapshot_version đều phải có) — nếu không, một test double
+  model không có registry cũng bị bắt gọi `model_router`, vỡ bất biến cũ.
+- `UsageRecorder.close()` trước đây có comment nói sẽ settle kể cả khi
+  0 lines, nhưng code lại return sớm không settle gì — sửa lại cho đúng
+  với comment.
+- Estimate cho PROVIDER acquire (`per_attempt_estimate_usd`) và estimate
+  cho reserve request-level (nhân với multiplier) là hai giá trị khác nhau
+  — dùng chung một giá trị sẽ over-reserve PROVIDER scope theo đúng hệ số
+  multiplier mỗi attempt.
+
 **Verification:**
-- [ ] pytest đủ ma trận scope × action trong plan (9 ô)
-- [ ] pytest: budget PROVIDER openai BLOCK, SYSTEM còn → request đi Anthropic
-- [ ] pytest: failover openai → anthropic giữa chừng → `reserved`/`inflight`
-      openai về 0 ngay sau attempt lỗi, anthropic được acquire
+- [x] pytest với Redis thật: PROVIDER bị BLOCK → fail over sang candidate
+      khác; hết candidate → `NoBudgetAvailableError`; một call thành công
+      release đúng, không còn gì outstanding trong `reserved`/`inflight`
+- [ ] Chưa viết đủ ma trận scope × action 9 ô hay kịch bản failover
+      openai→anthropic giữa chừng chi tiết như plan mô tả - phần còn lại
+      dựa vào Task 9's coverage cho tầng Lua và 3 test trên cho tầng gọi.
 
 **Dependencies:** Task 6, Task 8, Task 9
 
 **Files likely touched:**
-- `unisage-agent/app/core/model_router.py`
-- `unisage-agent/app/core/usage_recorder.py`
-- `unisage-agent/app/api/exceptions.py`
+- `unisage-agent/app/core/registry/model_router.py`
+- `unisage-agent/app/core/usage/usage_recorder.py`
+- `unisage-agent/app/graph/streaming.py`
+- `unisage-agent/app/graph/streaming_graph.py`
+- `unisage-agent/app/graph/streaming_session.py`
+- `unisage-agent/app/graph/stream_error_codes.py`
 - `unisage-agent/app/api/v1/chat.py`
+- `unisage-agent/app/rag/enrichment/multi_representation.py`
+- `unisage-agent/app/rag/embeddings/openai_embedder.py`
 
 **Estimated scope:** M
 
