@@ -41,4 +41,20 @@ public interface BudgetAlertLogRepository extends JpaRepository<BudgetAlertLog, 
             @Param("thresholdPercent") Integer thresholdPercent, @Param("channel") String channel,
             @Param("dedupeKey") String dedupeKey, @Param("spentUsd") BigDecimal spentUsd,
             @Param("limitUsd") BigDecimal limitUsd);
+
+    /**
+     * Locks and returns up to {@code limit} rows ready to (re)send, skipping any row another
+     * transaction already has locked - 2 dispatcher instances running at once split the work
+     * instead of racing to send the same alert twice. Must be called from inside a
+     * {@code @Transactional} method: the lock only holds for the duration of that transaction, so
+     * the caller's status update has to happen before it commits.
+     */
+    @Query(value = """
+            SELECT * FROM budget_alert_log
+            WHERE status IN ('PENDING', 'FAILED') AND next_attempt_at <= now()
+            ORDER BY created_at
+            LIMIT :limit
+            FOR UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    List<BudgetAlertLog> claimReadyToSend(@Param("limit") int limit);
 }
