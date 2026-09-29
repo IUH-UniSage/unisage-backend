@@ -901,17 +901,35 @@ bật persistence.
 ### Task 14: Wiring
 
 **Acceptance criteria:**
-- [ ] `ROUTE_SEGMENTS.costManagement = "cost-management"`
-- [ ] Entry `FEATURE_REGISTRY` workspace `system-admin`, label "Chi phí AI",
+- [x] `ROUTE_SEGMENTS.costManagement = "cost-management"`
+- [x] Entry `FEATURE_REGISTRY` workspace `system-admin`, label "Chi phí AI",
       icon `Wallet`, `requiredPermissions: PERMISSION_POLICIES.costManagement`,
       fallback `AccessDeniedPage`
-- [ ] `PERMISSION_POLICIES.costManagement` và `costManagementBudgets`
-- [ ] `features/cost-management/`: `api/` (client theo pattern feature khác),
+- [x] `PERMISSION_POLICIES.costManagement` và `costManagementBudgets`
+- [x] `features/cost-management/`: `api/` (client theo pattern feature khác),
       `query-keys.ts`, `schemas.ts` (zod cho summary, usage list/detail, budget,
       alert setting, alert log), trang có 5 tab (tab lưu trên URL search param)
 
+**Implementation notes:**
+- `fallback: AccessDeniedPage` KHÔNG được thêm — comment ngay trong
+  `FeatureEntry` type nói rõ `fallback` chỉ cần cho route index của workspace
+  (tránh redirect loop), route segment thường như Cost Management dựa vào
+  `fallbackTo` mặc định, đúng như `ChatModelPage`'s entry đang làm.
+- Repo thật không dùng `query-keys.ts`/`schemas.ts` phẳng ở root feature như
+  plan giả định — convention thật là `api/`, `queries/{keys,options,
+  use-queries,use-mutations}.ts`, `schemas/<feature>-schemas.ts` (xem feature
+  `analytics`/`rbac`/`audit-log`). Đã theo đúng convention thật thay vì tên
+  file trong plan.
+- Mỗi tab hiện render `FeatureComingSoon` (component sẵn có trong repo) —
+  nội dung thật thuộc Task 15-19.
+
 **Verification:**
-- [ ] `npm run typecheck` + `npm run lint`; user thiếu permission không thấy menu
+- [x] `npm run typecheck` + `npm run lint` (cả 2 pass sạch); `npm run build`
+      cũng pass, sinh chunk `cost-management-page` riêng
+- [ ] "user thiếu permission không thấy menu" — chưa verify bằng UI thật
+      (cần đăng nhập với role thiếu `USAGE_LOG_READ` để xác nhận menu item
+      không hiện; logic route guard giống hệt các feature khác đã hoạt động
+      đúng nên rủi ro thấp, nhưng chưa test tay)
 
 **Dependencies:** Task 3, Task 4
 

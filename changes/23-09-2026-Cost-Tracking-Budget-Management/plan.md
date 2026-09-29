@@ -525,7 +525,7 @@ với `RequestUsageLog`. Để 2 hệ thống độc lập (xem Open Questions).
 - [x] Task 13: Gửi In-app/Email/Slack (env)
 
 ### Phase 5: unisage-web
-- [ ] Task 14: Wiring (route, registry, permission, api client, query keys, schema)
+- [x] Task 14: Wiring (route, registry, permission, api client, query keys, schema)
 - [ ] Task 15: Tab Tổng quan
 - [ ] Task 16: Tab Ngân sách & Giới hạn
 - [ ] Task 17: Tab Cảnh báo + `BudgetAlertBanner`
