@@ -109,6 +109,14 @@ public enum ErrorCode {
     BUDGET_ALERT_SETTING_INVALID(HttpStatus.BAD_REQUEST, 2605,
             "Cấu hình cảnh báo không hợp lệ (ngưỡng phải 1-200, email không đúng định dạng)."),
     BUDGET_ALERT_NOT_FOUND(HttpStatus.NOT_FOUND, 2606, "Cảnh báo không tồn tại."),
+    MODEL_PRICING_SYNC_FAILED(HttpStatus.BAD_GATEWAY, 2608,
+            "Không đồng bộ được bảng giá từ nguồn LiteLLM, giá hiện tại được giữ nguyên."),
+    MODEL_PRICE_NOT_FOUND(HttpStatus.NOT_FOUND, 2609, "Giá model không tồn tại."),
+    MODEL_PRICE_INVALID(HttpStatus.BAD_REQUEST, 2610,
+            "Giá model không hợp lệ (giá phải từ 0 đến 1000 USD mỗi 1 triệu token)."),
+    MODEL_PRICE_ALREADY_EXISTS(HttpStatus.CONFLICT, 2611, "Model này đã có giá, hãy sửa giá hiện có."),
+    MODEL_PRICE_NOT_MANUAL(HttpStatus.BAD_REQUEST, 2612,
+            "Chỉ khôi phục được giá đã chỉnh tay."),
 
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),
