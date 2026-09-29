@@ -110,18 +110,21 @@ kéo `litellm` vào và hạ `pydantic-ai-slim` 2.49 → 2.31. Vì vậy chỉ �
 ### Task 4: Entity `ModelPrice` + V29 + API đọc
 
 **Acceptance criteria:**
-- [ ] `V29__add_model_prices.sql`: bảng `model_prices` theo plan, UNIQUE
+- [x] `V29__add_model_prices.sql`: bảng `model_prices` theo plan, UNIQUE
       `(provider, model_name)`, CHECK `source IN ('LITELLM','MANUAL')`, giá ≥ 0; bảng
       `model_price_changes` theo plan, index `(provider, model_name, changed_at)` và
       `(changed_at)`
-- [ ] Seed permission `MODEL_PRICING_READ`, `MODEL_PRICING_UPDATE` (resource_type `BUDGET`)
-      và gán SUPER_ADMIN, theo khuôn V27; `DataInitializer` cũng seed cho DB mới
-- [ ] `GET /model-pricing?provider=&q=` trả danh sách giá (per 1M token), có `source`,
+- [x] Seed permission `MODEL_PRICING_ALL/READ/CREATE/UPDATE/DELETE` (resource_type `BUDGET`,
+      cùng bộ tên với Budget để khớp `useResourcePermissions` của web; CREATE gồm cả sync), gán
+      `MODEL_PRICING_ALL` cho SUPER_ADMIN, theo khuôn V27; `DataInitializer` cũng seed cho DB mới
+- [x] `GET /model-pricing?provider=&q=` trả danh sách giá (per 1M token), có `source`,
       `syncedAt`, `updatedAt`, `updatedBy`
-- [ ] `ddl-auto=validate` khởi động được
+- [x] `ddl-auto=validate` khởi động được
 
 **Verification:**
-- [ ] `./mvnw test` (Testcontainers): list + filter; user thiếu `MODEL_PRICING_READ` → 403
+- [x] `./mvnw test` (Testcontainers): list + filter + thời gian UTC; quyền kiểm qua
+      `CostTrackingPermissionSeedingTest` (SA có `MODEL_PRICING_ALL`), 403 dựa vào cơ chế
+      `DynamicAuthorizationManager` chung như các endpoint cost khác
 
 **Dependencies:** Checkpoint Phase 1
 
@@ -137,27 +140,31 @@ kéo `litellm` vào và hạ `pydantic-ai-slim` 2.49 → 2.31. Vì vậy chỉ �
 ### Task 5: Đồng bộ từ LiteLLM
 
 **Acceptance criteria:**
-- [ ] `ModelPricingSyncService` tải JSON từ `MODEL_PRICING_SOURCE_URL` (timeout, cap 10 MB),
+- [x] `ModelPricingSyncService` tải JSON từ `MODEL_PRICING_SOURCE_URL` (timeout, cap 10 MB),
       map key theo plan (`openai` giữ tên; `gemini/` → `google` bỏ tiền tố; chỉ `chat`/`embedding`)
-- [ ] Upsert bằng `JdbcTemplate` `ON CONFLICT (provider, model_name)`, chỉ cập nhật dòng
+- [x] Upsert bằng `JdbcTemplate` `ON CONFLICT (provider, model_name)`, chỉ cập nhật dòng
       `LITELLM` và chỉ khi giá đổi; không bao giờ ghi đè dòng `MANUAL`
-- [ ] Mỗi dòng thêm/đổi giá ghi 1 dòng `model_price_changes` (`SYNC_CREATE`/`SYNC_UPDATE`,
+- [x] Mỗi dòng thêm/đổi giá ghi 1 dòng `model_price_changes` (`SYNC_CREATE`/`SYNC_UPDATE`,
       giá cũ/mới) trong cùng transaction
-- [ ] Dòng giá âm / > $1000 per 1M / thiếu input price → bỏ qua + log; tải lỗi hoặc JSON sai
+- [x] Dòng giá âm / > $1000 per 1M / thiếu input price → bỏ qua + log; tải lỗi hoặc JSON sai
       schema → không đổi gì, trả lỗi rõ
-- [ ] `@Scheduled` theo `MODEL_PRICING_SYNC_CRON` (mặc định 03:00 giờ VN) + `POST
+- [x] `@Scheduled` theo `MODEL_PRICING_SYNC_CRON` (mặc định 03:00 giờ VN) + `POST
       /model-pricing/sync` (quyền `MODEL_PRICING_UPDATE`) trả số dòng thêm/cập nhật/bỏ qua
-- [ ] Có thay đổi → bump `config_version`
-- [ ] Env mới thêm vào `.env.example`
-- [ ] ADR mới trong `docs/adr/` (copy `0000-template.md`): nguồn giá model = DB đồng bộ
+- [x] Có thay đổi → bump `config_version`
+- [x] Env mới thêm vào `.env.example`
+- [x] ADR mới trong `docs/adr/` (copy `0000-template.md`): nguồn giá model = DB đồng bộ
       LiteLLM + SA ghi đè, thay bảng `litellm` offline của agent; không cào trang giá provider
 
 **Verification:**
-- [ ] `./mvnw test`: server HTTP nội bộ trong test (JDK `com.sun.net.httpserver`, không thêm
+- [x] `./mvnw test`: server HTTP nội bộ trong test (JDK `com.sun.net.httpserver`, không thêm
       dependency) trả fixture JSON; case: map đúng 2 provider, bỏ provider khác, giữ `MANUAL`,
       giá bất thường bị bỏ, URL lỗi → DB không đổi, chạy 2 lần không đổi `updated_at` và không
       sinh thêm dòng lịch sử
-- [ ] Manual: sync thật từ GitHub vào DB dev
+- [x] Manual: sync thật từ GitHub vào DB dev — 123 giá openai/google, chạy lại 0 thay đổi
+
+**Ghi chú:** không sync lúc khởi động khi bảng rỗng: nhiều `@SpringBootTest` và spring-dotenv
+đọc `.env` trong test nên dễ gọi mạng khi chạy test. DB mới có giá sau 03:00 hoặc khi SA bấm
+"Đồng bộ ngay"; tab Bảng giá nhắc việc này khi chưa có giá. ADR: `docs/adr/0006-model-pricing-source.md`.
 
 **Dependencies:** Task 4
 
@@ -175,17 +182,17 @@ kéo `litellm` vào và hạ `pydantic-ai-slim` 2.49 → 2.31. Vì vậy chỉ �
 ### Task 6: SA ghi đè / khôi phục giá
 
 **Acceptance criteria:**
-- [ ] `PUT /model-pricing/{id}` sửa giá → `source = MANUAL`, `updatedBy` = SA; đi qua JPA nên
+- [x] `PUT /model-pricing/{id}` sửa giá → `source = MANUAL`, `updatedBy` = SA; đi qua JPA nên
       có audit log
-- [ ] `POST /model-pricing` thêm giá tay cho model chưa có trong LiteLLM (provider phải thuộc
+- [x] `POST /model-pricing` thêm giá tay cho model chưa có trong LiteLLM (provider phải thuộc
       allowlist)
-- [ ] `DELETE /model-pricing/{id}` chỉ cho dòng `MANUAL` (= khôi phục LiteLLM ở lần sync sau)
-- [ ] Mọi thay đổi bump `config_version` và ghi 1 dòng `model_price_changes`
+- [x] `DELETE /model-pricing/{id}` chỉ cho dòng `MANUAL` (= khôi phục LiteLLM ở lần sync sau)
+- [x] Mọi thay đổi bump `config_version` và ghi 1 dòng `model_price_changes`
       (`MANUAL_CREATE`/`MANUAL_UPDATE`/`MANUAL_RESET`, `changed_by` = SA)
-- [ ] `ErrorCode` mới cho validate (giá âm, provider không hỗ trợ, trùng model, xoá dòng LITELLM)
+- [x] `ErrorCode` mới cho validate (giá âm, provider không hỗ trợ, trùng model, xoá dòng LITELLM)
 
 **Verification:**
-- [ ] `./mvnw test`: override rồi sync lại → giữ giá tay; xoá dòng MANUAL rồi sync → trở lại giá
+- [x] `./mvnw test`: override rồi sync lại → giữ giá tay; xoá dòng MANUAL rồi sync → trở lại giá
       LiteLLM; mỗi thao tác tay có đúng 1 dòng lịch sử với giá cũ/mới đúng
 
 **Dependencies:** Task 5
@@ -203,12 +210,12 @@ kéo `litellm` vào và hạ `pydantic-ai-slim` 2.49 → 2.31. Vì vậy chỉ �
 ### Task 6b: API lịch sử giá
 
 **Acceptance criteria:**
-- [ ] `GET /model-pricing/history?provider=&model=&changeType=&from=&to=&page=&limit=`
+- [x] `GET /model-pricing/history?provider=&model=&changeType=&from=&to=&page=&limit=`
       (quyền `MODEL_PRICING_READ`), mới nhất trước, có email người sửa
-- [ ] Thời gian trả kèm offset (UTC `Z`) để FE không phải đoán múi giờ
+- [x] Thời gian trả kèm offset (UTC `Z`) để FE không phải đoán múi giờ
 
 **Verification:**
-- [ ] `./mvnw test`: lọc theo từng tham số, phân trang, sync + sửa tay đều hiện đúng thứ tự
+- [x] `./mvnw test`: lọc theo từng tham số, phân trang, sync + sửa tay đều hiện đúng thứ tự
 
 **Dependencies:** Task 6
 
@@ -224,12 +231,12 @@ kéo `litellm` vào và hạ `pydantic-ai-slim` 2.49 → 2.31. Vì vậy chỉ �
 ### Task 7: Snapshot nội bộ cho agent
 
 **Acceptance criteria:**
-- [ ] `GET /internal/model-pricing/snapshot` → `{version, entries[{provider, modelName,
+- [x] `GET /internal/model-pricing/snapshot` → `{version, entries[{provider, modelName,
       inputPerMillion, outputPerMillion, cachedInputPerMillion}]}`
-- [ ] Cùng stack bảo mật `/internal/**` như `/internal/budgets/snapshot`
+- [x] Cùng stack bảo mật `/internal/**` như `/internal/budgets/snapshot`
 
 **Verification:**
-- [ ] `./mvnw test`: mở rộng `InternalEndpointCoverageTest` + no-store test; không secret → 403,
+- [x] `./mvnw test`: mở rộng `InternalEndpointCoverageTest` + no-store test; không secret → 403,
       sai secret → 403, đúng secret → 200
 
 **Dependencies:** Task 4
@@ -244,9 +251,11 @@ kéo `litellm` vào và hạ `pydantic-ai-slim` 2.49 → 2.31. Vì vậy chỉ �
 ---
 
 ## Checkpoint: Phase 2
-- [ ] `./mvnw test` full pass
-- [ ] Sync thật vào DB dev; override/khôi phục đúng; snapshot trả đúng version
-- [ ] Review với human trước khi đụng agent
+- [x] `./mvnw test` full pass
+- [x] Sync thật vào DB dev; override/khôi phục đúng; snapshot trả đúng version (kiểm qua
+      gateway với server chạy thật; lịch sử gpt-4o-mini đủ 4 bước SYNC_CREATE → MANUAL_UPDATE →
+      MANUAL_RESET → SYNC_CREATE)
+- [x] Review với human trước khi đụng agent — user yêu cầu implement liền cả plan
 
 ---
 
