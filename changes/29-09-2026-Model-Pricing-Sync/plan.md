@@ -111,36 +111,36 @@ Repo đang ở V27.
 ## Task List
 
 ### Phase 1: Gỡ provider Mistral/Groq
-- [ ] Task 1: Backend: allowlist + migration vô hiệu hoá model groq/mistral
-- [ ] Task 2: Agent: gỡ factory, error classifier, dependency extra
-- [ ] Task 3: Web: gỡ khỏi danh sách provider, icon, bảng giá tĩnh
+- [x] Task 1: Backend: allowlist + migration vô hiệu hoá model groq/mistral
+- [x] Task 2: Agent: gỡ factory, error classifier, dependency extra
+- [x] Task 3: Web: gỡ khỏi danh sách provider, icon, bảng giá tĩnh
 
 ### Checkpoint: Phase 1
-- [ ] Full test 3 repo pass; không tạo được model groq/mistral qua UI/API
+- [x] Full test 3 repo pass; không tạo được model groq/mistral qua UI/API
 
 ### Phase 2: Backend: giá trong DB
-- [ ] Task 4: Entity `ModelPrice` + V29 + API đọc `GET /model-pricing`
-- [ ] Task 5: Sync từ LiteLLM (service + job + `POST /model-pricing/sync`)
-- [ ] Task 6: SA ghi đè / khôi phục giá
-- [ ] Task 6b: API lịch sử giá `GET /model-pricing/history`
-- [ ] Task 7: Snapshot nội bộ `GET /internal/model-pricing/snapshot`
+- [x] Task 4: Entity `ModelPrice` + V29 + API đọc `GET /model-pricing`
+- [x] Task 5: Sync từ LiteLLM (service + job + `POST /model-pricing/sync`)
+- [x] Task 6: SA ghi đè / khôi phục giá
+- [x] Task 6b: API lịch sử giá `GET /model-pricing/history`
+- [x] Task 7: Snapshot nội bộ `GET /internal/model-pricing/snapshot`
 
 ### Checkpoint: Phase 2
-- [ ] Sync thật từ GitHub vào DB dev; override và reset đúng; snapshot trả đúng version
+- [x] Sync thật từ GitHub vào DB dev; override và reset đúng; snapshot trả đúng version
 
 ### Phase 3: Agent: tính cost từ snapshot
-- [ ] Task 8: `PricingSnapshot` (load/refresh/poller/beat)
-- [ ] Task 9: `cost_calculator` dùng snapshot, gỡ `litellm`
+- [x] Task 8: `PricingSnapshot` (load/refresh/poller/beat)
+- [x] Task 9: `cost_calculator` dùng snapshot, gỡ `litellm`
 
 ### Checkpoint: Phase 3
-- [ ] Line cost ghi đúng theo giá DB; SA sửa giá → request sau dùng giá mới trong ≤ 60s
+- [x] Line cost ghi đúng theo giá DB; SA sửa giá → request sau dùng giá mới trong ≤ 60s
 
 ### Phase 4: Web: tab Bảng giá động
-- [ ] Task 10: Tab Bảng giá đọc API, sửa/khôi phục/đồng bộ, bỏ bảng tĩnh
-- [ ] Task 11: Màn hình lịch sử giá
+- [x] Task 10: Tab Bảng giá đọc API, sửa/khôi phục/đồng bộ, bỏ bảng tĩnh
+- [x] Task 11: Màn hình lịch sử giá
 
 ### Checkpoint: Hoàn chỉnh
-- [ ] Full test 3 repo pass, test tay trên trình duyệt với server chạy thật
+- [x] Full test 3 repo pass, test tay trên trình duyệt với server chạy thật
 - [ ] Ready for review
 
 ## Risks and Mitigations

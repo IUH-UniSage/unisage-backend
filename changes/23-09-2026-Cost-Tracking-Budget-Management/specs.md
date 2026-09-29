@@ -169,12 +169,12 @@ Cảnh báo:
 - [ ] Banner in-app hiện khi có cảnh báo chưa tắt, tắt được.
 
 Giá model:
-- [ ] Job hằng ngày đồng bộ giá openai/google từ LiteLLM vào DB; lỗi tải → giữ giá cũ.
-- [ ] SA sửa giá → nguồn "Chỉnh tay", sync không ghi đè; khôi phục → quay về giá LiteLLM.
-- [ ] Mọi thay đổi giá (sync và tay) có trong lịch sử giá, lọc được; agent dùng giá mới ≤ 60s.
+- [x] Job hằng ngày đồng bộ giá openai/google từ LiteLLM vào DB; lỗi tải → giữ giá cũ.
+- [x] SA sửa giá → nguồn "Chỉnh tay", sync không ghi đè; khôi phục → quay về giá LiteLLM.
+- [x] Mọi thay đổi giá (sync và tay) có trong lịch sử giá, lọc được; agent dùng giá mới ≤ 60s.
 
 Provider:
-- [ ] Chỉ tạo được model cloud với `openai`, `google`; model groq/mistral cũ đã INACTIVE.
+- [x] Chỉ tạo được model cloud với `openai`, `google`; model groq/mistral cũ đã INACTIVE.
 
 UI:
 - [ ] 5 tab (Tổng quan, Ngân sách, Cảnh báo, Bảng giá, Lịch sử) render dữ liệu thật, giờ đúng

@@ -264,13 +264,13 @@ kéo `litellm` vào và hạ `pydantic-ai-slim` 2.49 → 2.31. Vì vậy chỉ �
 ### Task 8: `PricingSnapshot`
 
 **Acceptance criteria:**
-- [ ] `app/core/pricing/snapshot.py` theo khuôn `app/core/budget/snapshot.py`: load/refresh từ
+- [x] `app/core/pricing/snapshot.py` theo khuôn `app/core/budget/snapshot.py`: load/refresh từ
       `GET /internal/model-pricing/snapshot`, tra `(provider lowercase, model_name)`, fail-open
-- [ ] Refresh bằng poller trong app + task beat cho worker (khuôn `refresh_budget_snapshot`),
+- [x] Refresh bằng poller trong app + task beat cho worker (khuôn `refresh_budget_snapshot`),
       chu kỳ theo biến `PRICING_SNAPSHOT_REFRESH_SECONDS` (mặc định 60)
 
 **Verification:**
-- [ ] pytest: load OK, lỗi mạng giữ snapshot cũ, chưa từng load → `None`
+- [x] pytest: load OK, lỗi mạng giữ snapshot cũ, chưa từng load → `None`
 
 **Dependencies:** Task 7
 
@@ -286,19 +286,19 @@ kéo `litellm` vào và hạ `pydantic-ai-slim` 2.49 → 2.31. Vì vậy chỉ �
 ### Task 9: `cost_calculator` dùng snapshot, gỡ `litellm`
 
 **Acceptance criteria:**
-- [ ] `calculate_actual`/`estimate` nhận thêm `provider`, tính theo công thức trong plan bằng
+- [x] `calculate_actual`/`estimate` nhận thêm `provider`, tính theo công thức trong plan bằng
       `Decimal`; không có giá hoặc snapshot `None` → UNPRICED + fallback như hiện tại;
       SELF_HOSTED → FREE
-- [ ] Cập nhật caller: `usage_recorder.py`, `app/api/v1/chat.py`, luồng Extraction/Embedding
-- [ ] Gỡ `litellm` bằng `uv remove`, rồi `uv lock` cho lock khớp `pyproject.toml` (sửa luôn lỗi
+- [x] Cập nhật caller: `usage_recorder.py`, `app/api/v1/chat.py`, luồng Extraction/Embedding
+- [x] Gỡ `litellm` bằng `uv remove`, rồi `uv lock` cho lock khớp `pyproject.toml` (sửa luôn lỗi
       lock lệch từ trước, xem ghi chú Task 2); bỏ ngoại lệ `litellm` trong
       `tests/core/test_no_raw_provider_clients.py` (giữ lệnh cấm import)
-- [ ] `DECISIONS.md` và `PRODUCT.md` cập nhật theo mục "Cập nhật tài liệu sản phẩm" của plan
+- [x] `DECISIONS.md` và `PRODUCT.md` cập nhật theo mục "Cập nhật tài liệu sản phẩm" của plan
 
 **Verification:**
-- [ ] pytest full pass; case so khớp: `gpt-4o-mini` 1000 in/500 out/200 cached cho đúng số
+- [x] pytest full pass; case so khớp: `gpt-4o-mini` 1000 in/500 out/200 cached cho đúng số
       LiteLLM cũ với cùng đơn giá
-- [ ] Manual: seed giá DB, 1 request usage đi qua → line PRICED đúng cost
+- [x] Manual: seed giá DB, 1 request usage đi qua → line PRICED đúng cost
 
 **Dependencies:** Task 8
 
@@ -313,9 +313,9 @@ kéo `litellm` vào và hạ `pydantic-ai-slim` 2.49 → 2.31. Vì vậy chỉ �
 ---
 
 ## Checkpoint: Phase 3
-- [ ] pytest full pass
-- [ ] SA sửa giá → request sau dùng giá mới trong ≤ 60s
-- [ ] Review với human trước khi làm web
+- [x] pytest full pass
+- [x] SA sửa giá → request sau dùng giá mới trong ≤ 60s
+- [x] Review với human trước khi làm web
 
 ---
 
@@ -324,16 +324,20 @@ kéo `litellm` vào và hạ `pydantic-ai-slim` 2.49 → 2.31. Vì vậy chỉ �
 ### Task 10: Tab Bảng giá đọc API
 
 **Acceptance criteria:**
-- [ ] Bảng model đang đăng ký ghép với giá từ `GET /model-pricing` theo `(provider, model)`:
+- [x] Bảng model đang đăng ký ghép với giá từ `GET /model-pricing` theo `(provider, model)`:
       badge nguồn (LiteLLM/Chỉnh tay), thời điểm đồng bộ, link trang giá chính thức của provider
-- [ ] SA có `MODEL_PRICING_UPDATE`: sửa giá (dialog), thêm giá tay, khôi phục giá LiteLLM,
+- [x] SA có `MODEL_PRICING_UPDATE`: sửa giá (dialog), thêm giá tay, khôi phục giá LiteLLM,
       nút "Đồng bộ ngay" hiện kết quả; thiếu quyền → ẩn các nút
-- [ ] Ghi chú: chỉ tier Standard; giá mới áp dụng cho request sau, không sửa chi phí đã ghi
-- [ ] Xoá `constants/model-pricing.ts`
+- [x] Ghi chú: chỉ tier Standard; giá mới áp dụng cho request sau, không sửa chi phí đã ghi
+- [x] Xoá `constants/model-pricing.ts`
+
+**Ghi chú:** tab có 2 chế độ xem: "Mô hình đang đăng ký" (mặc định) và "Toàn bộ bảng giá" (tra
+giá model trước khi đăng ký). Khôi phục giá tay tự chạy đồng bộ ngay sau đó để model không bị
+UNPRICED tới 03:00. Model của provider đã gỡ (groq) không hiện nút "Thêm giá".
 
 **Verification:**
-- [ ] `pnpm typecheck`, `eslint`, `pnpm build`, `vitest run` pass
-- [ ] Manual với server chạy thật (Playwright): sửa → badge Chỉnh tay; khôi phục; đồng bộ
+- [x] `pnpm typecheck`, `eslint`, `pnpm build`, `vitest run` pass
+- [x] Manual với server chạy thật (Playwright): sửa → badge Chỉnh tay; khôi phục; đồng bộ
 
 **Dependencies:** Task 6
 
@@ -350,14 +354,14 @@ kéo `litellm` vào và hạ `pydantic-ai-slim` 2.49 → 2.31. Vì vậy chỉ �
 ### Task 11: Màn hình lịch sử giá
 
 **Acceptance criteria:**
-- [ ] Trong tab Bảng giá có khu "Lịch sử thay đổi giá": bảng thời điểm, provider/model, loại
+- [x] Trong tab Bảng giá có khu "Lịch sử thay đổi giá": bảng thời điểm, provider/model, loại
       thay đổi (đồng bộ/chỉnh tay/khôi phục), giá cũ → mới cho từng loại giá, người sửa
-- [ ] Lọc theo provider, model, loại thay đổi, khoảng thời gian; phân trang
-- [ ] Từ một dòng model ở bảng giá mở được lịch sử của riêng model đó (lọc sẵn)
+- [x] Lọc theo provider, model, loại thay đổi, khoảng thời gian; phân trang
+- [x] Từ một dòng model ở bảng giá mở được lịch sử của riêng model đó (lọc sẵn)
 
 **Verification:**
-- [ ] `pnpm typecheck`, `eslint`, `pnpm build`, `vitest run` pass
-- [ ] Manual (Playwright, server thật): sync + sửa tay → lịch sử hiện đúng 2 loại, lọc đúng
+- [x] `pnpm typecheck`, `eslint`, `pnpm build`, `vitest run` pass
+- [x] Manual (Playwright, server thật): sync + sửa tay → lịch sử hiện đúng 2 loại, lọc đúng
 
 **Dependencies:** Task 6b, Task 10
 
@@ -371,8 +375,8 @@ kéo `litellm` vào và hạ `pydantic-ai-slim` 2.49 → 2.31. Vì vậy chỉ �
 ---
 
 ## Checkpoint: Hoàn chỉnh
-- [ ] Full test 3 repo pass
-- [ ] Test tay trên trình duyệt với server chạy thật: giá đồng bộ, sửa, khôi phục, lịch sử giá,
+- [x] Full test 3 repo pass
+- [x] Test tay trên trình duyệt với server chạy thật: giá đồng bộ, sửa, khôi phục, lịch sử giá,
       cost request mới theo giá DB
-- [ ] `DECISIONS.md`/`PRODUCT.md` khớp hành vi cuối
-- [ ] Ready for review
+- [x] `DECISIONS.md`/`PRODUCT.md` khớp hành vi cuối
+- [ ] Ready for review — chờ user review và push
