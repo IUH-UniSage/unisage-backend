@@ -139,4 +139,12 @@ public final class PredefinedPermissions {
     public static final String BUDGET_ALERT_SETTING_UPDATE = "BUDGET_ALERT_SETTING_UPDATE";
     public static final String BUDGET_ALERT_READ    = "BUDGET_ALERT_READ";
     public static final String BUDGET_ALERT_DISMISS = "BUDGET_ALERT_DISMISS";
+
+    // ─── Model pricing (Cost Tracking) ─────────────────────────────────────
+    // CREATE covers both adding a manual price and POST /model-pricing/sync.
+    public static final String MODEL_PRICING_ALL    = "MODEL_PRICING_ALL";
+    public static final String MODEL_PRICING_READ   = "MODEL_PRICING_READ";
+    public static final String MODEL_PRICING_CREATE = "MODEL_PRICING_CREATE";
+    public static final String MODEL_PRICING_UPDATE = "MODEL_PRICING_UPDATE";
+    public static final String MODEL_PRICING_DELETE = "MODEL_PRICING_DELETE";
 }

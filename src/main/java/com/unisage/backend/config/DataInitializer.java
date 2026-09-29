@@ -421,7 +421,24 @@ public class DataInitializer implements CommandLineRunner {
                 "Xem lịch sử cảnh báo ngân sách"),
             def(PredefinedPermissions.BUDGET_ALERT_DISMISS,
                 "/budget-alerts/*/dismiss", PermissionMethod.POST, ResourceType.BUDGET,
-                "Ẩn cảnh báo ngân sách")
+                "Ẩn cảnh báo ngân sách"),
+
+            // ── Model pricing (Cost Tracking) ─────────────────────────────
+            def(PredefinedPermissions.MODEL_PRICING_ALL,
+                "/model-pricing/**", PermissionMethod.ALL, ResourceType.BUDGET,
+                "Toàn quyền bảng giá model AI"),
+            def(PredefinedPermissions.MODEL_PRICING_READ,
+                "/model-pricing/**", PermissionMethod.GET, ResourceType.BUDGET,
+                "Xem bảng giá và lịch sử giá model AI"),
+            def(PredefinedPermissions.MODEL_PRICING_CREATE,
+                "/model-pricing/**", PermissionMethod.POST, ResourceType.BUDGET,
+                "Thêm giá model AI và đồng bộ giá"),
+            def(PredefinedPermissions.MODEL_PRICING_UPDATE,
+                "/model-pricing/**", PermissionMethod.PUT, ResourceType.BUDGET,
+                "Sửa giá model AI"),
+            def(PredefinedPermissions.MODEL_PRICING_DELETE,
+                "/model-pricing/**", PermissionMethod.DELETE, ResourceType.BUDGET,
+                "Khôi phục giá model AI")
         ));
 
         return list;

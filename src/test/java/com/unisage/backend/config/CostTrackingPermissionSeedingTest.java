@@ -37,6 +37,7 @@ class CostTrackingPermissionSeedingTest extends PostgresIntegrationTest {
                 PredefinedPermissions.BUDGET_ALERT_SETTING_UPDATE,
                 PredefinedPermissions.BUDGET_ALERT_READ,
                 PredefinedPermissions.BUDGET_ALERT_DISMISS,
+                PredefinedPermissions.MODEL_PRICING_ALL,
         }) {
             Permission permission = permissionRepository.findByName(permissionName)
                     .orElseThrow(() -> new AssertionError("permission not seeded: " + permissionName));
