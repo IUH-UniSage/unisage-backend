@@ -522,7 +522,7 @@ với `RequestUsageLog`. Để 2 hệ thống độc lập (xem Open Questions).
 
 ### Phase 4: Cảnh báo (Java)
 - [x] Task 12: Job phát hiện ngưỡng + spike, claim atomic
-- [ ] Task 13: Gửi In-app/Email/Slack (env)
+- [x] Task 13: Gửi In-app/Email/Slack (env)
 
 ### Phase 5: unisage-web
 - [ ] Task 14: Wiring (route, registry, permission, api client, query keys, schema)

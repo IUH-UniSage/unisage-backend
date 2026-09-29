@@ -829,36 +829,58 @@ bật persistence.
 ### Task 13: Gửi In-app/Email/Slack
 
 **Acceptance criteria:**
-- [ ] IN_APP: bản ghi claim chính là alert, status `SENT` ngay
-- [ ] EMAIL: dùng `spring-boot-starter-mail` (đã có trong pom, chưa dùng) —
+- [x] IN_APP: bản ghi claim chính là alert, status `SENT` ngay
+- [x] EMAIL: dùng `spring-boot-starter-mail` (đã có trong pom, chưa dùng) —
       `application.properties` map `spring.mail.*` từ `SPRING_MAIL_HOST`,
       `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` và
       `app.budget-alert.mail.from` từ `BUDGET_ALERT_MAIL_FROM` (placeholder đã có
       trong `.env.example`/`.ENV`)
-- [ ] Host hoặc from trống → dispatcher không gọi `JavaMailSender`, đánh `SKIPPED`
+- [x] Host hoặc from trống → dispatcher không gọi `JavaMailSender`, đánh `SKIPPED`
       (lấy sender qua `ObjectProvider`, kiểm `StringUtils.hasText`)
-- [ ] `management.health.mail.enabled=false` — không để SMTP trống/lỗi kéo
+- [x] `management.health.mail.enabled=false` — không để SMTP trống/lỗi kéo
       `/actuator/health` (public, System Health đang dùng) sang DOWN
-- [ ] SLACK: `SlackWebhookClient` đọc `app.budget-alert.slack.*` ←
+- [x] SLACK: `SlackWebhookClient` đọc `app.budget-alert.slack.*` ←
       `BUDGET_ALERT_SLACK_ENABLED`, `BUDGET_ALERT_SLACK_WEBHOOK_URL`,
       `BUDGET_ALERT_SLACK_CHANNEL_LABEL`, `BUDGET_ALERT_SLACK_TIMEOUT_MS` (placeholder
       đã có trong `.env.example`/`.ENV`); disabled hoặc URL trống → `SKIPPED`;
       không log URL
-- [ ] Gửi lỗi → `FAILED`, `attemptCount += 1`, `lastAttemptAt`, `nextAttemptAt =
+- [x] Gửi lỗi → `FAILED`, `attemptCount += 1`, `lastAttemptAt`, `nextAttemptAt =
       now + 2^attemptCount phút`, `errorMessage`; `attemptCount = 3` vẫn lỗi →
       `GAVE_UP`, không retry nữa
-- [ ] Nội dung: budget/scope, kỳ, spend/limit, %, link tới trang Cost Management
+- [x] Nội dung: budget/scope, kỳ, spend/limit, %, link tới trang Cost Management
+
+**Implementation notes:**
+- Bước gửi `SELECT ... FOR UPDATE SKIP LOCKED` (đã note thiếu ở Task 12) triển
+  khai ở đây: `BudgetAlertLogRepository.claimReadyToSend()`, chạy trong
+  `BudgetAlertDispatchServiceImpl.dispatchPending()` (`@Transactional`) để lock
+  giữ đúng trong suốt transaction.
+- `BudgetAlertJob` thêm `dispatchPendingAlerts()` chạy cùng cron với
+  `checkThresholds()` (mỗi 2 phút) — không cần lịch riêng, backoff của
+  `nextAttemptAt` đã tự điều tiết tần suất retry.
+- Test dùng cổng loopback không ai lắng nghe (`127.0.0.1:1`) thay vì mock
+  `JavaMailSender`/HTTP client thật — bắt lỗi kết nối thật để test đường gửi
+  lỗi/backoff/GAVE_UP mà không cần thêm dependency test (GreenMail,
+  MockRestServiceServer).
+- Bug bắt được khi chạy full suite (pass riêng lẻ nhưng fail khi chạy chung):
+  test dùng `LocalDateTime.now()` (giờ hệ thống JVM, VN local UTC+7) để set
+  `nextAttemptAt`, trong khi code thật dùng `LocalDateTime.now(clock)` với
+  `Clock.systemUTC()` — lệch ~7 tiếng khiến `next_attempt_at <= now()` (SQL,
+  UTC) luôn sai. Sửa test dùng `LocalDateTime.now(ZoneOffset.UTC)` cho khớp.
 
 **Verification:**
-- [ ] `./mvnw test` với mock mail sender/mock HTTP: env trống → `SKIPPED` và
-      health UP; lỗi 3 lần → `GAVE_UP`
+- [x] `./mvnw test`: env trống (thiếu recipients cho EMAIL, URL rỗng cho SLACK)
+      → `SKIPPED`; lỗi 3 lần liên tiếp (cổng loopback không phản hồi) → `GAVE_UP`,
+      lần thứ 4 không claim lại; 2 luồng dispatch cùng lúc không gửi trùng
+- [ ] "health UP khi SMTP trống" không có test riêng khẳng định endpoint health
+      (chỉ có `management.health.mail.enabled=false` tĩnh + skip logic đã test)
 - [ ] Manual: điền webhook thật vào `.ENV`, hạ limit → thấy đúng 1 message Slack
+      — cần thao tác tay, chưa thực hiện trong phiên này
 
 **Dependencies:** Task 12
 
 **Files likely touched:**
 - `backend-java/src/main/java/com/unisage/backend/integration/SlackWebhookClient.java`
-- `backend-java/src/main/java/com/unisage/backend/service/budget/BudgetAlertDispatcher.java`
+- `backend-java/src/main/java/com/unisage/backend/service/budget/BudgetAlertDispatchServiceImpl.java`
 - `backend-java/src/main/resources/application.properties`
 
 **Estimated scope:** M
@@ -866,8 +888,11 @@ bật persistence.
 ---
 
 ## Checkpoint: Phase 4
-- [ ] Spend vượt 80% → alert đúng các kênh bật, đúng 1 lần/kênh/kỳ
-- [ ] Review với human trước khi làm Phase 5
+- [x] Spend vượt 80% → alert đúng các kênh bật, đúng 1 lần/kênh/kỳ
+      (`BudgetAlertDetectionServiceImplTest.thresholdBreach_claimsOneAlertPerReachedThresholdAndChannel`,
+      85% claim đúng ngưỡng 50+80 một lần/kênh, không double-claim khi chạy lại
+      hay chạy đồng thời 2 luồng)
+- [x] Review với human trước khi làm Phase 5 — user xác nhận tiếp tục Task 14 luôn
 
 ---
 
