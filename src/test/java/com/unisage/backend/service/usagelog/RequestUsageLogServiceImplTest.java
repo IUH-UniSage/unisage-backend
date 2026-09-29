@@ -140,6 +140,23 @@ class RequestUsageLogServiceImplTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void summaryByUser_keysByEmailThenGuestIp() {
+        OffsetDateTime now = OffsetDateTime.now();
+        var user = jdbcTemplate.queryForMap("SELECT id, email FROM users ORDER BY email LIMIT 1");
+        service.ingest(new UsageLogIngestRequest(
+                UUID.randomUUID(), UsagePurpose.CHAT, null, null, null, (UUID) user.get("id"), null,
+                UsageRequestStatus.SUCCESS, now, now,
+                List.of(line(0, "openai", "gpt-4o-mini", now, 0, UsageRequestStatus.SUCCESS))));
+        ingestGuestChat(now, "203.0.113.7");
+
+        var summary = service.summary(now.minusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(),
+                now.plusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(), "user", null, null);
+
+        assertThat(summary.buckets()).extracting(b -> b.key())
+                .containsExactlyInAnyOrder((String) user.get("email"), "203.0.113.7");
+    }
+
+    @Test
     void search_unsortedPage_returnsNewestFirst() {
         OffsetDateTime now = OffsetDateTime.now();
         UUID older = ingestChat(now.minusMinutes(5), "openai",

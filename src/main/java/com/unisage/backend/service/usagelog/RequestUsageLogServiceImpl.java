@@ -154,12 +154,13 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
                     GROUP BY purpose ORDER BY purpose
                     """.formatted(logPurposeFilter, logProviderFilter), this::mapSummaryRow, logParams.toArray());
             case "user" -> jdbcTemplate.query("""
-                    SELECT COALESCE(user_id::text, guest_ip, 'unknown') AS bucket_key,
+                    SELECT COALESCE(u.email, user_id::text, guest_ip, 'unknown') AS bucket_key,
                            SUM(total_cost_usd) AS priced, SUM(estimated_unpriced_cost_usd) AS unpriced,
                            COUNT(*) AS request_count, SUM(total_input_tokens) AS input_tokens, SUM(total_output_tokens) AS output_tokens
                     FROM request_usage_logs
+                    LEFT JOIN users u ON u.id = request_usage_logs.user_id
                     WHERE started_at >= ? AND started_at < ? %s %s
-                    GROUP BY bucket_key ORDER BY priced DESC
+                    GROUP BY bucket_key ORDER BY priced DESC NULLS LAST
                     """.formatted(logPurposeFilter, logProviderFilter), this::mapSummaryRow, logParams.toArray());
             case "day" -> {
                 List<Object> dayParams = new ArrayList<>();
