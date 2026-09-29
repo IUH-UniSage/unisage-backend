@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -112,31 +113,60 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
     }
 
     @Override
-    public UsageLogSummaryResponse summary(LocalDateTime from, LocalDateTime to, String groupBy) {
+    public UsageLogSummaryResponse summary(LocalDateTime from, LocalDateTime to, String groupBy,
+            UsagePurpose purposeFilter, String providerFilter) {
+        // "purpose"/"user"/"day" query request_usage_logs alone - filtering by provider there
+        // means "this request touched that provider on at least one line attempt", checked via
+        // EXISTS rather than a JOIN so a request with 2 lines on the same provider still counts
+        // once, keeping COUNT(*)/SUM(...) semantics identical to the unfiltered query.
+        String logProviderFilter = providerFilter == null ? "" : """
+                AND EXISTS (
+                    SELECT 1 FROM request_usage_lines pf
+                    WHERE pf.usage_log_id = request_usage_logs.id AND lower(pf.provider) = lower(?)
+                )""";
+        String logPurposeFilter = purposeFilter == null ? "" : "AND purpose = ?";
+        // "provider"/"model" already query request_usage_lines directly - purpose lives on the
+        // joined parent, provider is the line's own column.
+        String lineProviderFilter = providerFilter == null ? "" : "AND lower(l.provider) = lower(?)";
+        String linePurposeFilter = purposeFilter == null ? "" : "AND g.purpose = ?";
+
+        List<Object> logParams = new ArrayList<>(List.of(from, to));
+        if (purposeFilter != null) logParams.add(purposeFilter.name());
+        if (providerFilter != null) logParams.add(providerFilter);
+
+        List<Object> lineParams = new ArrayList<>(List.of(from, to));
+        if (purposeFilter != null) lineParams.add(purposeFilter.name());
+        if (providerFilter != null) lineParams.add(providerFilter);
+
         List<UsageLogSummaryResponse.Bucket> buckets = switch (groupBy) {
             case "purpose" -> jdbcTemplate.query("""
                     SELECT purpose AS bucket_key, SUM(total_cost_usd) AS priced, SUM(estimated_unpriced_cost_usd) AS unpriced,
                            COUNT(*) AS request_count, SUM(total_input_tokens) AS input_tokens, SUM(total_output_tokens) AS output_tokens
                     FROM request_usage_logs
-                    WHERE started_at >= ? AND started_at < ?
+                    WHERE started_at >= ? AND started_at < ? %s %s
                     GROUP BY purpose ORDER BY purpose
-                    """, this::mapSummaryRow, from, to);
+                    """.formatted(logPurposeFilter, logProviderFilter), this::mapSummaryRow, logParams.toArray());
             case "user" -> jdbcTemplate.query("""
                     SELECT COALESCE(user_id::text, guest_ip, 'unknown') AS bucket_key,
                            SUM(total_cost_usd) AS priced, SUM(estimated_unpriced_cost_usd) AS unpriced,
                            COUNT(*) AS request_count, SUM(total_input_tokens) AS input_tokens, SUM(total_output_tokens) AS output_tokens
                     FROM request_usage_logs
-                    WHERE started_at >= ? AND started_at < ?
+                    WHERE started_at >= ? AND started_at < ? %s %s
                     GROUP BY bucket_key ORDER BY priced DESC
-                    """, this::mapSummaryRow, from, to);
-            case "day" -> jdbcTemplate.query("""
-                    SELECT to_char((started_at AT TIME ZONE 'UTC') AT TIME ZONE ?, 'YYYY-MM-DD') AS bucket_key,
-                           SUM(total_cost_usd) AS priced, SUM(estimated_unpriced_cost_usd) AS unpriced,
-                           COUNT(*) AS request_count, SUM(total_input_tokens) AS input_tokens, SUM(total_output_tokens) AS output_tokens
-                    FROM request_usage_logs
-                    WHERE started_at >= ? AND started_at < ?
-                    GROUP BY bucket_key ORDER BY bucket_key
-                    """, this::mapSummaryRow, appTimezone, from, to);
+                    """.formatted(logPurposeFilter, logProviderFilter), this::mapSummaryRow, logParams.toArray());
+            case "day" -> {
+                List<Object> dayParams = new ArrayList<>();
+                dayParams.add(appTimezone);
+                dayParams.addAll(logParams);
+                yield jdbcTemplate.query("""
+                        SELECT to_char((started_at AT TIME ZONE 'UTC') AT TIME ZONE ?, 'YYYY-MM-DD') AS bucket_key,
+                               SUM(total_cost_usd) AS priced, SUM(estimated_unpriced_cost_usd) AS unpriced,
+                               COUNT(*) AS request_count, SUM(total_input_tokens) AS input_tokens, SUM(total_output_tokens) AS output_tokens
+                        FROM request_usage_logs
+                        WHERE started_at >= ? AND started_at < ? %s %s
+                        GROUP BY bucket_key ORDER BY bucket_key
+                        """.formatted(logPurposeFilter, logProviderFilter), this::mapSummaryRow, dayParams.toArray());
+            }
             case "provider" -> jdbcTemplate.query("""
                     SELECT l.provider AS bucket_key,
                            SUM(CASE WHEN l.cost_status = 'PRICED' THEN l.cost_usd ELSE 0 END) AS priced,
@@ -145,9 +175,9 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
                            SUM(l.input_tokens) AS input_tokens, SUM(l.output_tokens) AS output_tokens
                     FROM request_usage_lines l
                     JOIN request_usage_logs g ON g.id = l.usage_log_id
-                    WHERE g.started_at >= ? AND g.started_at < ?
+                    WHERE g.started_at >= ? AND g.started_at < ? %s %s
                     GROUP BY l.provider ORDER BY priced DESC
-                    """, this::mapSummaryRow, from, to);
+                    """.formatted(linePurposeFilter, lineProviderFilter), this::mapSummaryRow, lineParams.toArray());
             case "model" -> jdbcTemplate.query("""
                     SELECT l.model_name AS bucket_key,
                            SUM(CASE WHEN l.cost_status = 'PRICED' THEN l.cost_usd ELSE 0 END) AS priced,
@@ -156,9 +186,9 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
                            SUM(l.input_tokens) AS input_tokens, SUM(l.output_tokens) AS output_tokens
                     FROM request_usage_lines l
                     JOIN request_usage_logs g ON g.id = l.usage_log_id
-                    WHERE g.started_at >= ? AND g.started_at < ?
+                    WHERE g.started_at >= ? AND g.started_at < ? %s %s
                     GROUP BY l.model_name ORDER BY priced DESC
-                    """, this::mapSummaryRow, from, to);
+                    """.formatted(linePurposeFilter, lineProviderFilter), this::mapSummaryRow, lineParams.toArray());
             default -> throw new AppException(ErrorCode.USAGE_LOG_INVALID_PAYLOAD,
                     Map.of("groupBy", "Phải là một trong: purpose, provider, model, user, day"));
         };

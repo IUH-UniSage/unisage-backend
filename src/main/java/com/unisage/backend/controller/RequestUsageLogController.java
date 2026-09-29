@@ -24,7 +24,7 @@ import com.unisage.backend.service.usagelog.RequestUsageLogService;
 
 import lombok.RequiredArgsConstructor;
 
-/** SA-facing cost dashboard/history - plan.md "Giao diện quản lý ngân sách" Tab 1/5. */
+/** SA-facing cost dashboard and usage history endpoints. */
 @RestController
 @RequestMapping("/usage-logs")
 @RequiredArgsConstructor
@@ -36,9 +36,11 @@ public class RequestUsageLogController {
     public ResponseEntity<ApiResponse<UsageLogSummaryResponse>> summary(
             @RequestParam OffsetDateTime from,
             @RequestParam OffsetDateTime to,
-            @RequestParam String groupBy) {
+            @RequestParam String groupBy,
+            @RequestParam(required = false) UsagePurpose purpose,
+            @RequestParam(required = false) String provider) {
         return ResponseEntity.ok(ApiResponse.success(
-                requestUsageLogService.summary(toUtc(from), toUtc(to), groupBy)));
+                requestUsageLogService.summary(toUtc(from), toUtc(to), groupBy, purpose, provider)));
     }
 
     @GetMapping

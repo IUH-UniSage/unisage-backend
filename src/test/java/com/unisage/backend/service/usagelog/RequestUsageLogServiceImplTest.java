@@ -27,7 +27,7 @@ import com.unisage.backend.support.PostgresIntegrationTest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Task 4 verification: timezone-cut day grouping, hasFailover flag, null-message detail, and
+/** Verifies timezone-cut day grouping, hasFailover flag, null-message detail, and
  * cost aggregation across purpose/provider/model/day groupBy. */
 class RequestUsageLogServiceImplTest extends PostgresIntegrationTest {
 
@@ -76,7 +76,7 @@ class RequestUsageLogServiceImplTest extends PostgresIntegrationTest {
 
         var from = lateNight.minusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
         var to = justAfterMidnight.plusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
-        var summary = service.summary(from, to, "day");
+        var summary = service.summary(from, to, "day", null, null);
 
         assertThat(summary.buckets()).extracting(b -> b.key()).containsExactly("2026-09-27", "2026-09-28");
     }
@@ -127,8 +127,33 @@ class RequestUsageLogServiceImplTest extends PostgresIntegrationTest {
                 line(1, "anthropic", "claude-3-haiku", now, 1, UsageRequestStatus.SUCCESS)));
 
         var summary = service.summary(now.minusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(),
-                now.plusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(), "provider");
+                now.plusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(), "provider", null, null);
 
         assertThat(summary.buckets()).extracting(b -> b.key()).contains("anthropic");
+    }
+
+    @Test
+    void summaryByDay_providerFilter_excludesRequestsThatNeverTouchedThatProvider() {
+        OffsetDateTime now = OffsetDateTime.now();
+        ingestChat(now, "openai", List.of(line(0, "openai", "gpt-4o-mini", now, 0, UsageRequestStatus.SUCCESS)));
+        ingestChat(now, "anthropic", List.of(line(0, "anthropic", "claude-3-haiku", now, 0, UsageRequestStatus.SUCCESS)));
+
+        var summary = service.summary(now.minusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(),
+                now.plusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(), "day", null, "anthropic");
+
+        assertThat(summary.buckets()).hasSize(1);
+        assertThat(summary.buckets().get(0).requestCount()).isEqualTo(1);
+    }
+
+    @Test
+    void summaryByProvider_purposeFilter_excludesOtherPurposes() {
+        OffsetDateTime now = OffsetDateTime.now();
+        ingestChat(now, "openai", List.of(line(0, "openai", "gpt-4o-mini", now, 0, UsageRequestStatus.SUCCESS)));
+
+        var summary = service.summary(now.minusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(),
+                now.plusHours(1).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(), "provider",
+                UsagePurpose.EMBEDDING, null);
+
+        assertThat(summary.buckets()).isEmpty();
     }
 }

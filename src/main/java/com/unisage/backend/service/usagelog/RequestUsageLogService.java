@@ -19,7 +19,8 @@ public interface RequestUsageLogService {
 
     UsageLogIngestResponse ingest(UsageLogIngestRequest request);
 
-    UsageLogSummaryResponse summary(LocalDateTime from, LocalDateTime to, String groupBy);
+    UsageLogSummaryResponse summary(LocalDateTime from, LocalDateTime to, String groupBy,
+            UsagePurpose purposeFilter, String providerFilter);
 
     PageResponse<List<UsageLogListItemResponse>> search(
             UsagePurpose purpose, UsageRequestStatus status, LocalDateTime from, LocalDateTime to, Pageable pageable);
