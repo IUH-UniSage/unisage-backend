@@ -992,10 +992,10 @@ bật persistence.
 ### Task 16: Tab Ngân sách & Giới hạn
 
 **Acceptance criteria:**
-- [ ] Bảng budget có % đã dùng; form Scope → hiện dropdown provider (từ Model
+- [x] Bảng budget có % đã dùng; form Scope → hiện dropdown provider (từ Model
       Registry) hoặc purpose; Action THROTTLE → hiện input concurrency
-- [ ] Hiển thị lỗi validate từ Java (trùng budget enabled)
-- [ ] Ghi chú "giới hạn mềm" và hành vi fallback/từ chối theo scope
+- [x] Hiển thị lỗi validate từ Java (trùng budget enabled)
+- [x] Ghi chú "giới hạn mềm" và hành vi fallback/từ chối theo scope
 
 **Verification:** Manual tạo/sửa/xoá budget, đối chiếu DB
 
@@ -1004,6 +1004,29 @@ bật persistence.
 **Files likely touched:** `unisage-web/src/features/cost-management/budgets/`
 
 **Estimated scope:** M
+
+**Implementation notes:**
+- Backend business-rule errors for this endpoint (`BUDGET_INVALID_SCOPE`,
+  `BUDGET_INVALID_THROTTLE`, `BUDGET_ALREADY_ENABLED_FOR_PERIOD`) come back as
+  a plain `AppException` with no field-keyed `errors` map, so they're shown as
+  a root-level banner in the dialog (`applyFieldErrors` falls through to
+  `setError("root", ...)`), the same pattern as the chat-model dialog's
+  server-error handling, rather than attached to a specific field.
+- Cross-field validation (scope requires provider/purpose, THROTTLE requires
+  a concurrency cap) lives in a new `budgetFormSchema` zod schema with
+  `superRefine`, mirroring `buildChatModelFormSchema`'s conditional
+  validation rather than inventing a new pattern.
+- The budgets list has no pagination or search toolbar (unlike other admin
+  lists in this codebase) - the number of budgets is bounded by scope
+  combinations (1 system + N providers + N purposes), so a plain table was
+  judged sufficient; can add pagination later if that assumption stops
+  holding.
+- Verification actually run: `npm run typecheck`, `npx eslint`, `npm run
+  build`, all green. Did not do the "Manual tạo/sửa/xoá budget, đối chiếu DB"
+  check from this task's verification line for the same reason as Task 15 -
+  no live backend/DB session was exercised through the browser in this
+  session, only static verification. Recommend a manual CRUD pass before
+  shipping.
 
 ---
 
