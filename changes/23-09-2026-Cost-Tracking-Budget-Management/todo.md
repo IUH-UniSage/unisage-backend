@@ -767,11 +767,19 @@ bật persistence.
 ---
 
 ## Checkpoint: Phase 3
-- [ ] Budget SYSTEM BLOCK = $0 → request Chat bị từ chối ngay, không call provider
-- [ ] Budget PROVIDER = $0 BLOCK, SYSTEM còn → request thành công qua provider khác
-- [ ] Kill process giữa request → sau TTL, `reserved`/`inflight` về đúng
-- [ ] Restart Redis → không mất outbox/counter
-- [ ] Review với human trước khi làm Phase 4
+- [x] Budget SYSTEM BLOCK = $0 → request Chat bị từ chối ngay, không call provider
+      (pytest với Redis thật, `test_block_budget_rejects_once_exhausted` + reserve
+      request-level trong `streaming_session.py`)
+- [x] Budget PROVIDER = $0 BLOCK, SYSTEM còn → request thành công qua provider khác
+      (`test_provider_budget_denial_falls_over_to_the_next_candidate`)
+- [x] Kill process giữa request → sau TTL, `reserved`/`inflight` về đúng
+      (`test_release_expired_reservations_frees_reserved_and_inflight`, mô phỏng
+      expiry bằng cách ghi score ZSET vào quá khứ)
+- [ ] Restart Redis → không mất outbox/counter — chưa verify được: môi trường làm
+      việc không có Docker daemon thật để chạy `docker compose restart redis`.
+      AOF (`appendonly yes --appendfsync everysec`) đã cấu hình ở Task 11b; user đã
+      quyết định cho pass mục này để tiếp tục Phase 4, tự verify bằng Docker sau.
+- [x] Review với human trước khi làm Phase 4 — user xác nhận tiếp tục Task 12 luôn
 
 ---
 
