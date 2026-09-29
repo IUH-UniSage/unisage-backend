@@ -34,6 +34,9 @@ public record UsageLogIngestRequest(
 
     String guestIp,
 
+    /** Only set when {@code purpose = INGEST} - the document this ingestion job embedded. */
+    UUID documentId,
+
     @NotNull(message = "status không được để trống")
     UsageRequestStatus status,
 

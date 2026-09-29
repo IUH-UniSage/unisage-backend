@@ -9,5 +9,12 @@ package com.unisage.backend.entity.enums;
 public enum UsagePurpose {
     CHAT,
     EMBEDDING,
-    EXTRACTION
+    EXTRACTION,
+    /** One whole document ingestion job - every embedding/extraction call it made across every
+     * chunk shares this ONE top-level request (see {@link com.unisage.backend.entity.Document}
+     * on {@code RequestUsageLog}), not one request per call. */
+    INGEST,
+    /** One {@code POST /ingestion/chunking} call using the "semantic" strategy - every region's
+     * embedding call it made shares this ONE top-level request, not one request per region. */
+    SEMANTIC_CHUNKING
 }

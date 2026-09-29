@@ -56,14 +56,14 @@ class RequestUsageLogServiceImplTest extends PostgresIntegrationTest {
 
     private UUID ingestChat(OffsetDateTime startedAt, String provider, List<UsageLineIngestRequest> lines) {
         var response = service.ingest(new UsageLogIngestRequest(
-                UUID.randomUUID(), UsagePurpose.CHAT, null, null, null, null, null,
+                UUID.randomUUID(), UsagePurpose.CHAT, null, null, null, null, null, null,
                 UsageRequestStatus.SUCCESS, startedAt, startedAt, lines));
         return response.id();
     }
 
     private UUID ingestGuestChat(OffsetDateTime startedAt, String guestIp) {
         var response = service.ingest(new UsageLogIngestRequest(
-                UUID.randomUUID(), UsagePurpose.CHAT, null, null, null, null, guestIp,
+                UUID.randomUUID(), UsagePurpose.CHAT, null, null, null, null, guestIp, null,
                 UsageRequestStatus.SUCCESS, startedAt, startedAt,
                 List.of(line(0, "openai", "gpt-4o-mini", startedAt, 0, UsageRequestStatus.SUCCESS))));
         return response.id();
@@ -144,7 +144,7 @@ class RequestUsageLogServiceImplTest extends PostgresIntegrationTest {
         OffsetDateTime now = OffsetDateTime.now();
         var user = jdbcTemplate.queryForMap("SELECT id, email FROM users ORDER BY email LIMIT 1");
         service.ingest(new UsageLogIngestRequest(
-                UUID.randomUUID(), UsagePurpose.CHAT, null, null, null, (UUID) user.get("id"), null,
+                UUID.randomUUID(), UsagePurpose.CHAT, null, null, null, (UUID) user.get("id"), null, null,
                 UsageRequestStatus.SUCCESS, now, now,
                 List.of(line(0, "openai", "gpt-4o-mini", now, 0, UsageRequestStatus.SUCCESS))));
         ingestGuestChat(now, "203.0.113.7");

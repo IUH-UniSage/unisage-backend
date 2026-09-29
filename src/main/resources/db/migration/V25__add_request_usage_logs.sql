@@ -14,6 +14,7 @@ CREATE TABLE public.request_usage_logs (
     assistant_message_id uuid,
     user_id uuid,
     guest_ip character varying(255),
+    document_id uuid,
     status character varying(20) NOT NULL,
     total_input_tokens integer NOT NULL DEFAULT 0,
     total_output_tokens integer NOT NULL DEFAULT 0,
@@ -29,7 +30,7 @@ CREATE TABLE public.request_usage_logs (
     CONSTRAINT request_usage_logs_pkey PRIMARY KEY (id),
     CONSTRAINT ux_request_usage_logs_request_id UNIQUE (request_id),
     CONSTRAINT request_usage_logs_purpose_check
-        CHECK (purpose IN ('CHAT', 'EMBEDDING', 'EXTRACTION')),
+        CHECK (purpose IN ('CHAT', 'EMBEDDING', 'EXTRACTION', 'INGEST', 'SEMANTIC_CHUNKING')),
     CONSTRAINT request_usage_logs_status_check
         CHECK (status IN ('SUCCESS', 'ERROR', 'PARTIAL')),
     CONSTRAINT fk_request_usage_logs_conversation
@@ -39,7 +40,9 @@ CREATE TABLE public.request_usage_logs (
     CONSTRAINT fk_request_usage_logs_assistant_message
         FOREIGN KEY (assistant_message_id) REFERENCES public.messages(id) ON DELETE SET NULL,
     CONSTRAINT fk_request_usage_logs_user
-        FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL
+        FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_request_usage_logs_document
+        FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE SET NULL
 );
 
 CREATE INDEX ix_request_usage_logs_started_at ON public.request_usage_logs (started_at);
@@ -49,6 +52,7 @@ CREATE INDEX ix_request_usage_logs_status_started_at ON public.request_usage_log
 CREATE INDEX ix_request_usage_logs_user_message_id ON public.request_usage_logs (user_message_id);
 CREATE INDEX ix_request_usage_logs_assistant_message_id ON public.request_usage_logs (assistant_message_id);
 CREATE INDEX ix_request_usage_logs_conversation_id ON public.request_usage_logs (conversation_id);
+CREATE INDEX ix_request_usage_logs_document_id ON public.request_usage_logs (document_id);
 
 -- ── request_usage_lines: one row per provider call attempt within a request ────────
 

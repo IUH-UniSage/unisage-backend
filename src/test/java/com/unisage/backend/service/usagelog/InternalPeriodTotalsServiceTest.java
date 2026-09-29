@@ -46,7 +46,7 @@ class InternalPeriodTotalsServiceTest extends PostgresIntegrationTest {
     void pricedAndUnpricedLinesAreCountedInMicroUsd_freeIsExcluded() {
         OffsetDateTime now = OffsetDateTime.now();
         requestUsageLogService.ingest(new UsageLogIngestRequest(
-                UUID.randomUUID(), UsagePurpose.CHAT, null, null, null, null, null,
+                UUID.randomUUID(), UsagePurpose.CHAT, null, null, null, null, null, null,
                 UsageRequestStatus.SUCCESS, now, now, List.of(
                         new UsageLineIngestRequest(0, "n", 0, null, "openai", "gpt-4o-mini",
                                 ChatModelSourceType.CLOUD_API, 100, 50, 0,

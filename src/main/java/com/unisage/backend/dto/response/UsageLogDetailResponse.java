@@ -23,6 +23,8 @@ public record UsageLogDetailResponse(
     UUID userId,
     String userEmail,
     String guestIp,
+    /** Only set when {@code purpose = INGEST} - the document this ingestion job embedded. */
+    UUID documentId,
     Integer totalInputTokens,
     Integer totalOutputTokens,
     Integer totalCachedTokens,

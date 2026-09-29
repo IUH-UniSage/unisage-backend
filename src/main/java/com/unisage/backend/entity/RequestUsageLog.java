@@ -76,6 +76,13 @@ public class RequestUsageLog {
     @Column(name = "guest_ip", updatable = false)
     private String guestIp;
 
+    /** ON DELETE SET NULL - a usage record outlives the document it ingested. Only set when
+     * {@link #purpose} is {@code INGEST}; every embedding/extraction call this document's
+     * ingestion job made is a line under this one request, not one request per call. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "document_id", updatable = false)
+    private Document document;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", columnDefinition = "varchar(20)", nullable = false)
     private UsageRequestStatus status;

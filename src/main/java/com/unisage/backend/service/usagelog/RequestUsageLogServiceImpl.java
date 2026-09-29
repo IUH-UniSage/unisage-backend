@@ -58,10 +58,10 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
     private static final String INSERT_LOG_SQL = """
             INSERT INTO request_usage_logs
                 (id, request_id, purpose, conversation_id, user_message_id, assistant_message_id, user_id,
-                 guest_ip, status, total_input_tokens, total_output_tokens, total_cached_tokens,
+                 guest_ip, document_id, status, total_input_tokens, total_output_tokens, total_cached_tokens,
                  total_cost_usd, estimated_unpriced_cost_usd, unpriced_line_count, line_count,
                  latency_ms, started_at, finished_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (request_id) DO NOTHING
             """;
 
@@ -92,6 +92,7 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
                 request.assistantMessageId(),
                 request.userId(),
                 request.guestIp(),
+                request.documentId(),
                 request.status().name(),
                 aggregates.totalInputTokens(),
                 aggregates.totalOutputTokens(),
@@ -338,6 +339,7 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
                 .userId(log.getUser() != null ? log.getUser().getId() : null)
                 .userEmail(log.getUser() != null ? log.getUser().getEmail() : null)
                 .guestIp(log.getGuestIp())
+                .documentId(log.getDocument() != null ? log.getDocument().getId() : null)
                 .totalInputTokens(log.getTotalInputTokens())
                 .totalOutputTokens(log.getTotalOutputTokens())
                 .totalCachedTokens(log.getTotalCachedTokens())
