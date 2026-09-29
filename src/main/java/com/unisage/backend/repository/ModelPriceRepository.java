@@ -12,4 +12,6 @@ public interface ModelPriceRepository extends JpaRepository<ModelPrice, UUID> {
 
     @EntityGraph(attributePaths = "updatedBy")
     List<ModelPrice> findAllByOrderByProviderAscModelNameAsc();
+
+    boolean existsByProviderAndModelName(String provider, String modelName);
 }
