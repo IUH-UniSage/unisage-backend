@@ -203,6 +203,9 @@
                     <argLine>-Dnet.bytebuddy.experimental=true</argLine>
                     <!-- One JVM per test class — avoids ThreadLocal state leaking between @SpringBootTest contexts. -->
                     <reuseForks>false</reuseForks>
+                    <systemPropertyVariables>
+                        <app.model-pricing.sync-on-startup>true</app.model-pricing.sync-on-startup>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
         </plugins>

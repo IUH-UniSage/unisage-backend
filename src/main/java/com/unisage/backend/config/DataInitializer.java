@@ -27,6 +27,7 @@ public class DataInitializer implements CommandLineRunner {
     private final RolePermissionRepository  rolePermissionRepository;
     private final UserRepository            userRepository;
     private final DepartmentRepository      departmentRepository;
+    private final CategoryRepository        categoryRepository;
     private final AccessLevelRepository     accessLevelRepository;
     private final UserDepartmentAccessRepository userDepartmentAccessRepository;
     private final UsageLimitPlanRepository usageLimitPlanRepository;
@@ -46,8 +47,9 @@ public class DataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         // Runs independently of the RBAC skip-guard below, so re-running on an already
-        // initialised system still fills in any department still missing.
+        // initialised system still fills in any department/category still missing.
         seedDepartments();
+        seedCategories();
         Map<Integer, AccessLevel> accessLevels = seedAccessLevels();
 
         if (roleRepository.findByName(PredefinedRoles.SUPER_ADMIN).isPresent()) {
@@ -385,7 +387,60 @@ public class DataInitializer implements CommandLineRunner {
             // ── Dashboard ──────────────────────────────────────────────────
             def(PredefinedPermissions.DASHBOARD_READ,
                 "/admin/dashboard/**", PermissionMethod.GET, ResourceType.SYSTEM,
-                "Xem tổng quan hệ thống")
+                "Xem tổng quan hệ thống"),
+
+            // ── UsageLog (Cost Tracking) ─────────────────────────────────
+            def(PredefinedPermissions.USAGE_LOG_READ,
+                "/usage-logs/**", PermissionMethod.GET, ResourceType.USAGE_LOG,
+                "Xem nhật ký chi phí AI"),
+
+            // ── Budget (Cost Tracking) ───────────────────────────────────
+            def(PredefinedPermissions.BUDGET_ALL,
+                "/budgets/**", PermissionMethod.ALL, ResourceType.BUDGET,
+                "Toàn quyền ngân sách AI"),
+            def(PredefinedPermissions.BUDGET_READ,
+                "/budgets/**", PermissionMethod.GET, ResourceType.BUDGET,
+                "Xem ngân sách AI"),
+            def(PredefinedPermissions.BUDGET_CREATE,
+                "/budgets", PermissionMethod.POST, ResourceType.BUDGET,
+                "Tạo ngân sách AI"),
+            def(PredefinedPermissions.BUDGET_UPDATE,
+                "/budgets/**", PermissionMethod.PUT, ResourceType.BUDGET,
+                "Cập nhật ngân sách AI"),
+            def(PredefinedPermissions.BUDGET_DELETE,
+                "/budgets/**", PermissionMethod.DELETE, ResourceType.BUDGET,
+                "Xóa ngân sách AI"),
+
+            // ── Budget alert settings/history (Cost Tracking) ─────────────
+            def(PredefinedPermissions.BUDGET_ALERT_SETTING_READ,
+                "/budget-alert-settings", PermissionMethod.GET, ResourceType.BUDGET,
+                "Xem cấu hình cảnh báo ngân sách"),
+            def(PredefinedPermissions.BUDGET_ALERT_SETTING_UPDATE,
+                "/budget-alert-settings", PermissionMethod.PUT, ResourceType.BUDGET,
+                "Cập nhật cấu hình cảnh báo ngân sách"),
+            def(PredefinedPermissions.BUDGET_ALERT_READ,
+                "/budget-alerts/**", PermissionMethod.GET, ResourceType.BUDGET,
+                "Xem lịch sử cảnh báo ngân sách"),
+            def(PredefinedPermissions.BUDGET_ALERT_DISMISS,
+                "/budget-alerts/*/dismiss", PermissionMethod.POST, ResourceType.BUDGET,
+                "Ẩn cảnh báo ngân sách"),
+
+            // ── Model pricing (Cost Tracking) ─────────────────────────────
+            def(PredefinedPermissions.MODEL_PRICING_ALL,
+                "/model-pricing/**", PermissionMethod.ALL, ResourceType.BUDGET,
+                "Toàn quyền bảng giá model AI"),
+            def(PredefinedPermissions.MODEL_PRICING_READ,
+                "/model-pricing/**", PermissionMethod.GET, ResourceType.BUDGET,
+                "Xem bảng giá và lịch sử giá model AI"),
+            def(PredefinedPermissions.MODEL_PRICING_CREATE,
+                "/model-pricing/**", PermissionMethod.POST, ResourceType.BUDGET,
+                "Thêm giá model AI và đồng bộ giá"),
+            def(PredefinedPermissions.MODEL_PRICING_UPDATE,
+                "/model-pricing/**", PermissionMethod.PUT, ResourceType.BUDGET,
+                "Sửa giá model AI"),
+            def(PredefinedPermissions.MODEL_PRICING_DELETE,
+                "/model-pricing/**", PermissionMethod.DELETE, ResourceType.BUDGET,
+                "Khôi phục giá model AI")
         ));
 
         return list;
@@ -442,7 +497,14 @@ public class DataInitializer implements CommandLineRunner {
             // but seeded explicitly so the permission exists as its own row for role granularity.
             permKey(PredefinedPermissions.CHAT_MODEL_ACTIVATE),
             permKey(PredefinedPermissions.CHAT_MODEL_VERIFY),
-            permKey(PredefinedPermissions.DASHBOARD_READ)
+            permKey(PredefinedPermissions.DASHBOARD_READ),
+            permKey(PredefinedPermissions.USAGE_LOG_READ),
+            // BUDGET_ALL (granted by the _ALL loop above) already covers /budgets/**, but
+            // budget-alert-settings/budget-alerts live under different path prefixes.
+            permKey(PredefinedPermissions.BUDGET_ALERT_SETTING_READ),
+            permKey(PredefinedPermissions.BUDGET_ALERT_SETTING_UPDATE),
+            permKey(PredefinedPermissions.BUDGET_ALERT_READ),
+            permKey(PredefinedPermissions.BUDGET_ALERT_DISMISS)
         );
         assign(role, perms, explicit);
         count += explicit.size();
@@ -697,6 +759,24 @@ public class DataInitializer implements CommandLineRunner {
             log.info("  Department seeded: {}", name);
             return d;
         });
+    }
+
+    // ─── Category seeding ──────────────────────────────────────────────────
+    private void seedCategories() {
+        seedCategory("Test", "Danh mục dùng để kiểm thử.");
+        log.info("  Categories ready.");
+    }
+
+    private void seedCategory(String name, String description) {
+        if (categoryRepository.existsByName(name)) {
+            return;
+        }
+        Category c = Category.builder()
+                .name(name)
+                .description(description)
+                .build();
+        categoryRepository.save(c);
+        log.info("  Category seeded: {}", name);
     }
 
     // ─── Compact builder record ──────────────────────────────────────────

@@ -1,12 +1,16 @@
 {
-  "basePath": "/api/v1/internal/model-registry",
+  "_comment": "basePath is per-endpoint (not a single shared prefix) since Cost Tracking's endpoints (UNISAGE-90) live directly under /internal, not /internal/model-registry. Every value here is relative to the servlet context path (/api/v1), matching how InternalEndpointCoverageTest reads real route mappings.",
   "endpoints": [
-    { "method": "GET", "path": "/snapshot", "returnsSecret": true, "implemented": true },
-    { "method": "GET", "path": "/version", "returnsSecret": false, "implemented": true },
-    { "method": "POST", "path": "/credentials/{id}/health", "returnsSecret": false, "implemented": true },
-    { "method": "POST", "path": "/verifications/claim", "returnsSecret": true, "implemented": true },
-    { "method": "POST", "path": "/verifications/{jobId}/result", "returnsSecret": false, "implemented": true },
-    { "method": "GET", "path": "/embedding-index/{collection}/identity", "returnsSecret": false, "implemented": true },
-    { "method": "PUT", "path": "/embedding-index/{collection}/identity", "returnsSecret": false, "implemented": true }
+    { "method": "GET", "basePath": "/internal/model-registry", "path": "/snapshot", "returnsSecret": true, "implemented": true },
+    { "method": "GET", "basePath": "/internal/model-registry", "path": "/version", "returnsSecret": false, "implemented": true },
+    { "method": "POST", "basePath": "/internal/model-registry", "path": "/credentials/{id}/health", "returnsSecret": false, "implemented": true },
+    { "method": "POST", "basePath": "/internal/model-registry", "path": "/verifications/claim", "returnsSecret": true, "implemented": true },
+    { "method": "POST", "basePath": "/internal/model-registry", "path": "/verifications/{jobId}/result", "returnsSecret": false, "implemented": true },
+    { "method": "GET", "basePath": "/internal/model-registry", "path": "/embedding-index/{collection}/identity", "returnsSecret": false, "implemented": true },
+    { "method": "PUT", "basePath": "/internal/model-registry", "path": "/embedding-index/{collection}/identity", "returnsSecret": false, "implemented": true },
+    { "method": "POST", "basePath": "/internal", "path": "/usage-logs", "returnsSecret": false, "implemented": true },
+    { "method": "GET", "basePath": "/internal", "path": "/budgets/snapshot", "returnsSecret": false, "implemented": true },
+    { "method": "GET", "basePath": "/internal", "path": "/usage-logs/period-totals", "returnsSecret": false, "implemented": true },
+    { "method": "GET", "basePath": "/internal", "path": "/model-pricing/snapshot", "returnsSecret": false, "implemented": true }
   ]
 }

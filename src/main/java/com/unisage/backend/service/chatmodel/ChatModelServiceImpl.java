@@ -55,7 +55,7 @@ public class ChatModelServiceImpl implements ChatModelService {
      * codebase has no SSRF-pinned equivalent for — allowing it here would let an SA create a
      * credential Python can never actually use. Revisit if/when that gap is closed.
      */
-    public static final Set<String> SUPPORTED_LLM_PROVIDERS = Set.of("openai", "google", "groq", "mistral");
+    public static final Set<String> SUPPORTED_LLM_PROVIDERS = Set.of("openai", "google");
 
     /** Default {@code maxAttempts} for a freshly-created verification job (plan.md "Verification lifecycle"). */
     private static final int DEFAULT_MAX_ATTEMPTS = 3;

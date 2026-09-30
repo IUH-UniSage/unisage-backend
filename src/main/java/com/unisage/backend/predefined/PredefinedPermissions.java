@@ -121,4 +121,30 @@ public final class PredefinedPermissions {
     // ─── Dashboard ──────────────────────────────────────────────────────────
     // Read-only aggregate view, same shape as SystemHealth: no _UPDATE/_ALL.
     public static final String DASHBOARD_READ = "DASHBOARD_READ";
+
+    // ─── UsageLog (Cost Tracking) ─────────────────────────────────────────
+    // Read-only: usage logs are only ever written by the internal ingest endpoint, never by an SA.
+    public static final String USAGE_LOG_READ = "USAGE_LOG_READ";
+
+    // ─── Budget (Cost Tracking) ───────────────────────────────────────────
+    public static final String BUDGET_ALL    = "BUDGET_ALL";
+    public static final String BUDGET_READ   = "BUDGET_READ";
+    public static final String BUDGET_CREATE = "BUDGET_CREATE";
+    public static final String BUDGET_UPDATE = "BUDGET_UPDATE";
+    public static final String BUDGET_DELETE = "BUDGET_DELETE";
+
+    // ─── Budget alert settings/history (Cost Tracking) ─────────────────────
+    // Different path prefixes than /budgets/**, so BUDGET_ALL doesn't cover them.
+    public static final String BUDGET_ALERT_SETTING_READ   = "BUDGET_ALERT_SETTING_READ";
+    public static final String BUDGET_ALERT_SETTING_UPDATE = "BUDGET_ALERT_SETTING_UPDATE";
+    public static final String BUDGET_ALERT_READ    = "BUDGET_ALERT_READ";
+    public static final String BUDGET_ALERT_DISMISS = "BUDGET_ALERT_DISMISS";
+
+    // ─── Model pricing (Cost Tracking) ─────────────────────────────────────
+    // CREATE covers both adding a manual price and POST /model-pricing/sync.
+    public static final String MODEL_PRICING_ALL    = "MODEL_PRICING_ALL";
+    public static final String MODEL_PRICING_READ   = "MODEL_PRICING_READ";
+    public static final String MODEL_PRICING_CREATE = "MODEL_PRICING_CREATE";
+    public static final String MODEL_PRICING_UPDATE = "MODEL_PRICING_UPDATE";
+    public static final String MODEL_PRICING_DELETE = "MODEL_PRICING_DELETE";
 }

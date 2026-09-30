@@ -405,14 +405,19 @@ tên class Java...) — chỉ dùng chúng trong tên file migration và tài li
 `PredefinedPublicPaths` cho `/internal/**` (bản trước của plan này yêu cầu vậy,
 sai và không nhất quán với plan kia).
 
-- Prefix `/internal/**`, khai báo tường minh từng method+path (không wildcard
-  rộng) trong `InternalSecretFilter.INTERNAL_ONLY_PATHS`: thiếu/sai secret →
-  403 `INTERNAL_SECRET_INVALID` ngay tại filter; secret đúng → filter set
-  request attribute `TRUSTED_INTERNAL_CALLER_ATTRIBUTE = TRUE`.
-  `DynamicAuthorizationManager` có nhánh riêng: path khớp `/internal/**` **và**
-  attribute đó `TRUE` → grant, **không** cần path nằm trong
-  `PredefinedPublicPaths` và không cần JWT. Path `/internal/**` thiếu attribute
-  (vd filter chưa chạy, bug thứ tự filter) → deny, kể cả JWT SA hợp lệ.
+- Prefix `/internal/**`. **Cập nhật khi implement Task 2 (thực tế khác giả định
+  ban đầu ở trên):** `InternalSecretFilter.INTERNAL_ONLY_PATHS` **đã** dùng
+  wildcard `("*", "/internal/**")` từ Model Registry Task 0.1, không phải danh
+  sách method+path tường minh từng endpoint — bất kỳ controller mới nào dưới
+  `/internal/**` tự động được bảo vệ, **không cần sửa filter** khi thêm
+  endpoint. Hành vi: thiếu/sai secret → 403 `INTERNAL_SECRET_INVALID` ngay tại
+  filter; secret đúng → filter set request attribute
+  `TRUSTED_INTERNAL_CALLER_ATTRIBUTE = TRUE` cho **mọi** request (không riêng
+  `/internal/**`). `DynamicAuthorizationManager` có nhánh riêng: path khớp
+  `/internal/**` **và** attribute đó `TRUE` → grant, **không** cần path nằm
+  trong `PredefinedPublicPaths` và không cần JWT. Path `/internal/**` thiếu
+  attribute (vd filter chưa chạy, bug thứ tự filter) → deny, kể cả JWT SA hợp
+  lệ.
 - Áp dụng chung với 7 endpoint của Model Registry: `InternalCallerCidrFilter`
   (CIDR fail-closed) và `InternalResponseHeadersFilter` (`Cache-Control:
   no-store` + `Pragma: no-cache` cho mọi response `/internal/**`, kể cả 3
@@ -495,37 +500,37 @@ với `RequestUsageLog`. Để 2 hệ thống độc lập (xem Open Questions).
 ## Task List
 
 ### Phase 0: Gate
-- [ ] Task 0: Nghiệm thu Model Registry + spike chốt nguồn usage/token
+- [x] Task 0: Nghiệm thu Model Registry + spike chốt nguồn usage/token
 
 ### Phase 1: Java — Data model, internal API, RBAC
-- [ ] Task 1: Entity `RequestUsageLog` + `RequestUsageLine` + migration
-- [ ] Task 2: Internal auth whitelist + `POST /internal/usage-logs` idempotent
-- [ ] Task 3: `Budget` + `BudgetAlertSetting` + `BudgetAlertLog` + CRUD + RBAC
-- [ ] Task 4: API dashboard/lịch sử/chi tiết + internal snapshot/period-totals
+- [x] Task 1: Entity `RequestUsageLog` + `RequestUsageLine` + migration
+- [x] Task 2: Internal auth whitelist + `POST /internal/usage-logs` idempotent
+- [x] Task 3: `Budget` + `BudgetAlertSetting` + `BudgetAlertLog` + CRUD + RBAC
+- [x] Task 4: API dashboard/lịch sử/chi tiết + internal snapshot/period-totals
 
 ### Phase 2: Python — Đo usage & outbox
-- [ ] Task 5: `cost_calculator` (actual + estimate)
-- [ ] Task 6: `UsageRecorder` theo request, ghi line cho mọi call Chat
-- [ ] Task 7: Outbox Redis + worker drain về Java
-- [ ] Task 8: Extraction + Embedding ghi usage
+- [x] Task 5: `cost_calculator` (actual + estimate)
+- [x] Task 6: `UsageRecorder` theo request, ghi line cho mọi call Chat
+- [x] Task 7: Outbox Redis + worker drain về Java
+- [x] Task 8: Extraction + Embedding ghi usage
 
 ### Phase 3: Python — Budget enforcement (soft limit + reservation)
-- [ ] Task 9: Lua reserve/settle request + acquire/release provider + budget snapshot
-- [ ] Task 10: Gắn reservation vào Chat/Extraction/Embedding + acquire/release trong router
-- [ ] Task 11: Đối soát + release reservation treo
-- [ ] Task 11b: Deploy Celery worker/beat, Redis AOF, health outbox, replay dead-letter
+- [x] Task 9: Lua reserve/settle request + acquire/release provider + budget snapshot
+- [x] Task 10: Gắn reservation vào Chat/Extraction/Embedding + acquire/release trong router
+- [x] Task 11: Đối soát + release reservation treo
+- [x] Task 11b: Deploy Celery worker/beat, Redis AOF, health outbox, replay dead-letter
 
 ### Phase 4: Cảnh báo (Java)
-- [ ] Task 12: Job phát hiện ngưỡng + spike, claim atomic
-- [ ] Task 13: Gửi In-app/Email/Slack (env)
+- [x] Task 12: Job phát hiện ngưỡng + spike, claim atomic
+- [x] Task 13: Gửi In-app/Email/Slack (env)
 
 ### Phase 5: unisage-web
-- [ ] Task 14: Wiring (route, registry, permission, api client, query keys, schema)
-- [ ] Task 15: Tab Tổng quan
-- [ ] Task 16: Tab Ngân sách & Giới hạn
-- [ ] Task 17: Tab Cảnh báo + `BudgetAlertBanner`
-- [ ] Task 18: Tab Bảng giá
-- [ ] Task 19: Tab Lịch sử sử dụng + drawer
+- [x] Task 14: Wiring (route, registry, permission, api client, query keys, schema)
+- [x] Task 15: Tab Tổng quan
+- [x] Task 16: Tab Ngân sách & Giới hạn
+- [x] Task 17: Tab Cảnh báo + `BudgetAlertBanner`
+- [x] Task 18: Tab Bảng giá
+- [x] Task 19: Tab Lịch sử sử dụng + drawer
 
 ### Checkpoint: Hoàn chỉnh
 - [ ] Toàn bộ test ở mục "Test bắt buộc" pass
