@@ -71,40 +71,58 @@ unisage-gateway/dataset/
 | `source_page` | Trang HTML chứa link |
 | `unit` | Đơn vị (phòng/khoa/cơ sở) suy ra từ domain/đường dẫn |
 | `campus` | Cơ sở (`HCM`, hoặc tên tỉnh) |
-| `department_id` | Department gán cho tài liệu |
+| `department_id` | **Mã** department do backend seed (`departments.name`, vd `PHONG_DAO_TAO`); UUID tra ở bước ingest |
 | `is_public` | `true`/`false` |
 | `access_level` | Số nguyên; **để trống khi `is_public=true`** |
 | `pages`, `size_bytes`, `sha256`, `local_path`, `crawled_at` | Metadata file |
 | `text_chars` | Số ký tự text trích được (phát hiện PDF scan, ước tính token) |
 | `quality` | `ok` (ở `files/`), còn lại ở `scanned_pdf/`: `scanned`, `garbled_ocr`, `no_diacritics`, `broken_encoding`. Gán bởi `evals.crawl.triage` |
 | `selected` | `true` nếu được chọn ingest (chốt ở Task 3 sau khi dự trù chi phí) |
+| `label_source` | `auto` (do `evals.label` gán) hoặc `manual` (người sửa tay, không bị ghi đè) |
 | `ingest_status`, `document_id` | Trạng thái nạp vào hệ thống |
 
-Quy tắc nhãn: `department_id` lấy từ bảng `departments` của backend, map từ đơn vị phát hành (bảng map `unit → department_id` trong `evals/label_map.yaml`, người duyệt); khoảng 30% tài liệu
-mỗi department được chuyển thành `is_public=false` với `access_level` giả lập.
+Quy tắc nhãn (`evals.label`, cấu hình `evals/label_map.yaml`): map đơn vị phát hành → mã
+department của backend; trong mỗi nhóm (department, `quality=ok` hay không) khoảng 30%
+tài liệu thành `is_public=false` với `access_level` ngẫu nhiên 1–4 (seed cố định);
+mức 0 bị loại để mọi tài liệu private đều có persona "thiếu 1 bậc", mức 5 để dành cho admin.
+Một số đơn vị hướng ra công chúng (trang chính, tuyển sinh, cẩm nang) luôn public.
 Quy tắc hiển thị khớp `app/rag/vectorstore/qdrant_store.py`: chunk thấy được
 khi `is_public`, hoặc user có entry cùng department (hoặc `*`) với
 `access_level ≥` của chunk.
 
 ### 3.4. `questions.jsonl`
 
-Khoảng **300 câu**, LLM sinh từ tài liệu, người duyệt tay ≥ 20%.
+**297 dòng** (263 ô, 2 ô bị bỏ; 12 câu `access` × 4 persona), sinh ngày 30-09-2026 bởi
+`evals.questions.plan` → subagent Claude viết câu hỏi từ trích đoạn PDF →
+`evals.questions.build`. Người duyệt tay ≥ 20% qua `questions_review.csv`.
 
 ```json
-{"id": "q0042", "category": "access", "question": "...",
- "expected_answer": "...", "expected_doc_ids": ["a1b2c3d4e5f6"],
- "expected_intent": "rag",
- "asker": {"department_access": [{"department_id": "phong-tai-chinh", "access_level": 1}]},
- "expect_visible": false, "reviewed": true}
+{"id": "q0002", "slot_id": "acc-001", "category": "access", "question": "...",
+ "expected_answer": "...", "evidence": "<trích nguyên văn>", "evidence_found": true,
+ "expected_doc_ids": ["a1b2c3d4e5f6"], "expected_intent": "academic_advisory",
+ "department_id": "KHOA_LUAT_KHCT", "doc_is_public": false, "doc_access_level": 3,
+ "persona": "same_department_one_level_below",
+ "asker": {"department_access": [{"department_id": "KHOA_LUAT_KHCT", "access_level": 2}]},
+ "expect_visible": false, "reviewed": false, "generator": "..."}
 ```
+
+- `expected_intent` dùng đúng nhãn của graph: `academic_advisory`,
+  `academic_calculation`, `off_topic`, `social_chat`.
+- `evidence_found`: `build.py` kiểm tra trích dẫn có nằm nguyên văn trong trích
+  đoạn không (chuẩn hóa khoảng trắng + Unicode NFC). Hiện 191/191 câu có nguồn (227 dòng) đều khớp.
+- Persona: tài liệu public → `guest` (không quyền); tài liệu private → cùng
+  department đúng mức. Nhóm `access` có 4 persona: đúng mức (thấy), thiếu 1 bậc
+  (không thấy), department khác mức 5 (không thấy), `*` mức 5 (thấy).
+- File trung gian để build lại: `dataset/question_work/` (`slots.jsonl`,
+  `answers/`, `review_notes.json`; `excerpts/` bị gitignore vì `plan.py` tạo lại được).
 
 | `category` | Số lượng dự kiến | Kiểm tra |
 |---|---|---|
-| `normal` | ~150 | Truy xuất + trả lời thường, gồm câu nhiều ý |
-| `calculation` | ~30 | Tính học phí, tín chỉ, GPA |
-| `unanswerable` | ~40 | Không có trong tài liệu → phải từ chối / ticket |
-| `access` | ~50 | Cùng một câu hỏi với nhiều persona (đủ quyền, thiếu 1 bậc, khác department, `*`) |
-| `off_topic` / `social` | ~30 | Phân loại intent đúng |
+| `normal` | 149 | Truy xuất + trả lời thường, gồm câu nhiều ý |
+| `calculation` | 30 | Tính tín chỉ, học phí, số ngày, tỷ lệ… (vài ô thành câu sự kiện, xem ghi chú review) |
+| `unanswerable` | 40 | Không có trong tài liệu → phải từ chối / ticket |
+| `access` | 48 (12 × 4) | Cùng một câu hỏi với 4 persona |
+| `off_topic` / `social` | 18 / 12 | Phân loại intent đúng |
 
 ## 4. Tiêu chí đánh giá
 

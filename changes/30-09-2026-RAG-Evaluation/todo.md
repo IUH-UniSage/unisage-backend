@@ -179,23 +179,25 @@ department thành private (chọn ngẫu nhiên có seed cố định) với `ac
 giả lập. Không ghi đè nhãn người đã sửa tay (cột `label_source=manual`).
 
 **Acceptance criteria:**
-- [ ] 100% dòng có nhãn; `is_public=true` ⇒ `access_level` rỗng
-- [ ] Mọi `department_id` tồn tại trong bảng `departments`
-- [ ] Mỗi department có ít nhất 1 tài liệu private (nếu có ≥ 2 tài liệu)
-- [ ] Chạy lại với cùng seed ra cùng kết quả
+- [x] 100% dòng có nhãn; `is_public=true` ⇒ `access_level` rỗng
+- [x] Mọi `department_id` là mã department có trong `DataInitializer.seedDepartments()` (kiểm tra bằng `known_departments` trong `label_map.yaml`)
+- [x] Mỗi department có ít nhất 1 tài liệu private (nếu có ≥ 2 tài liệu), trừ đơn vị `force_public`
+- [x] Chạy lại với cùng seed ra cùng kết quả
 
 **Verification:**
-- [ ] Tests pass: `pytest tests/evals/test_label.py`
+- [x] Tests pass: `pytest tests/evals/test_label.py`
 
 **Dependencies:** Checkpoint 2
 
-**Files likely touched:** `evals/label.py`, `evals/label_map.yaml`, `tests/evals/test_label.py`
+**Files touched:** `evals/label.py`, `evals/label_map.yaml`, `evals/crawl/download.py` (cột `label_source`), `tests/evals/test_label.py`
+
+**Kết quả (30-09-2026, làm trước Checkpoint 1 theo yêu cầu người dùng):** 1.929 dòng có nhãn; trong 1.111 file `quality=ok` có 329 private (~30%, mức 1/2/3/4 = 83/79/79/88), 28 department. `department_id` lưu **mã department** (vd `PHONG_DAO_TAO`), không phải UUID: UUID sinh ngẫu nhiên khi seed DB nên phải tra ở bước ingest (Task 7). Giả định map (người dùng cần duyệt `label_map.yaml`): trang chính trường → `PHONG_TO_CHUC_HANH_CHINH`, tuyển sinh → `PHONG_DAO_TAO`, cẩm nang người học và TT Kết nối doanh nghiệp → `PHONG_CTSV`, TT Ngoại ngữ - Tin học → `TT_NGOAI_NGU`; ba đơn vị đầu luôn public.
 
 **Estimated scope:** S
 
 ### Task 7: Ingest hàng loạt theo manifest
 
-**Description:** `evals/ingest.py` dùng đường nạp đã làm ở Task 4 (đường B), nạp từng
+**Description:** `evals/ingest.py` dùng đường nạp đã làm ở Task 4 (đường B), tra UUID department từ mã (`department_id` trong manifest) qua DB/API backend, nạp từng
 dòng manifest có `selected=true` (chốt ở Task 3) và chưa `done`, cập nhật `ingest_status` và `document_id`. PDF parse
 ra rỗng thì đánh dấu `empty_text`.
 
@@ -239,7 +241,9 @@ department, gọi LLM rẻ sinh câu hỏi + đáp án chuẩn cho các nhóm `n
 
 **Dependencies:** Task 7
 
-**Files likely touched:** `evals/questions/generate.py`, `evals/questions/prompts.py`, `evals/questions/schema.py`, `tests/evals/test_questions_schema.py`
+**Files touched:** `evals/questions/plan.py`, `evals/questions/build.py`, `tests/evals/test_questions.py`
+
+**Kết quả (30-09-2026, làm trước ingest theo yêu cầu người dùng):** không có API key LLM trên máy nên câu hỏi do **subagent Claude** viết từ trích đoạn PDF (thay cho `generate.py` gọi API). `plan.py` đặt `selected=true` theo phương án B (`quality=ok`, ≤ 100 trang: 1.085 file) — **chưa được người dùng chốt ở Checkpoint 1**. 263 ô → 297 dòng (`dataset/questions.jsonl`); 191/191 trích dẫn khớp nguyên văn; 2 ô bị bỏ (danh sách giảng viên kèm ngày sinh; biểu mẫu font VNI). Câu `unanswerable` chưa được kiểm tra bằng truy xuất thật — cần kiểm lại sau ingest.
 
 **Estimated scope:** M
 
@@ -260,7 +264,11 @@ và ghi lại `reviewed=true`.
 
 **Dependencies:** Task 8
 
-**Files likely touched:** `evals/questions/personas.py`, `tests/evals/test_personas.py`
+**Files touched:** `evals/questions/build.py` (persona + bảng duyệt), `tests/evals/test_questions.py`
+
+**Trạng thái:** 4 persona đã sinh (24 thấy / 24 không thấy). Bảng duyệt `dataset/questions_review.csv` (21 dòng có `review_note` xếp đầu: phép tính quá dễ, câu dựa trên biểu mẫu/mục lục, nguồn font VNI...). **Chờ người dùng duyệt ≥ 20%.**
+
+**Việc phát sinh:** triage chưa phát hiện PDF dùng **font VNI/TCVN3 cũ** (text dạng "Hß trÿ 70% hßc phí"); cần thêm luật vào `evals/crawl/triage.py` trước khi ingest.
 
 **Estimated scope:** S
 
