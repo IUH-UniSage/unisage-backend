@@ -23,7 +23,7 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 public class ModelProviderSupportCatalog {
 
     static final String RESOURCE = "model-provider-support.yml";
-    private static final Set<String> STATUSES = Set.of("tested", "paid", "restricted", "unsupported");
+    private static final Set<String> STATUSES = Set.of("tested", "paid", "restricted", "inferred", "unsupported");
 
     private final Map<String, List<String>> providerDefaults = new HashMap<>();
     private final Map<String, Support> models = new HashMap<>();

@@ -16,14 +16,14 @@ Có ý kiến để nút "Đồng bộ" ghi luôn một file YAML chứa cả ha
 
 ## Decision
 
-### 1. Danh sách provider: `src/main/resources/model-provider-support.yml`, sửa tay và commit
+### 1. Danh sách provider: `src/main/resources/model-provider-support.yml`, sinh bằng script và commit
 
 `ModelProviderSupportCatalog` đọc file này lúc khởi động; file sai định dạng thì app không lên. File có hai phần:
 
 - `providers`: giá trị mặc định theo nhà cung cấp, ví dụ `deepseek: [openai]` cho các API tương thích OpenAI.
-- `models`: kết quả gọi thử từng model, gồm `providers`, `status` (`tested`, `paid`, `restricted`, `unsupported`), `note`, `is_deprecated`.
+- `models`: một entry cho **mọi** model mà đồng bộ lưu vào DB (khoảng 3.700 model tính giá theo token), gồm `providers`, `status` (`tested`, `paid`, `restricted`, `inferred`, `unsupported`), `note`, `is_deprecated`, `probed_at`.
 
-Đồng bộ **không** ghi file này. Khi có model mới thì chạy lại script gọi thử rồi commit.
+`scripts/model-provider-support/generate.py` sinh lại phần `models` từ file giá LiteLLM, theo đúng quy tắc lọc của `LiteLlmPriceParser`. Script giữ nguyên các entry có `probed_at` (đã gọi thử thật). Các entry còn lại được suy ra: model không phải chat/embedding thì `unsupported` kèm lý do, còn lại lấy theo `providers`. Đồng bộ **không** ghi file này. Khi LiteLLM có model mới thì chạy lại script rồi commit; muốn kiểm chứng model nào thì gọi thử, ghi `status` và `probed_at` bằng tay.
 
 ### 2. Ngừng hỗ trợ: cột `model_prices.deprecation_date`, đồng bộ từ LiteLLM
 
@@ -43,7 +43,7 @@ Mỗi dòng trả về có thêm `supportedProviders`, `supportStatus`, `support
 
 **Tiêu cực / rủi ro**:
 
-- Danh sách provider sẽ cũ dần nếu không ai chạy lại script gọi thử. Model chưa có trong file sẽ rơi về giá trị mặc định theo nhà cung cấp (`inferred`), và giao diện ghi rõ là "chưa test".
+- Danh sách sẽ cũ dần nếu không ai chạy lại script sinh file. Model mới chưa có trong file sẽ rơi về giá trị mặc định theo nhà cung cấp (`inferred`), và giao diện ghi rõ là "chưa test". File khoảng 430 KB, mỗi model một dòng để diff dễ đọc.
 - Trạng thái `paid` là giả định: lúc test bị chặn vì key free hoặc tài khoản hết số dư, chưa kiểm chứng với gói trả phí.
 
 ## Alternatives considered
