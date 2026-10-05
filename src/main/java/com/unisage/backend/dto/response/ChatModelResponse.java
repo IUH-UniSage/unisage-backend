@@ -23,11 +23,12 @@ public record ChatModelResponse(
     Boolean hasApiKey,
     String apiBaseUrl,
     Integer maxRpm,
+    Integer maxConcurrency,
     Integer priority,
     Integer errorCount,
     LocalDateTime lastErrorAt,
     String lastErrorCode,
-    /** True when there's a candidate awaiting verification/promotion (an open QUEUED/RUNNING job). */
+    String lastErrorMessage,
     Boolean hasPendingChange,
     ChatModelVerificationSummary latestVerification,
     Boolean isActive,

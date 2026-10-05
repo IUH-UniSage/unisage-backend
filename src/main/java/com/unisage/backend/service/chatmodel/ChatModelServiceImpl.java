@@ -57,7 +57,7 @@ public class ChatModelServiceImpl implements ChatModelService {
      * codebase has no SSRF-pinned equivalent for — allowing it here would let an SA create a
      * credential Python can never actually use. Revisit if/when that gap is closed.
      */
-    public static final Set<String> SUPPORTED_LLM_PROVIDERS = Set.of("openai", "google");
+    public static final Set<String> SUPPORTED_LLM_PROVIDERS = Set.of("openai", "google", "zai");
 
     /** Default {@code maxAttempts} for a freshly-created verification job (plan.md "Verification lifecycle"). */
     private static final int DEFAULT_MAX_ATTEMPTS = 3;
@@ -91,6 +91,7 @@ public class ChatModelServiceImpl implements ChatModelService {
                 .apiKeyEncrypted(request.apiKey())
                 .apiBaseUrl(request.apiBaseUrl())
                 .maxRpm(request.maxRpm())
+                .maxConcurrency(request.maxConcurrency())
                 .priority(request.priority())
                 .errorCount(0)
                 .build();
@@ -145,16 +146,12 @@ public class ChatModelServiceImpl implements ChatModelService {
 
         validateCredentialShape(request.sourceType(), request.llmProvider(), effectiveHasKey);
 
-        // ── Non-credential fields apply immediately, no verify needed (plan.md footnote: only
-        // apiKey/apiBaseUrl/llmModelName/llmProvider/modelSourceRef are staged). ────────────────
-        // Only `priority` bumps the registry version here: Python sorts credentials by priority
-        // within a purpose, so a priority change can change routing order. `maxRpm` is parsed by
-        // unisage-agent (app/core/model_registry.py) but nothing there reads it yet for
-        // routing/rate-limiting (Task 9/10 territory, not built) — bumping on it today would only
-        // be reload churn with no behavioral effect. Revisit this once Task 9/10 lands.
-        boolean snapshotAffectingChange = !Objects.equals(model.getPriority(), request.priority());
+        boolean snapshotAffectingChange = !Objects.equals(model.getPriority(), request.priority())
+                || !Objects.equals(model.getMaxRpm(), request.maxRpm())
+                || !Objects.equals(model.getMaxConcurrency(), request.maxConcurrency());
         model.setSourceType(request.sourceType());
         model.setMaxRpm(request.maxRpm());
+        model.setMaxConcurrency(request.maxConcurrency());
         model.setPriority(request.priority());
         model.setDisplayName(request.displayName());
 
@@ -535,10 +532,12 @@ public class ChatModelServiceImpl implements ChatModelService {
                 .hasApiKey(StringUtils.hasText(chatModel.getApiKeyEncrypted()))
                 .apiBaseUrl(chatModel.getApiBaseUrl())
                 .maxRpm(chatModel.getMaxRpm())
+                .maxConcurrency(chatModel.getMaxConcurrency())
                 .priority(chatModel.getPriority())
                 .errorCount(chatModel.getErrorCount())
                 .lastErrorAt(chatModel.getLastErrorAt())
                 .lastErrorCode(chatModel.getLastErrorCode())
+                .lastErrorMessage(chatModel.getLastErrorMessage())
                 .hasPendingChange(hasPendingChange)
                 .latestVerification(latestJob != null ? toVerificationSummary(latestJob) : null)
                 .isActive(chatModel.getIsActive())

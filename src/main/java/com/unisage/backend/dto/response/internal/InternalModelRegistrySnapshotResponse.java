@@ -59,7 +59,8 @@ public record InternalModelRegistrySnapshotResponse(
         String apiBaseUrl,
         String apiKey,
         Integer priority,
-        Integer maxRpm
+        Integer maxRpm,
+        Integer maxConcurrency
     ) {
         @Override
         public String toString() {
@@ -71,7 +72,8 @@ public record InternalModelRegistrySnapshotResponse(
                     + ", displayName=" + displayName
                     + ", apiBaseUrl=" + apiBaseUrl
                     + ", apiKey=REDACTED, priority=" + priority
-                    + ", maxRpm=" + maxRpm + "]";
+                    + ", maxRpm=" + maxRpm
+                    + ", maxConcurrency=" + maxConcurrency + "]";
         }
     }
 }

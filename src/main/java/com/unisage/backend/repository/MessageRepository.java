@@ -37,15 +37,19 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
         """, nativeQuery = true)
     long countAssistantWithCitationsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    /** UNISAGE-72: dashboard's weekly activity chart - one row per day since {@code from}. */
+    /**
+     * UNISAGE-72: dashboard's weekly activity chart - one row per day since {@code from} (UTC),
+     * days cut in {@code zone} ({@code created_at} is stored as UTC).
+     */
     @Query(value = """
-        SELECT CAST(created_at AS date) AS day, COUNT(*) AS count
+        SELECT CAST((created_at AT TIME ZONE 'UTC') AT TIME ZONE :zone AS date) AS day, COUNT(*) AS count
         FROM messages
         WHERE role = 'ASSISTANT' AND created_at >= :from
         GROUP BY day
         ORDER BY day
         """, nativeQuery = true)
-    List<DailyMessageCount> countDailyAssistantMessagesSince(@Param("from") LocalDateTime from);
+    List<DailyMessageCount> countDailyAssistantMessagesSince(
+            @Param("from") LocalDateTime from, @Param("zone") String zone);
 
     /** Bulk delete for the guest-session cleanup job — bypasses conversation-by-conversation loading. */
     @Modifying

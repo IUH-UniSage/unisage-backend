@@ -124,6 +124,7 @@ public class ModelRegistryInternalServiceImpl implements ModelRegistryInternalSe
                 model.getApiBaseUrl(),
                 model.getApiKeyEncrypted(),
                 model.getPriority(),
-                model.getMaxRpm());
+                model.getMaxRpm(),
+                model.getMaxConcurrency());
     }
 }

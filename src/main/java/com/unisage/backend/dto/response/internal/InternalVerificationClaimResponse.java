@@ -40,7 +40,8 @@ public record InternalVerificationClaimResponse(
         String modelSourceRef,
         String apiBaseUrl,
         String apiKey,
-        Integer maxRpm
+        Integer maxRpm,
+        Integer maxConcurrency
     ) {
         @Override
         public String toString() {
@@ -51,7 +52,8 @@ public record InternalVerificationClaimResponse(
                     + ", modelName=" + modelName
                     + ", modelSourceRef=" + modelSourceRef
                     + ", apiBaseUrl=" + apiBaseUrl
-                    + ", apiKey=REDACTED, maxRpm=" + maxRpm + "]";
+                    + ", apiKey=REDACTED, maxRpm=" + maxRpm
+                    + ", maxConcurrency=" + maxConcurrency + "]";
         }
     }
 }
