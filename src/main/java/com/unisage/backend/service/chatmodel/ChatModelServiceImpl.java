@@ -145,14 +145,8 @@ public class ChatModelServiceImpl implements ChatModelService {
 
         validateCredentialShape(request.sourceType(), request.llmProvider(), effectiveHasKey);
 
-        // ── Non-credential fields apply immediately, no verify needed (plan.md footnote: only
-        // apiKey/apiBaseUrl/llmModelName/llmProvider/modelSourceRef are staged). ────────────────
-        // Only `priority` bumps the registry version here: Python sorts credentials by priority
-        // within a purpose, so a priority change can change routing order. `maxRpm` is parsed by
-        // unisage-agent (app/core/model_registry.py) but nothing there reads it yet for
-        // routing/rate-limiting (Task 9/10 territory, not built) — bumping on it today would only
-        // be reload churn with no behavioral effect. Revisit this once Task 9/10 lands.
-        boolean snapshotAffectingChange = !Objects.equals(model.getPriority(), request.priority());
+        boolean snapshotAffectingChange = !Objects.equals(model.getPriority(), request.priority())
+                || !Objects.equals(model.getMaxRpm(), request.maxRpm());
         model.setSourceType(request.sourceType());
         model.setMaxRpm(request.maxRpm());
         model.setPriority(request.priority());

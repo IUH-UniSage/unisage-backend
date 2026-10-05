@@ -354,10 +354,9 @@ class ChatModelRotationTest {
     }
 
     @Test
-    void maxRpmOnlyEdit_appliesImmediately_doesNotBump() {
-        // Decision (Task 7 audit): unisage-agent parses maxRpm into its registry dataclass but
-        // nothing there reads it for routing/rate-limiting yet (Task 9/10 territory) -- so a
-        // maxRpm-only edit is pure reload churn with no behavioral effect. Only priority bumps.
+    void maxRpmOnlyEdit_appliesImmediately_bumpsExactlyOnce() {
+        // unisage-agent enforces maxRpm per credential before every provider call, so the edit
+        // has to reach its snapshot right away.
         ChatModel model = activeCloudRow();
         when(chatModelRepository.findByIdForUpdate(model.getId())).thenReturn(Optional.of(model));
 
@@ -365,7 +364,7 @@ class ChatModelRotationTest {
         chatModelService.update(model.getId(), request);
 
         assertThat(model.getMaxRpm()).isEqualTo(999);
-        verify(modelRegistryVersionService, never()).bump();
+        verify(modelRegistryVersionService, org.mockito.Mockito.times(1)).bump();
     }
 
     @Test
