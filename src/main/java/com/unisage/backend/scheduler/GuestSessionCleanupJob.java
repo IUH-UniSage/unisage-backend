@@ -30,7 +30,7 @@ public class GuestSessionCleanupJob {
 
     private final GuestSessionService guestSessionService;
 
-    @Scheduled(cron = "${app.guest-session.cleanup.cron:0 0 3 * * *}")
+    @Scheduled(cron = "${app.guest-session.cleanup.cron:0 0 3 * * *}", zone = "${app.timezone:Asia/Ho_Chi_Minh}")
     public void purgeExpiredSessions() {
         int totalPurged = 0;
         int purgedThisBatch;
