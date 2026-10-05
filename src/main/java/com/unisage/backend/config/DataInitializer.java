@@ -549,7 +549,9 @@ public class DataInitializer implements CommandLineRunner {
             permKey(PredefinedPermissions.DOCUMENT_READ),
             permKey(PredefinedPermissions.DEPARTMENT_READ),
             permKey(PredefinedPermissions.CATEGORY_READ),
-            permKey(PredefinedPermissions.CHAT_MODEL_READ),
+            // No CHAT_MODEL_READ: chat never reads /chat-models (unisage-agent loads models
+            // through /internal with the shared secret), and the model configuration -
+            // providers, base URLs, error state - is admin-only information.
             permKey(PredefinedPermissions.USER_READ),
             permKey(PredefinedPermissions.USER_UPDATE)
         );
