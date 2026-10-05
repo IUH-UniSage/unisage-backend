@@ -4,6 +4,7 @@ import com.unisage.backend.entity.enums.ChatModelPurpose;
 import com.unisage.backend.entity.enums.ChatModelSourceType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.Builder;
 
 @Builder
@@ -30,8 +31,13 @@ public record ChatModelRequest(
     @NotBlank(message = "apiBaseUrl không được để trống")
     String apiBaseUrl,
 
-    @NotNull(message = "maxRpm không được để trống")
+    /** Requests per minute for this credential; null = no limit. */
+    @Positive(message = "maxRpm phải lớn hơn 0")
     Integer maxRpm,
+
+    /** In-flight requests at once for this credential; null = no limit. */
+    @Positive(message = "maxConcurrency phải lớn hơn 0")
+    Integer maxConcurrency,
 
     Integer priority
 ) {}

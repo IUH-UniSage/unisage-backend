@@ -252,4 +252,21 @@ class ChatModelServiceImplTest {
                 .extracting(e -> ((AppException) e).getErrorCode())
                 .isEqualTo(ErrorCode.CHAT_MODEL_PROVIDER_UNSUPPORTED);
     }
+
+    @Test
+    void create_withoutRateLimits_leavesBothUnlimited() {
+        ChatModelRequest request = ChatModelRequest.builder()
+                .modelPurpose(ChatModelPurpose.CHAT)
+                .sourceType(ChatModelSourceType.CLOUD_API)
+                .llmProvider("openai")
+                .llmModelName("gpt-4o-mini")
+                .apiKey("sk-abc123")
+                .apiBaseUrl("https://api.openai.com/v1")
+                .build();
+
+        var response = chatModelService.create(request);
+
+        assertThat(response.maxRpm()).isNull();
+        assertThat(response.maxConcurrency()).isNull();
+    }
 }

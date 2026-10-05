@@ -111,6 +111,7 @@ class ChatModelRotationTest {
                 .modelSourceRef(model.getModelSourceRef())
                 .apiBaseUrl(model.getApiBaseUrl())
                 .maxRpm(model.getMaxRpm())
+                .maxConcurrency(model.getMaxConcurrency())
                 .priority(model.getPriority());
     }
 
@@ -364,6 +365,19 @@ class ChatModelRotationTest {
         chatModelService.update(model.getId(), request);
 
         assertThat(model.getMaxRpm()).isEqualTo(999);
+        verify(modelRegistryVersionService, org.mockito.Mockito.times(1)).bump();
+    }
+
+    @Test
+    void maxConcurrencyOnlyEdit_appliesImmediately_bumpsExactlyOnce() {
+        ChatModel model = activeCloudRow();
+        when(chatModelRepository.findByIdForUpdate(model.getId())).thenReturn(Optional.of(model));
+
+        ChatModelUpdateRequest request = baseUpdateFrom(model).maxConcurrency(2).build();
+        chatModelService.update(model.getId(), request);
+
+        assertThat(model.getMaxConcurrency()).isEqualTo(2);
+        verify(chatModelVerificationRepository, never()).save(any());
         verify(modelRegistryVersionService, org.mockito.Mockito.times(1)).bump();
     }
 

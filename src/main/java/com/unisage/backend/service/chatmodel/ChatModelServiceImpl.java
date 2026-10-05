@@ -91,6 +91,7 @@ public class ChatModelServiceImpl implements ChatModelService {
                 .apiKeyEncrypted(request.apiKey())
                 .apiBaseUrl(request.apiBaseUrl())
                 .maxRpm(request.maxRpm())
+                .maxConcurrency(request.maxConcurrency())
                 .priority(request.priority())
                 .errorCount(0)
                 .build();
@@ -146,9 +147,11 @@ public class ChatModelServiceImpl implements ChatModelService {
         validateCredentialShape(request.sourceType(), request.llmProvider(), effectiveHasKey);
 
         boolean snapshotAffectingChange = !Objects.equals(model.getPriority(), request.priority())
-                || !Objects.equals(model.getMaxRpm(), request.maxRpm());
+                || !Objects.equals(model.getMaxRpm(), request.maxRpm())
+                || !Objects.equals(model.getMaxConcurrency(), request.maxConcurrency());
         model.setSourceType(request.sourceType());
         model.setMaxRpm(request.maxRpm());
+        model.setMaxConcurrency(request.maxConcurrency());
         model.setPriority(request.priority());
         model.setDisplayName(request.displayName());
 
@@ -529,6 +532,7 @@ public class ChatModelServiceImpl implements ChatModelService {
                 .hasApiKey(StringUtils.hasText(chatModel.getApiKeyEncrypted()))
                 .apiBaseUrl(chatModel.getApiBaseUrl())
                 .maxRpm(chatModel.getMaxRpm())
+                .maxConcurrency(chatModel.getMaxConcurrency())
                 .priority(chatModel.getPriority())
                 .errorCount(chatModel.getErrorCount())
                 .lastErrorAt(chatModel.getLastErrorAt())
