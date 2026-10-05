@@ -27,7 +27,7 @@ public record ChatModelResponse(
     Integer errorCount,
     LocalDateTime lastErrorAt,
     String lastErrorCode,
-    /** True when there's a candidate awaiting verification/promotion (an open QUEUED/RUNNING job). */
+    String lastErrorMessage,
     Boolean hasPendingChange,
     ChatModelVerificationSummary latestVerification,
     Boolean isActive,

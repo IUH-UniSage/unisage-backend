@@ -533,6 +533,7 @@ public class ChatModelServiceImpl implements ChatModelService {
                 .errorCount(chatModel.getErrorCount())
                 .lastErrorAt(chatModel.getLastErrorAt())
                 .lastErrorCode(chatModel.getLastErrorCode())
+                .lastErrorMessage(chatModel.getLastErrorMessage())
                 .hasPendingChange(hasPendingChange)
                 .latestVerification(latestJob != null ? toVerificationSummary(latestJob) : null)
                 .isActive(chatModel.getIsActive())
