@@ -18,8 +18,9 @@ import lombok.RequiredArgsConstructor;
 /**
  * Maps LiteLLM's {@code model_prices_and_context_window.json} to (provider, model) prices per 1M
  * tokens. Key naming differs per provider in that file: OpenAI models are bare
- * ({@code gpt-4o-mini}), Gemini API models are prefixed ({@code gemini/gemini-2.5-flash}) - the
- * prefix is stripped so the name matches what SA types into the model registry.
+ * ({@code gpt-4o-mini}), Gemini API and Z.ai models are prefixed ({@code gemini/gemini-2.5-flash},
+ * {@code zai/glm-4.6}) - the prefix is stripped so the name matches what SA types into the model
+ * registry.
  */
 @Component
 @RequiredArgsConstructor
@@ -33,7 +34,8 @@ public class LiteLlmPriceParser {
     /** LiteLLM's {@code litellm_provider} -> our provider id, and the key prefix to strip. */
     private static final Map<String, String[]> PROVIDERS = Map.of(
             "openai", new String[] {"openai", ""},
-            "gemini", new String[] {"google", "gemini/"});
+            "gemini", new String[] {"google", "gemini/"},
+            "zai", new String[] {"zai", "zai/"});
 
     private final ObjectMapper objectMapper;
 
@@ -70,7 +72,7 @@ public class LiteLlmPriceParser {
             prices.add(new ParsedPrice(mapping[0], modelName, input, output, cached));
         }
         if (prices.isEmpty()) {
-            throw new IllegalArgumentException("price map has no usable openai/google entries");
+            throw new IllegalArgumentException("price map has no usable openai/google/zai entries");
         }
         return new ParseResult(prices, rejected);
     }

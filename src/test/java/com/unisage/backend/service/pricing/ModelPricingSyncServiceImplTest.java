@@ -66,6 +66,11 @@ class ModelPricingSyncServiceImplTest extends PostgresIntegrationTest {
                                          "input_cost_per_token": 2e-08, "output_cost_per_token": 0},
               "gemini/gemini-2.5-flash": {"litellm_provider": "gemini", "mode": "chat",
                                           "input_cost_per_token": 3e-07, "output_cost_per_token": 2.5e-06},
+              "zai/glm-4.6": {"litellm_provider": "zai", "mode": "chat",
+                              "input_cost_per_token": 6e-07, "output_cost_per_token": 2.2e-06,
+                              "cache_read_input_token_cost": 1.1e-07},
+              "fireworks_ai/glm-5p1": {"litellm_provider": "fireworks_ai", "mode": "chat",
+                                       "input_cost_per_token": 1.4e-06},
               "gemini-2.5-flash": {"litellm_provider": "vertex_ai-language-models", "mode": "chat",
                                    "input_cost_per_token": 3e-07},
               "groq/llama-3.1-8b": {"litellm_provider": "groq", "mode": "chat", "input_cost_per_token": 5e-08},
@@ -94,18 +99,20 @@ class ModelPricingSyncServiceImplTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void sync_mapsOpenaiAndGeminiAndSkipsEverythingElse() {
+    void sync_mapsOpenaiGeminiAndZaiAndSkipsEverythingElse() {
         var result = service.sync();
 
-        assertThat(result.created()).isEqualTo(3);
+        assertThat(result.created()).isEqualTo(4);
         assertThat(result.rejected()).isEqualTo(1);
         assertThat(jdbcTemplate.queryForList(
                 "SELECT provider || '/' || model_name FROM model_prices ORDER BY 1", String.class))
-                .containsExactly("google/gemini-2.5-flash", "openai/gpt-4o-mini", "openai/text-embedding-3-small");
+                .containsExactly("google/gemini-2.5-flash", "openai/gpt-4o-mini", "openai/text-embedding-3-small",
+                        "zai/glm-4.6");
         assertThat(price("openai", "gpt-4o-mini", "input_per_million")).isEqualByComparingTo("0.15");
         assertThat(price("openai", "gpt-4o-mini", "cached_input_per_million")).isEqualByComparingTo("0.075");
         assertThat(price("google", "gemini-2.5-flash", "output_per_million")).isEqualByComparingTo("2.5");
-        assertThat(changeCount("SYNC_CREATE")).isEqualTo(3);
+        assertThat(price("zai", "glm-4.6", "cached_input_per_million")).isEqualByComparingTo("0.11");
+        assertThat(changeCount("SYNC_CREATE")).isEqualTo(4);
     }
 
     @Test
@@ -143,8 +150,8 @@ class ModelPricingSyncServiceImplTest extends PostgresIntegrationTest {
 
         assertThat(result.created()).isZero();
         assertThat(result.updated()).isZero();
-        assertThat(result.unchanged()).isEqualTo(3);
-        assertThat(changeCount(null)).isEqualTo(3);
+        assertThat(result.unchanged()).isEqualTo(4);
+        assertThat(changeCount(null)).isEqualTo(4);
         assertThat(timestamp("updated_at")).isEqualTo(updatedBefore);
         assertThat(timestamp("synced_at")).isAfterOrEqualTo(syncedBefore);
     }
@@ -161,7 +168,7 @@ class ModelPricingSyncServiceImplTest extends PostgresIntegrationTest {
         BODY.set("{}");
         assertSyncFails();
 
-        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM model_prices", Integer.class)).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM model_prices", Integer.class)).isEqualTo(4);
     }
 
     private void assertSyncFails() {
