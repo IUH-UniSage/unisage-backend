@@ -26,7 +26,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -274,8 +276,12 @@ public class ChatModelServiceImpl implements ChatModelService {
     @Override
     public PageResponse<List<ChatModelResponse>> getAll(
             String query, ChatModelPurpose modelPurpose, ChatModelStatus status, Boolean isActive, Pageable pageable) {
+        // priority is not unique, so without a unique tie-breaker the DB may order ties differently
+        // per page query and rows repeat/vanish across pages.
+        Pageable stablePageable = PageRequest.of(
+                pageable.getPageNumber(), pageable.getPageSize(), pageable.getSort().and(Sort.by("id")));
         Page<ChatModel> page = chatModelRepository.findAll(
-                buildSpec(query, modelPurpose, status, isActive), pageable);
+                buildSpec(query, modelPurpose, status, isActive), stablePageable);
         return PageResponse.fromPage(page, this::mapToResponse);
     }
 
