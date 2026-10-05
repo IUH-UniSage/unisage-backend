@@ -3,6 +3,7 @@ package com.unisage.backend.service.pricing;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -47,9 +48,10 @@ public class ModelPricingServiceImpl implements ModelPricingService {
     private final SecurityUtil securityUtil;
     private final JdbcTemplate jdbcTemplate;
     private final ModelRegistryVersionService modelRegistryVersionService;
+    private final ModelProviderSupportCatalog supportCatalog;
     private final Clock clock;
 
-    /** Filtered in memory: the table only holds openai/google chat and embedding models. */
+    /** Filtered in memory: the table holds LiteLLM's per-token price map, a few thousand rows. */
     @Override
     @Transactional(readOnly = true)
     public List<ModelPriceResponse> getAll(String provider, String query) {
@@ -59,7 +61,7 @@ public class ModelPricingServiceImpl implements ModelPricingService {
                 .filter(price -> providerFilter == null || price.getProvider().equals(providerFilter))
                 .filter(price -> queryFilter == null
                         || price.getModelName().toLowerCase(Locale.ROOT).contains(queryFilter))
-                .map(ModelPricingServiceImpl::toResponse)
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -217,7 +219,11 @@ public class ModelPricingServiceImpl implements ModelPricingService {
         return InternalModelPricingSnapshotResponse.builder().version(version).prices(prices).build();
     }
 
-    static ModelPriceResponse toResponse(ModelPrice price) {
+    ModelPriceResponse toResponse(ModelPrice price) {
+        ModelProviderSupportCatalog.Support support = supportCatalog.lookup(price.getProvider(), price.getModelName());
+        LocalDate deprecationDate = price.getDeprecationDate();
+        boolean deprecated = support.deprecated()
+                || (deprecationDate != null && !deprecationDate.isAfter(LocalDate.now(clock)));
         return ModelPriceResponse.builder()
                 .id(price.getId())
                 .provider(price.getProvider())
@@ -229,6 +235,11 @@ public class ModelPricingServiceImpl implements ModelPricingService {
                 .syncedAt(utc(price.getSyncedAt()))
                 .updatedAt(utc(price.getUpdatedAt()))
                 .updatedByEmail(price.getUpdatedBy() != null ? price.getUpdatedBy().getEmail() : null)
+                .supportedProviders(support.providers())
+                .supportStatus(support.status())
+                .supportNote(support.note())
+                .deprecationDate(deprecationDate)
+                .deprecated(deprecated)
                 .build();
     }
 

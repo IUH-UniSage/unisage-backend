@@ -61,7 +61,7 @@ class ModelPricingSyncServiceImplTest extends PostgresIntegrationTest {
               "sample_spec": {"litellm_provider": "openai", "mode": "chat", "input_cost_per_token": 0},
               "gpt-4o-mini": {"litellm_provider": "openai", "mode": "chat",
                               "input_cost_per_token": 1.5e-07, "output_cost_per_token": 6e-07,
-                              "cache_read_input_token_cost": 7.5e-08},
+                              "cache_read_input_token_cost": 7.5e-08, "deprecation_date": "2027-02-01"},
               "text-embedding-3-small": {"litellm_provider": "openai", "mode": "embedding",
                                          "input_cost_per_token": 2e-08, "output_cost_per_token": 0},
               "gemini/gemini-2.5-flash": {"litellm_provider": "gemini", "mode": "chat",
@@ -74,6 +74,10 @@ class ModelPricingSyncServiceImplTest extends PostgresIntegrationTest {
               "gemini-2.5-flash": {"litellm_provider": "vertex_ai-language-models", "mode": "chat",
                                    "input_cost_per_token": 3e-07},
               "groq/llama-3.1-8b": {"litellm_provider": "groq", "mode": "chat", "input_cost_per_token": 5e-08},
+              "deepseek-chat": {"litellm_provider": "deepseek", "mode": "chat", "input_cost_per_token": 1e-07},
+              "deepseek/deepseek-chat": {"litellm_provider": "deepseek", "mode": "chat",
+                                         "input_cost_per_token": 2.8e-07, "output_cost_per_token": 4.2e-07},
+              "dall-e-2": {"litellm_provider": "openai", "mode": "image_generation", "input_cost_per_image": 0.02},
               "dall-e-3": {"litellm_provider": "openai", "mode": "image_generation", "input_cost_per_token": 1e-06},
               "ft:gpt-4o-mini": {"litellm_provider": "openai", "mode": "chat", "input_cost_per_token": 3e-07},
               "gpt-broken": {"litellm_provider": "openai", "mode": "chat", "input_cost_per_token": 0.5}
@@ -99,20 +103,26 @@ class ModelPricingSyncServiceImplTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void sync_mapsOpenaiGeminiAndZaiAndSkipsEverythingElse() {
+    void sync_storesEveryPerTokenPriceUnderItsProvider() {
         var result = service.sync();
 
-        assertThat(result.created()).isEqualTo(4);
+        assertThat(result.created()).isEqualTo(9);
         assertThat(result.rejected()).isEqualTo(1);
         assertThat(jdbcTemplate.queryForList(
                 "SELECT provider || '/' || model_name FROM model_prices ORDER BY 1", String.class))
-                .containsExactly("google/gemini-2.5-flash", "openai/gpt-4o-mini", "openai/text-embedding-3-small",
-                        "zai/glm-4.6");
+                .containsExactly("deepseek/deepseek-chat", "fireworks_ai/glm-5p1", "google/gemini-2.5-flash",
+                        "groq/llama-3.1-8b", "openai/dall-e-3", "openai/gpt-4o-mini", "openai/text-embedding-3-small",
+                        "vertex_ai-language-models/gemini-2.5-flash", "zai/glm-4.6");
         assertThat(price("openai", "gpt-4o-mini", "input_per_million")).isEqualByComparingTo("0.15");
         assertThat(price("openai", "gpt-4o-mini", "cached_input_per_million")).isEqualByComparingTo("0.075");
         assertThat(price("google", "gemini-2.5-flash", "output_per_million")).isEqualByComparingTo("2.5");
         assertThat(price("zai", "glm-4.6", "cached_input_per_million")).isEqualByComparingTo("0.11");
-        assertThat(changeCount("SYNC_CREATE")).isEqualTo(4);
+        // The prefixed key is the provider's own entry and wins over the bare duplicate.
+        assertThat(price("deepseek", "deepseek-chat", "input_per_million")).isEqualByComparingTo("0.28");
+        assertThat(changeCount("SYNC_CREATE")).isEqualTo(9);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT deprecation_date::text FROM model_prices WHERE model_name = 'gpt-4o-mini'", String.class))
+                .isEqualTo("2027-02-01");
     }
 
     @Test
@@ -150,10 +160,26 @@ class ModelPricingSyncServiceImplTest extends PostgresIntegrationTest {
 
         assertThat(result.created()).isZero();
         assertThat(result.updated()).isZero();
-        assertThat(result.unchanged()).isEqualTo(4);
-        assertThat(changeCount(null)).isEqualTo(4);
+        assertThat(result.unchanged()).isEqualTo(9);
+        assertThat(changeCount(null)).isEqualTo(9);
         assertThat(timestamp("updated_at")).isEqualTo(updatedBefore);
         assertThat(timestamp("synced_at")).isAfterOrEqualTo(syncedBefore);
+    }
+
+    @Test
+    void sync_refreshesDeprecationDateWithoutHistoryEvenOnManualPrice() {
+        insertManual("openai", "gpt-4o-mini", "9.99");
+        service.sync();
+        int changes = changeCount(null);
+
+        BODY.set(FIXTURE.replace("2027-02-01", "2026-12-31"));
+        service.sync();
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT deprecation_date::text FROM model_prices WHERE model_name = 'gpt-4o-mini'", String.class))
+                .isEqualTo("2026-12-31");
+        assertThat(price("openai", "gpt-4o-mini", "input_per_million")).isEqualByComparingTo("9.99");
+        assertThat(changeCount(null)).isEqualTo(changes);
     }
 
     @Test
@@ -168,7 +194,7 @@ class ModelPricingSyncServiceImplTest extends PostgresIntegrationTest {
         BODY.set("{}");
         assertSyncFails();
 
-        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM model_prices", Integer.class)).isEqualTo(4);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM model_prices", Integer.class)).isEqualTo(9);
     }
 
     private void assertSyncFails() {

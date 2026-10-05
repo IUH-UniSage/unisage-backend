@@ -1,0 +1,616 @@
+# Which UniSage chat-model providers can call a priced model - read by ModelProviderSupportCatalog
+# and returned with every row of GET /model-pricing. Edited by hand and committed; the price sync
+# never writes it (deprecation dates come from LiteLLM into model_prices.deprecation_date instead).
+#
+# providers: provider-level default, for models without an entry under `models` (status "inferred",
+#   or "unsupported" when the provider is not listed). Key = model_prices.provider (LiteLLM's
+#   litellm_provider, "gemini" stored as "google"); value = chat-model providers that can call it.
+#   "openai" on a non-openai provider means: pick OpenAI with that provider's API Base URL.
+#   Only providers documented as OpenAI-compatible are listed. Gemini/Z.ai have no "callable via
+#   google/zai" lists: only Google serves the Gemini format (Vertex needs project auth that
+#   build_model() doesn't pass) and ZaiModel sends Z.ai-only params (extra_body.thinking).
+#
+# models: probed on 2026-10-05 through unisage-agent's build_model() (one short prompt per model
+#   and route; the OpenAI-compatible route answered exactly like the native one). Key = "<provider>/<model>".
+#   status: tested      - called successfully
+#           paid        - blocked only by billing during the probe (free-tier Gemini key, empty
+#                         Z.ai balance), assumed callable on a paid plan
+#           restricted  - the provider must grant access first
+#           unsupported - not callable by UniSage on any plan; `note` says why
+#   is_deprecated: true when the provider API itself reported the model as retired, even if
+#     LiteLLM has no deprecation_date for it.
+#   Re-probe and update when new models land in the price map.
+
+providers:
+  openai: [openai]
+  google: [google, openai]
+  zai: [zai, openai]
+  aihubmix: [openai]
+  baseten: [openai]
+  cerebras: [openai]
+  dashscope: [openai]
+  deepinfra: [openai]
+  deepseek: [openai]
+  fireworks_ai: [openai]
+  friendliai: [openai]
+  gmi: [openai]
+  groq: [openai]
+  hyperbolic: [openai]
+  lambda_ai: [openai]
+  lemonade: [openai]
+  minimax: [openai]
+  mistral: [openai]
+  moonshot: [openai]
+  nebius: [openai]
+  novita: [openai]
+  nscale: [openai]
+  nvidia_nim: [openai]
+  ollama: [openai]
+  openrouter: [openai]
+  ovhcloud: [openai]
+  perplexity: [openai]
+  sambanova: [openai]
+  scaleway: [openai]
+  together_ai: [openai]
+  vercel_ai_gateway: [openai]
+  volcengine: [openai]
+  wandb: [openai]
+  xai: [openai]
+
+models:
+  # openai
+  "openai/chat-latest":
+    providers: [openai]
+    status: tested
+  "openai/computer-use-preview":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/daybreak-blue-latest":
+    providers: []
+    status: restricted
+    note: "Cần OpenAI duyệt quyền truy cập"
+  "openai/daybreak-red-latest":
+    providers: []
+    status: restricted
+    note: "Cần OpenAI duyệt quyền truy cập"
+  "openai/gpt-3.5-turbo":
+    providers: [openai]
+    status: tested
+  "openai/gpt-3.5-turbo-0125":
+    providers: [openai]
+    status: tested
+  "openai/gpt-3.5-turbo-1106":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/gpt-3.5-turbo-16k":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4-0613":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4-1106-preview":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/gpt-4-turbo":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4-turbo-2024-04-09":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4.1":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4.1-2025-04-14":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4.1-mini":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4.1-mini-2025-04-14":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4.1-nano":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4.1-nano-2025-04-14":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4o":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4o-2024-05-13":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4o-2024-08-06":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4o-2024-11-20":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4o-audio-preview-2024-12-17":
+    providers: []
+    status: unsupported
+    note: "Model audio, không phải chat văn bản"
+  "openai/gpt-4o-audio-preview-2025-06-03":
+    providers: []
+    status: unsupported
+    note: "Model audio, không phải chat văn bản"
+  "openai/gpt-4o-mini":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4o-mini-2024-07-18":
+    providers: [openai]
+    status: tested
+  "openai/gpt-4o-mini-audio-preview-2024-12-17":
+    providers: []
+    status: unsupported
+    note: "Model audio, không phải chat văn bản"
+  "openai/gpt-4o-mini-search-preview":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/gpt-4o-search-preview":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/gpt-5":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5-2025-08-07":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5-chat":
+    providers: []
+    status: unsupported
+    note: "Không tồn tại trên API của nhà cung cấp"
+  "openai/gpt-5-chat-latest":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/gpt-5-codex":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/gpt-5-mini":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5-mini-2025-08-07":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5-nano":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5-nano-2025-08-07":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5-pro":
+    providers: []
+    status: unsupported
+    note: "Chỉ có Responses API, agent chưa hỗ trợ"
+  "openai/gpt-5-pro-2025-10-06":
+    providers: []
+    status: unsupported
+    note: "Chỉ có Responses API, agent chưa hỗ trợ"
+  "openai/gpt-5-search-api":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5-search-api-2025-10-14":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.1":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.1-2025-11-13":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.1-chat-latest":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/gpt-5.1-codex":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/gpt-5.1-codex-max":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/gpt-5.1-codex-mini":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/gpt-5.2":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.2-2025-12-11":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.2-chat-latest":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/gpt-5.2-codex":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/gpt-5.2-pro":
+    providers: []
+    status: unsupported
+    note: "Chỉ có Responses API, agent chưa hỗ trợ"
+  "openai/gpt-5.2-pro-2025-12-11":
+    providers: []
+    status: unsupported
+    note: "Chỉ có Responses API, agent chưa hỗ trợ"
+  "openai/gpt-5.3-chat-latest":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/gpt-5.3-codex":
+    providers: []
+    status: unsupported
+    note: "Chỉ có Responses API, agent chưa hỗ trợ"
+  "openai/gpt-5.4":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.4-2026-03-05":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.4-mini":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.4-mini-2026-03-17":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.4-nano":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.4-nano-2026-03-17":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.4-pro":
+    providers: []
+    status: unsupported
+    note: "Chỉ có Responses API, agent chưa hỗ trợ"
+  "openai/gpt-5.4-pro-2026-03-05":
+    providers: []
+    status: unsupported
+    note: "Chỉ có Responses API, agent chưa hỗ trợ"
+  "openai/gpt-5.5":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.5-2026-04-23":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.5-cyber":
+    providers: []
+    status: restricted
+    note: "Cần OpenAI duyệt quyền truy cập"
+  "openai/gpt-5.5-pro":
+    providers: []
+    status: unsupported
+    note: "Chỉ có Responses API, agent chưa hỗ trợ"
+  "openai/gpt-5.5-pro-2026-04-23":
+    providers: []
+    status: unsupported
+    note: "Chỉ có Responses API, agent chưa hỗ trợ"
+  "openai/gpt-5.6":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.6-cyber":
+    providers: []
+    status: restricted
+    note: "Cần OpenAI duyệt quyền truy cập"
+  "openai/gpt-5.6-luna":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.6-sol":
+    providers: [openai]
+    status: tested
+  "openai/gpt-5.6-terra":
+    providers: [openai]
+    status: tested
+  "openai/gpt-6-astra":
+    providers: [openai]
+    status: tested
+  "openai/gpt-6-luna":
+    providers: [openai]
+    status: tested
+  "openai/gpt-6-sol":
+    providers: [openai]
+    status: tested
+  "openai/gpt-6.1-sol":
+    providers: [openai]
+    status: tested
+  "openai/gpt-audio":
+    providers: []
+    status: unsupported
+    note: "Model audio, không phải chat văn bản"
+  "openai/gpt-audio-1.5":
+    providers: []
+    status: unsupported
+    note: "Model audio, không phải chat văn bản"
+  "openai/gpt-audio-2025-08-28":
+    providers: []
+    status: unsupported
+    note: "Model audio, không phải chat văn bản"
+  "openai/gpt-audio-mini":
+    providers: []
+    status: unsupported
+    note: "Model audio, không phải chat văn bản"
+  "openai/gpt-audio-mini-2025-12-15":
+    providers: []
+    status: unsupported
+    note: "Model audio, không phải chat văn bản"
+  "openai/gpt-daybreak-blue-latest":
+    providers: []
+    status: restricted
+    note: "Cần OpenAI duyệt quyền truy cập"
+  "openai/gpt-daybreak-red-latest":
+    providers: []
+    status: restricted
+    note: "Cần OpenAI duyệt quyền truy cập"
+  "openai/gpt-rosalind-research":
+    providers: []
+    status: restricted
+    note: "Cần OpenAI duyệt quyền truy cập"
+  "openai/o1":
+    providers: [openai]
+    status: tested
+  "openai/o1-2024-12-17":
+    providers: [openai]
+    status: tested
+  "openai/o1-pro":
+    providers: []
+    status: unsupported
+    note: "Chỉ có Responses API, agent chưa hỗ trợ"
+  "openai/o1-pro-2025-03-19":
+    providers: []
+    status: unsupported
+    note: "Chỉ có Responses API, agent chưa hỗ trợ"
+  "openai/o3":
+    providers: [openai]
+    status: tested
+  "openai/o3-2025-04-16":
+    providers: [openai]
+    status: tested
+  "openai/o3-deep-research":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "openai/o3-mini":
+    providers: [openai]
+    status: tested
+  "openai/o3-mini-2025-01-31":
+    providers: [openai]
+    status: tested
+  "openai/o3-pro":
+    providers: []
+    status: unsupported
+    note: "Chỉ có Responses API, agent chưa hỗ trợ"
+  "openai/o3-pro-2025-06-10":
+    providers: []
+    status: unsupported
+    note: "Chỉ có Responses API, agent chưa hỗ trợ"
+  "openai/o4-mini":
+    providers: [openai]
+    status: tested
+  "openai/o4-mini-2025-04-16":
+    providers: [openai]
+    status: tested
+  "openai/o4-mini-deep-research":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  # google
+  "google/deep-research-max-preview-04-2026":
+    providers: []
+    status: unsupported
+    note: "Agent Deep Research, chỉ gọi qua Interactions API"
+  "google/deep-research-preview-04-2026":
+    providers: []
+    status: unsupported
+    note: "Agent Deep Research, chỉ gọi qua Interactions API"
+  "google/deep-research-pro-preview-12-2025":
+    providers: []
+    status: unsupported
+    note: "Agent Deep Research, chỉ gọi qua Interactions API"
+  "google/gemini-2.5-computer-use-preview-10-2025":
+    providers: []
+    status: unsupported
+    note: "Cần bật tool computer-use"
+  "google/gemini-2.5-flash":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "google/gemini-2.5-flash-lite":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "google/gemini-2.5-pro":
+    providers: []
+    status: unsupported
+    note: "Đã ngừng hoặc không cấp cho tài khoản mới"
+    is_deprecated: true
+  "google/gemini-2.5-pro-preview-tts":
+    providers: []
+    status: unsupported
+    note: "Model chuyển văn bản thành giọng nói"
+  "google/gemini-3-flash-preview":
+    providers: [google, openai]
+    status: tested
+  "google/gemini-3.1-flash-lite":
+    providers: [google, openai]
+    status: tested
+  "google/gemini-3.1-flash-lite-preview":
+    providers: [google, openai]
+    status: tested
+  "google/gemini-3.1-pro-preview":
+    providers: [google, openai]
+    status: paid
+  "google/gemini-3.1-pro-preview-customtools":
+    providers: [google, openai]
+    status: paid
+  "google/gemini-3.5-flash":
+    providers: [google, openai]
+    status: tested
+  "google/gemini-3.5-flash-lite":
+    providers: [google, openai]
+    status: tested
+  "google/gemini-3.6-flash":
+    providers: [google, openai]
+    status: tested
+  "google/gemini-3.7-flash":
+    providers: [google, openai]
+    status: tested
+  "google/gemini-3.8-flash":
+    providers: [google, openai]
+    status: tested
+  "google/gemini-exp-1114":
+    providers: []
+    status: unsupported
+    note: "Không tồn tại trên API của nhà cung cấp"
+  "google/gemini-exp-1206":
+    providers: []
+    status: unsupported
+    note: "Không tồn tại trên API của nhà cung cấp"
+  "google/gemini-flash-latest":
+    providers: [google, openai]
+    status: tested
+  "google/gemini-flash-lite-latest":
+    providers: [google, openai]
+    status: tested
+  "google/gemini-gemma-2-27b-it":
+    providers: []
+    status: unsupported
+    note: "Không tồn tại trên API của nhà cung cấp"
+  "google/gemini-gemma-2-9b-it":
+    providers: []
+    status: unsupported
+    note: "Không tồn tại trên API của nhà cung cấp"
+  "google/gemini-omni-1.1-flash":
+    providers: [google, openai]
+    status: paid
+  "google/gemini-omni-flash-preview":
+    providers: [google, openai]
+    status: paid
+  "google/gemini-pro-latest":
+    providers: [google, openai]
+    status: paid
+  "google/gemini-robotics-er-2-preview":
+    providers: [google, openai]
+    status: tested
+  "google/gemini-robotics-er-2-streaming-preview":
+    providers: []
+    status: unsupported
+    note: "Chỉ chạy qua Live API (WebSocket)"
+  "google/gemma-3-27b-it":
+    providers: []
+    status: unsupported
+    note: "Không tồn tại trên API của nhà cung cấp"
+  "google/gemma-4-26b-a4b-it":
+    providers: [google, openai]
+    status: tested
+  "google/gemma-4-31b-it":
+    providers: [google, openai]
+    status: paid
+  "google/learnlm-1.5-pro-experimental":
+    providers: []
+    status: unsupported
+    note: "Không tồn tại trên API của nhà cung cấp"
+  "google/lyria-3-clip-preview":
+    providers: []
+    status: unsupported
+    note: "Model tạo nhạc, không phải chat văn bản"
+  "google/lyria-3-pro-preview":
+    providers: []
+    status: unsupported
+    note: "Model tạo nhạc, không phải chat văn bản"
+  "google/lyria-3.5":
+    providers: []
+    status: unsupported
+    note: "Model tạo nhạc, không phải chat văn bản"
+  "google/lyria-3.5-clip-preview":
+    providers: []
+    status: unsupported
+    note: "Không tồn tại trên API của nhà cung cấp"
+  "google/lyria-3.5-pro-preview":
+    providers: []
+    status: unsupported
+    note: "Không tồn tại trên API của nhà cung cấp"
+  "google/lyria-realtime-exp":
+    providers: []
+    status: unsupported
+    note: "Chỉ chạy qua Live API (WebSocket)"
+  # zai
+  "zai/glm-4-32b-0414-128k":
+    providers: [zai, openai]
+    status: paid
+  "zai/glm-4.5":
+    providers: [zai, openai]
+    status: paid
+  "zai/glm-4.5-air":
+    providers: [zai, openai]
+    status: paid
+  "zai/glm-4.5-airx":
+    providers: [zai, openai]
+    status: paid
+  "zai/glm-4.5-flash":
+    providers: [zai, openai]
+    status: tested
+  "zai/glm-4.5-x":
+    providers: [zai, openai]
+    status: paid
+  "zai/glm-4.5v":
+    providers: [zai, openai]
+    status: paid
+  "zai/glm-4.6":
+    providers: [zai, openai]
+    status: paid
+  "zai/glm-4.7":
+    providers: [zai, openai]
+    status: paid
+  "zai/glm-4.7-flash":
+    providers: [zai, openai]
+    status: tested
+  "zai/glm-5":
+    providers: [zai, openai]
+    status: paid
+  "zai/glm-5-code":
+    providers: [zai, openai]
+    status: paid
+  "zai/glm-5.1":
+    providers: [zai, openai]
+    status: paid
+  "zai/glm-5.2":
+    providers: [zai, openai]
+    status: paid
+  "zai/glm-5.3":
+    providers: [zai, openai]
+    status: paid
+  "zai/glm-5.3-flash":
+    providers: [zai, openai]
+    status: paid
