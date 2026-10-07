@@ -1,15 +1,19 @@
 package com.unisage.backend.service.conversation;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import com.unisage.backend.dto.request.SendMessageRequest;
+import com.unisage.backend.dto.request.StartTurnRequest;
 import com.unisage.backend.dto.request.UpdateMessageRequest;
+import com.unisage.backend.dto.response.ChatTurnResponse;
 import com.unisage.backend.dto.response.MessageResponse;
 import com.unisage.backend.entity.Conversation;
 import com.unisage.backend.entity.GuestSession;
@@ -36,6 +40,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -657,6 +662,108 @@ class MessageServiceImplTest {
                 .isInstanceOf(AppException.class)
                 .extracting(e -> ((AppException) e).getErrorCode())
                 .isEqualTo(ErrorCode.AUTH_UNAUTHORIZED);
+    }
+
+    // ── startTurn() ──────────────────────────────────────────────────────
+
+    @Test
+    void startTurn_savesUserThenAssistantPlaceholder() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        when(conversationRepository.findById(conversationId))
+                .thenReturn(Optional.of(conversation(conversationId, owner, null)));
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(List.of());
+
+        ChatTurnResponse response = messageService.startTurn(
+                new StartTurnRequest(conversationId, "hi"), owner.getId(), null);
+
+        ArgumentCaptor<Message> saved = ArgumentCaptor.forClass(Message.class);
+        verify(messageRepository, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(Message::getRole, Message::getStatus, Message::getContent)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(MsgRole.USER, MsgStatus.COMPLETED, "hi"),
+                        org.assertj.core.groups.Tuple.tuple(MsgRole.ASSISTANT, MsgStatus.STREAMING, ""));
+        assertThat(response.firstTurn()).isTrue();
+        assertThat(response.context()).isEmpty();
+        assertThat(response.userMessage().role()).isEqualTo(MsgRole.USER);
+        assertThat(response.assistantMessage().role()).isEqualTo(MsgRole.ASSISTANT);
+        verify(usageLimitService).checkAndConsumeQuestion(owner, null, "hi");
+    }
+
+    @Test
+    void startTurn_assistantPlaceholderIsStampedStrictlyAfterUserMessage() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        when(conversationRepository.findById(conversationId))
+                .thenReturn(Optional.of(conversation(conversationId, owner, null)));
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(List.of());
+        when(messageRepository.save(any(Message.class))).thenAnswer(invocation -> {
+            Message message = invocation.getArgument(0);
+            message.setCreatedAt(LocalDateTime.now());
+            return message;
+        });
+
+        for (int i = 0; i < 200; i++) {
+            ChatTurnResponse response = messageService.startTurn(
+                    new StartTurnRequest(conversationId, "hi"), owner.getId(), null);
+
+            LocalDateTime user = response.userMessage().createdAt().truncatedTo(ChronoUnit.MICROS);
+            LocalDateTime assistant = response.assistantMessage().createdAt().truncatedTo(ChronoUnit.MICROS);
+            assertThat(assistant).isAfter(user.plus(1, ChronoUnit.MICROS));
+        }
+    }
+
+    @Test
+    void startTurn_existingConversation_returnsCappedContextAndNotFirstTurn() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        when(conversationRepository.findById(conversationId))
+                .thenReturn(Optional.of(conversation(conversationId, owner, null)));
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId))
+                .thenReturn(buildMessages(conversationId, 25));
+        when(ticketRepository.findByMessageIdIn(any())).thenReturn(List.of());
+
+        ChatTurnResponse response = messageService.startTurn(
+                new StartTurnRequest(conversationId, "hi"), owner.getId(), null);
+
+        assertThat(response.firstTurn()).isFalse();
+        assertThat(response.context()).hasSize(20);
+        assertThat(response.context().get(19).content()).isEqualTo("msg-24");
+    }
+
+    @Test
+    void startTurn_overLimit_propagatesAndSavesNothing() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        when(conversationRepository.findById(conversationId))
+                .thenReturn(Optional.of(conversation(conversationId, owner, null)));
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(List.of());
+        doThrow(new AppException(ErrorCode.USAGE_LIMIT_EXCEEDED))
+                .when(usageLimitService).checkAndConsumeQuestion(any(), any(), any());
+
+        StartTurnRequest request = new StartTurnRequest(conversationId, "hi");
+
+        assertThatThrownBy(() -> messageService.startTurn(request, owner.getId(), null))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USAGE_LIMIT_EXCEEDED);
+        verify(messageRepository, never()).save(any(Message.class));
+    }
+
+    @Test
+    void startTurn_callerIsNotOwner_throwsUnauthorizedAndSavesNothing() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        when(conversationRepository.findById(conversationId))
+                .thenReturn(Optional.of(conversation(conversationId, owner, null)));
+
+        StartTurnRequest request = new StartTurnRequest(conversationId, "hi");
+
+        assertThatThrownBy(() -> messageService.startTurn(request, UUID.randomUUID(), null))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_UNAUTHORIZED);
+        verify(messageRepository, never()).save(any(Message.class));
     }
 
     // ── helpers ──────────────────────────────────────────────────────────

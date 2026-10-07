@@ -8,8 +8,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.unisage.backend.dto.request.SendMessageRequest;
+import com.unisage.backend.dto.request.StartTurnRequest;
 import com.unisage.backend.dto.request.UpdateMessageRequest;
 import com.unisage.backend.dto.response.ApiResponse;
+import com.unisage.backend.dto.response.ChatTurnResponse;
 import com.unisage.backend.dto.response.MessageResponse;
 import com.unisage.backend.security.InternalSecretFilter;
 import com.unisage.backend.service.conversation.MessageService;
@@ -45,6 +47,16 @@ public class MessageController {
         String guestSessionToken = extractGuestSessionToken(httpRequest);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(messageService.send(request, callerId, guestSessionToken)));
+    }
+
+    @PostMapping("/turn")
+    public ResponseEntity<ApiResponse<ChatTurnResponse>> startTurn(
+            @Valid @RequestBody StartTurnRequest request,
+            HttpServletRequest httpRequest) {
+        UUID callerId = securityUtil.getCurrentUserIdOrNull();
+        String guestSessionToken = extractGuestSessionToken(httpRequest);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(messageService.startTurn(request, callerId, guestSessionToken)));
     }
 
     @PatchMapping("/{id}")
