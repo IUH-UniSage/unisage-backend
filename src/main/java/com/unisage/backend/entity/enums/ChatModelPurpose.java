@@ -9,5 +9,9 @@ package com.unisage.backend.entity.enums;
 public enum ChatModelPurpose {
     CHAT,
     EMBEDDING,
-    EXTRACTION
+    EXTRACTION,
+    /** Judges which retrieved chunks answer the question at chat time - separate from
+     * EXTRACTION, which runs thousands of times per ingest and is picked for cost. Optional:
+     * with no ACTIVE RERANK row the agent falls back to the EXTRACTION credential. */
+    RERANK
 }

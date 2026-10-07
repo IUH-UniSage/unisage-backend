@@ -1,5 +1,6 @@
 package com.unisage.backend.service.conversation;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -8,7 +9,9 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 import com.unisage.backend.dto.request.SendMessageRequest;
+import com.unisage.backend.dto.request.StartTurnRequest;
 import com.unisage.backend.dto.request.UpdateMessageRequest;
+import com.unisage.backend.dto.response.ChatTurnResponse;
 import com.unisage.backend.dto.response.MessageResponse;
 import com.unisage.backend.entity.ChatModel;
 import com.unisage.backend.entity.Conversation;
@@ -33,6 +36,9 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class MessageServiceImpl implements MessageService {
+
+    // created_at is rounded to microseconds by Postgres; 2us keeps the next row strictly after.
+    private static final long CREATED_AT_GAP_NANOS = 2_000;
 
     private final MessageRepository messageRepository;
     private final ConversationRepository conversationRepository;
@@ -93,6 +99,42 @@ public class MessageServiceImpl implements MessageService {
 
     @Override
     @Transactional
+    public ChatTurnResponse startTurn(StartTurnRequest request, UUID callerId, String guestSessionToken) {
+        Conversation conversation = conversationRepository.findById(request.conversationId())
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
+
+        validateOwnership(conversation, callerId, guestSessionToken);
+
+        List<Message> previous = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversation.getId());
+        List<MessageResponse> context = toResponses(previous, null, true);
+
+        usageLimitService.checkAndConsumeQuestion(
+                conversation.getUser(), conversation.getGuestSession(), request.content());
+
+        Message userMessage = messageRepository.save(Message.builder()
+                .conversation(conversation)
+                .role(MsgRole.USER)
+                .content(request.content())
+                .status(MsgStatus.COMPLETED)
+                .build());
+        waitPastCreatedAt(userMessage);
+        Message assistantMessage = messageRepository.save(Message.builder()
+                .conversation(conversation)
+                .role(MsgRole.ASSISTANT)
+                .content("")
+                .status(MsgStatus.STREAMING)
+                .build());
+
+        return ChatTurnResponse.builder()
+                .firstTurn(previous.isEmpty())
+                .context(context)
+                .userMessage(toResponse(userMessage, null))
+                .assistantMessage(toResponse(assistantMessage, null))
+                .build();
+    }
+
+    @Override
+    @Transactional
     public MessageResponse update(UUID id, UpdateMessageRequest request) {
         Message message = messageRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.MESSAGE_NOT_FOUND));
@@ -147,27 +189,7 @@ public class MessageServiceImpl implements MessageService {
 
     @Override
     public List<MessageResponse> getByConversation(UUID conversationId, Integer limit, boolean forContext) {
-        List<Message> messages = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
-
-        int effectiveLimit = (limit != null && limit > 0) ? limit : Integer.MAX_VALUE;
-        if (forContext) {
-            // Only the prompt context is capped - capping the UI too hid older messages whenever a
-            // conversation was reopened (UNISAGE-94).
-            int maxMessageHistory = configResolver.getInt("chat.max_history_messages", 20);
-            effectiveLimit = Math.min(effectiveLimit, maxMessageHistory);
-        }
-        if (messages.size() > effectiveLimit) {
-            messages = messages.subList(messages.size() - effectiveLimit, messages.size());
-        }
-
-        // One query for the whole page instead of one per message.
-        Map<UUID, UUID> ticketIdByMessage = messages.isEmpty() ? Map.of()
-                : ticketRepository.findByMessageIdIn(messages.stream().map(Message::getId).toList()).stream()
-                        .collect(Collectors.toMap(t -> t.getMessage().getId(), Ticket::getId));
-
-        return messages.stream()
-                .map(message -> toResponse(message, ticketIdByMessage.get(message.getId())))
-                .collect(Collectors.toList());
+        return toResponses(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId), limit, forContext);
     }
 
     @Override
@@ -201,6 +223,40 @@ public class MessageServiceImpl implements MessageService {
                 throw new AppException(ErrorCode.AUTH_UNAUTHORIZED);
             }
         }
+    }
+
+    /** Messages are ordered by created_at only - spin until the clock is past the previous row's stamp. */
+    private static void waitPastCreatedAt(Message message) {
+        LocalDateTime createdAt = message.getCreatedAt();
+        if (createdAt == null) {
+            return;
+        }
+        LocalDateTime threshold = createdAt.plusNanos(CREATED_AT_GAP_NANOS);
+        while (!LocalDateTime.now().isAfter(threshold)) {
+            Thread.onSpinWait();
+        }
+    }
+
+    private List<MessageResponse> toResponses(List<Message> messages, Integer limit, boolean forContext) {
+        int effectiveLimit = (limit != null && limit > 0) ? limit : Integer.MAX_VALUE;
+        if (forContext) {
+            // Only the prompt context is capped - capping the UI too hid older messages whenever a
+            // conversation was reopened (UNISAGE-94).
+            int maxMessageHistory = configResolver.getInt("chat.max_history_messages", 20);
+            effectiveLimit = Math.min(effectiveLimit, maxMessageHistory);
+        }
+        if (messages.size() > effectiveLimit) {
+            messages = messages.subList(messages.size() - effectiveLimit, messages.size());
+        }
+
+        // One query for the whole page instead of one per message.
+        Map<UUID, UUID> ticketIdByMessage = messages.isEmpty() ? Map.of()
+                : ticketRepository.findByMessageIdIn(messages.stream().map(Message::getId).toList()).stream()
+                        .collect(Collectors.toMap(t -> t.getMessage().getId(), Ticket::getId));
+
+        return messages.stream()
+                .map(message -> toResponse(message, ticketIdByMessage.get(message.getId())))
+                .collect(Collectors.toList());
     }
 
     private UUID ticketIdOf(Message message) {
