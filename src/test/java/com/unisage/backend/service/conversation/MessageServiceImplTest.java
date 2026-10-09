@@ -2,7 +2,9 @@ package com.unisage.backend.service.conversation;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,8 +15,10 @@ import org.mockito.ArgumentCaptor;
 import com.unisage.backend.dto.request.SendMessageRequest;
 import com.unisage.backend.dto.request.StartTurnRequest;
 import com.unisage.backend.dto.request.UpdateMessageRequest;
+import com.unisage.backend.dto.request.internal.CancelClarificationRequest;
 import com.unisage.backend.dto.response.ChatTurnResponse;
 import com.unisage.backend.dto.response.MessageResponse;
+import com.unisage.backend.dto.response.internal.ClarificationStatusResponse;
 import com.unisage.backend.entity.Conversation;
 import com.unisage.backend.entity.GuestSession;
 import com.unisage.backend.entity.Message;
@@ -766,7 +770,226 @@ class MessageServiceImplTest {
         verify(messageRepository, never()).save(any(Message.class));
     }
 
+    @Test
+    void startTurn_withClarificationAnswers_storesThemOnTheUserMessageOnly() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        when(conversationRepository.findById(conversationId))
+                .thenReturn(Optional.of(conversation(conversationId, owner, null)));
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(List.of());
+        Map<String, Object> metadata = Map.of("clarification_answers", Map.of(
+                "schema_version", 1,
+                "panel_id", "7f1c2a9e",
+                "items", List.of(Map.of("question_id", "q1", "kind", "choice", "display", "K20"))));
+
+        ChatTurnResponse response = messageService.startTurn(
+                new StartTurnRequest(conversationId, "Khoá: K20", metadata), owner.getId(), null);
+
+        ArgumentCaptor<Message> saved = ArgumentCaptor.forClass(Message.class);
+        verify(messageRepository, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues().get(0).getMetadata()).isEqualTo(metadata);
+        assertThat(saved.getAllValues().get(1).getMetadata()).isNull();
+        assertThat(response.userMessage().metadata()).isEqualTo(metadata);
+    }
+
+    @Test
+    void startTurn_withoutMetadata_leavesUserMessageMetadataNull() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        when(conversationRepository.findById(conversationId))
+                .thenReturn(Optional.of(conversation(conversationId, owner, null)));
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(List.of());
+
+        messageService.startTurn(new StartTurnRequest(conversationId, "hi", null), owner.getId(), null);
+
+        ArgumentCaptor<Message> saved = ArgumentCaptor.forClass(Message.class);
+        verify(messageRepository, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(Message::getMetadata).containsOnlyNulls();
+    }
+
+    @Test
+    void startTurn_unknownMetadataKey_isRejectedBeforeAnythingIsSavedOrCounted() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        when(conversationRepository.findById(conversationId))
+                .thenReturn(Optional.of(conversation(conversationId, owner, null)));
+        Map<String, Object> metadata = Map.of("clarification_answers", Map.of(), "calculation", Map.of());
+
+        StartTurnRequest request = new StartTurnRequest(conversationId, "hi", metadata);
+
+        assertThatThrownBy(() -> messageService.startTurn(request, owner.getId(), null))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.MESSAGE_METADATA_INVALID);
+        assertThat(ErrorCode.MESSAGE_METADATA_INVALID.getHttpStatus().value()).isEqualTo(400);
+        verify(messageRepository, never()).save(any(Message.class));
+        verify(usageLimitService, never()).checkAndConsumeQuestion(any(), any(), any());
+    }
+
+    @Test
+    void startTurn_metadataOver32Kb_isRejected() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        when(conversationRepository.findById(conversationId))
+                .thenReturn(Optional.of(conversation(conversationId, owner, null)));
+        Map<String, Object> metadata = Map.of("clarification_answers", Map.of("blob", "x".repeat(32 * 1024)));
+
+        StartTurnRequest request = new StartTurnRequest(conversationId, "hi", metadata);
+
+        assertThatThrownBy(() -> messageService.startTurn(request, owner.getId(), null))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.MESSAGE_METADATA_INVALID);
+        verify(messageRepository, never()).save(any(Message.class));
+    }
+
+    @Test
+    void startTurn_metadataJustUnder32Kb_isAccepted() {
+        UUID conversationId = UUID.randomUUID();
+        User owner = User.builder().id(UUID.randomUUID()).build();
+        when(conversationRepository.findById(conversationId))
+                .thenReturn(Optional.of(conversation(conversationId, owner, null)));
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(List.of());
+        // {"clarification_answers":{"blob":"..."}} adds 37 bytes of JSON around the string: exactly 32 KB.
+        Map<String, Object> metadata = Map.of("clarification_answers", Map.of("blob", "x".repeat(32 * 1024 - 37)));
+
+        ChatTurnResponse response = messageService.startTurn(
+                new StartTurnRequest(conversationId, "hi", metadata), owner.getId(), null);
+
+        assertThat(response.userMessage().metadata()).isEqualTo(metadata);
+    }
+
+    // ── cancelClarification() ────────────────────────────────────────────
+
+    @Test
+    void cancelClarification_openPanel_flipsOnlyTheStatusAndKeepsEverythingElse() {
+        UUID messageId = UUID.randomUUID();
+        UUID conversationId = UUID.randomUUID();
+        Message message = panelMessage(messageId, conversation(conversationId), "open");
+        when(messageRepository.findByIdForUpdate(messageId)).thenReturn(Optional.of(message));
+
+        ClarificationStatusResponse response = messageService.cancelClarification(
+                messageId, new CancelClarificationRequest(conversationId, "cancelled"));
+
+        assertThat(response.status()).isEqualTo("cancelled");
+        assertThat(response.messageId()).isEqualTo(messageId);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> clarification = (Map<String, Object>) message.getMetadata().get("clarification");
+        assertThat(clarification)
+                .containsEntry("status", "cancelled")
+                .containsEntry("schema_version", 1)
+                .containsEntry("panel", Map.of("panel_id", "p-1"));
+        assertThat(message.getMetadata()).containsEntry("other", "kept");
+        assertThat(message.getContent()).isEqualTo("Bạn thuộc khoá nào?");
+        assertThat(message.getStatus()).isEqualTo(MsgStatus.COMPLETED);
+        verify(messageRepository).save(message);
+        verify(usageLimitService, never()).consumeAnswer(any(), any(), any());
+    }
+
+    @Test
+    void cancelClarification_alreadyCancelled_isIdempotent() {
+        UUID messageId = UUID.randomUUID();
+        UUID conversationId = UUID.randomUUID();
+        Message message = panelMessage(messageId, conversation(conversationId), "cancelled");
+        Map<String, Object> before = message.getMetadata();
+        when(messageRepository.findByIdForUpdate(messageId)).thenReturn(Optional.of(message));
+
+        ClarificationStatusResponse response = messageService.cancelClarification(
+                messageId, new CancelClarificationRequest(conversationId, "cancelled"));
+
+        assertThat(response.status()).isEqualTo("cancelled");
+        assertThat(message.getMetadata()).isSameAs(before);
+        verify(messageRepository, never()).save(any(Message.class));
+    }
+
+    @Test
+    void cancelClarification_otherTargetStatus_isConflict() {
+        UUID messageId = UUID.randomUUID();
+        UUID conversationId = UUID.randomUUID();
+        Message message = panelMessage(messageId, conversation(conversationId), "cancelled");
+        when(messageRepository.findByIdForUpdate(messageId)).thenReturn(Optional.of(message));
+
+        assertCancelFails(messageId, new CancelClarificationRequest(conversationId, "open"),
+                ErrorCode.CLARIFICATION_INVALID_STATUS_TRANSITION);
+        assertThat(ErrorCode.CLARIFICATION_INVALID_STATUS_TRANSITION.getHttpStatus().value()).isEqualTo(409);
+        verify(messageRepository, never()).save(any(Message.class));
+    }
+
+    @Test
+    void cancelClarification_fromUnknownCurrentStatus_isConflict() {
+        UUID messageId = UUID.randomUUID();
+        UUID conversationId = UUID.randomUUID();
+        Message message = panelMessage(messageId, conversation(conversationId), "answered");
+        when(messageRepository.findByIdForUpdate(messageId)).thenReturn(Optional.of(message));
+
+        assertCancelFails(messageId, new CancelClarificationRequest(conversationId, "cancelled"),
+                ErrorCode.CLARIFICATION_INVALID_STATUS_TRANSITION);
+    }
+
+    @Test
+    void cancelClarification_wrongConversation_isNotFound() {
+        UUID messageId = UUID.randomUUID();
+        Message message = panelMessage(messageId, conversation(UUID.randomUUID()), "open");
+        when(messageRepository.findByIdForUpdate(messageId)).thenReturn(Optional.of(message));
+
+        assertCancelFails(messageId, new CancelClarificationRequest(UUID.randomUUID(), "cancelled"),
+                ErrorCode.MESSAGE_NOT_FOUND);
+    }
+
+    @Test
+    void cancelClarification_userMessage_isNotFound() {
+        UUID messageId = UUID.randomUUID();
+        UUID conversationId = UUID.randomUUID();
+        Message message = panelMessage(messageId, conversation(conversationId), "open");
+        message.setRole(MsgRole.USER);
+        when(messageRepository.findByIdForUpdate(messageId)).thenReturn(Optional.of(message));
+
+        assertCancelFails(messageId, new CancelClarificationRequest(conversationId, "cancelled"),
+                ErrorCode.MESSAGE_NOT_FOUND);
+    }
+
+    @Test
+    void cancelClarification_messageWithoutPanel_isNotFound() {
+        UUID messageId = UUID.randomUUID();
+        UUID conversationId = UUID.randomUUID();
+        Message message = assistantMessage(messageId, conversation(conversationId), MsgStatus.COMPLETED, "answer");
+        message.setMetadata(Map.of("calculation", Map.of()));
+        when(messageRepository.findByIdForUpdate(messageId)).thenReturn(Optional.of(message));
+
+        assertCancelFails(messageId, new CancelClarificationRequest(conversationId, "cancelled"),
+                ErrorCode.MESSAGE_NOT_FOUND);
+    }
+
+    @Test
+    void cancelClarification_unknownMessage_isNotFound() {
+        UUID messageId = UUID.randomUUID();
+        when(messageRepository.findByIdForUpdate(messageId)).thenReturn(Optional.empty());
+
+        assertCancelFails(messageId, new CancelClarificationRequest(UUID.randomUUID(), "cancelled"),
+                ErrorCode.MESSAGE_NOT_FOUND);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
+
+    private void assertCancelFails(UUID messageId, CancelClarificationRequest request, ErrorCode expected) {
+        assertThatThrownBy(() -> messageService.cancelClarification(messageId, request))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(expected);
+    }
+
+    private Message panelMessage(UUID id, Conversation conversation, String status) {
+        Message message = assistantMessage(id, conversation, MsgStatus.COMPLETED, "Bạn thuộc khoá nào?");
+        Map<String, Object> clarification = new LinkedHashMap<>();
+        clarification.put("schema_version", 1);
+        clarification.put("status", status);
+        clarification.put("panel", Map.of("panel_id", "p-1"));
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("clarification", clarification);
+        metadata.put("other", "kept");
+        message.setMetadata(metadata);
+        return message;
+    }
 
     private Conversation conversation(UUID id) {
         return Conversation.builder().id(id).build();
