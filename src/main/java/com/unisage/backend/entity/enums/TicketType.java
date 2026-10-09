@@ -8,7 +8,9 @@ public enum TicketType {
     AI_UNANSWERED("AI không trả lời được"),
     AI_SECURITY_BREACH("Nghi ngờ lộ thông tin bảo mật"),
     AI_INAPPROPRIATE("Nội dung không phù hợp"),
-    OTHER("Khác");
+    OTHER("Khác"),
+    /** Filed by the calculation feedback flow only (one per wrong item), never via POST /tickets. */
+    AI_CALCULATION_WRONG("AI tính sai theo quy chế");
 
     private final String displayName;
 

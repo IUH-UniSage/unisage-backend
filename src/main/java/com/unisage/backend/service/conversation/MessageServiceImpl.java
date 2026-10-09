@@ -330,9 +330,11 @@ public class MessageServiceImpl implements MessageService {
             messages = messages.subList(messages.size() - effectiveLimit, messages.size());
         }
 
-        // One query for the whole page instead of one per message.
+        // One query for the whole page instead of one per message. Only regular Reports: a message
+        // may also carry one calculation-item ticket per item, which must not collide in this map.
+        List<UUID> messageIds = messages.stream().map(Message::getId).toList();
         Map<UUID, UUID> ticketIdByMessage = messages.isEmpty() ? Map.of()
-                : ticketRepository.findByMessageIdIn(messages.stream().map(Message::getId).toList()).stream()
+                : ticketRepository.findByMessageIdInAndCalculationItemIdIsNull(messageIds).stream()
                         .collect(Collectors.toMap(t -> t.getMessage().getId(), Ticket::getId));
 
         return messages.stream()
@@ -340,8 +342,9 @@ public class MessageServiceImpl implements MessageService {
                 .collect(Collectors.toList());
     }
 
+    /** Only the regular Report - calculation-item tickets surface through metadata.calculation_feedback. */
     private UUID ticketIdOf(Message message) {
-        return ticketRepository.findByMessageId(message.getId()).map(Ticket::getId).orElse(null);
+        return ticketRepository.findByMessageIdAndCalculationItemIdIsNull(message.getId()).map(Ticket::getId).orElse(null);
     }
 
     private MessageResponse toResponse(Message message, UUID ticketId) {

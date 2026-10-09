@@ -400,7 +400,7 @@ class MessageServiceImplTest {
         UUID ticketId = UUID.randomUUID();
         Ticket ticket = Ticket.builder().id(ticketId).message(messages.get(1)).build();
         when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
-        when(ticketRepository.findByMessageIdIn(any())).thenReturn(List.of(ticket));
+        when(ticketRepository.findByMessageIdInAndCalculationItemIdIsNull(any())).thenReturn(List.of(ticket));
 
         List<MessageResponse> result = messageService.getByConversation(conversationId, 10, false);
 
@@ -415,7 +415,7 @@ class MessageServiceImplTest {
         Conversation conversation = Conversation.builder().id(UUID.randomUUID()).build();
         Message message = assistantMessage(messageId, conversation, MsgStatus.COMPLETED, "answer");
         when(messageRepository.findById(messageId)).thenReturn(Optional.of(message));
-        when(ticketRepository.findByMessageId(messageId))
+        when(ticketRepository.findByMessageIdAndCalculationItemIdIsNull(messageId))
                 .thenReturn(Optional.of(Ticket.builder().id(ticketId).build()));
 
         assertThat(messageService.getById(messageId).ticketId()).isEqualTo(ticketId);
@@ -427,7 +427,7 @@ class MessageServiceImplTest {
         Conversation conversation = Conversation.builder().id(UUID.randomUUID()).build();
         Message message = assistantMessage(messageId, conversation, MsgStatus.COMPLETED, "answer");
         when(messageRepository.findById(messageId)).thenReturn(Optional.of(message));
-        when(ticketRepository.findByMessageId(messageId)).thenReturn(Optional.empty());
+        when(ticketRepository.findByMessageIdAndCalculationItemIdIsNull(messageId)).thenReturn(Optional.empty());
 
         assertThat(messageService.getById(messageId).ticketId()).isNull();
     }
@@ -725,7 +725,7 @@ class MessageServiceImplTest {
                 .thenReturn(Optional.of(conversation(conversationId, owner, null)));
         when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId))
                 .thenReturn(buildMessages(conversationId, 25));
-        when(ticketRepository.findByMessageIdIn(any())).thenReturn(List.of());
+        when(ticketRepository.findByMessageIdInAndCalculationItemIdIsNull(any())).thenReturn(List.of());
 
         ChatTurnResponse response = messageService.startTurn(
                 new StartTurnRequest(conversationId, "hi"), owner.getId(), null);

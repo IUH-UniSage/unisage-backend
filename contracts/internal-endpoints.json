@@ -12,6 +12,7 @@
     { "method": "GET", "basePath": "/internal", "path": "/budgets/snapshot", "returnsSecret": false, "implemented": true },
     { "method": "GET", "basePath": "/internal", "path": "/usage-logs/period-totals", "returnsSecret": false, "implemented": true },
     { "method": "GET", "basePath": "/internal", "path": "/model-pricing/snapshot", "returnsSecret": false, "implemented": true },
-    { "method": "PATCH", "basePath": "/internal", "path": "/messages/{id}/clarification", "returnsSecret": false, "implemented": true }
+    { "method": "PATCH", "basePath": "/internal", "path": "/messages/{id}/clarification", "returnsSecret": false, "implemented": true },
+    { "method": "POST", "basePath": "/internal", "path": "/calculation-traces", "returnsSecret": false, "implemented": true }
   ]
 }
