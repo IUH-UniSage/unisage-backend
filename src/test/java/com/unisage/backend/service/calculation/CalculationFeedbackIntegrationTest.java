@@ -109,9 +109,9 @@ class CalculationFeedbackIntegrationTest {
     private Message assistantWithItems(Conversation conversation) {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("calculation", Map.of("schema_version", 1, "items", List.of(
-                Map.of("item_id", "T1", "run_id", "req-1", "mode", "retrieved", "status", "computed",
+                Map.of("item_id", "T1", "run_id", "req-1", "mode", "llm", "status", "computed",
                         "result_summary", "Học phí học kỳ: 8.400.000 đồng"),
-                Map.of("item_id", "T2", "run_id", "req-1", "mode", "retrieved", "status", "computed"))));
+                Map.of("item_id", "T2", "run_id", "req-1", "mode", "llm", "status", "computed"))));
         return messageRepository.save(Message.builder()
                 .conversation(conversation)
                 .role(MsgRole.ASSISTANT)
@@ -134,7 +134,7 @@ class CalculationFeedbackIntegrationTest {
         Message message = assistantWithItems(conversation);
         calculationTraceService.ingest(new CalculationTraceIngestRequest(message.getId(), List.of(
                 new CalculationTraceIngestRequest.Item("T1", "req-1",
-                        Map.of("question_raw", "Học phí 20 tín chỉ?", "expression", "so_tc * don_gia_tc")))));
+                        Map.of("question_raw", "Học phí 20 tín chỉ?", "answer", "20 × 420.000 = 8.400.000đ")))));
 
         assertThat(calculationFeedbackService.submit(message.getId(), wrong("T1"), user.getId(), null)
                 .ticketCreated()).isTrue();
@@ -154,7 +154,7 @@ class CalculationFeedbackIntegrationTest {
         assertThat(tickets).hasSize(3);
         assertThat(tickets).extracting(Ticket::getCalculationItemId).containsExactlyInAnyOrder(null, "T1", "T2");
         Ticket t1 = tickets.stream().filter(t -> "T1".equals(t.getCalculationItemId())).findFirst().orElseThrow();
-        assertThat(t1.getDescription()).contains(NOTE).contains("so_tc * don_gia_tc").contains("run_id: req-1");
+        assertThat(t1.getDescription()).contains(NOTE).contains("20 × 420.000 = 8.400.000đ").contains("run_id: req-1");
         Ticket t2 = tickets.stream().filter(t -> "T2".equals(t.getCalculationItemId())).findFirst().orElseThrow();
         assertThat(t2.getDescription()).contains("Không có trace cho run_id req-1.");
 

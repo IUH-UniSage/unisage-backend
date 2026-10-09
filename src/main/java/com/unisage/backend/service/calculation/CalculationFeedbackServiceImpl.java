@@ -84,7 +84,7 @@ public class CalculationFeedbackServiceImpl implements CalculationFeedbackServic
         // Locked: the metadata write below is a read-modify-write of the whole jsonb value.
         Message message = messageRepository.findByIdForUpdate(messageId)
                 .orElseThrow(() -> new AppException(ErrorCode.CALCULATION_ITEM_NOT_FOUND));
-        // Not the caller's message, not an assistant message, or no retrieved+computed item: all the
+        // Not the caller's message, not an assistant message, or no llm+computed item: all the
         // same 404, so a caller cannot probe other users' messages.
         if (message.getRole() != MsgRole.ASSISTANT
                 || !isOwnedByCaller(message.getConversation(), callerId, guestSessionToken)) {
@@ -143,7 +143,7 @@ public class CalculationFeedbackServiceImpl implements CalculationFeedbackServic
                 .orElse(false);
     }
 
-    /** {@code metadata.calculation.items[]} entry with this item_id, mode retrieved, status computed. */
+    /** {@code metadata.calculation.items[]} entry with this item_id, mode llm, status computed. */
     private static Optional<Map<?, ?>> findFeedbackableItem(Map<String, Object> metadata, String itemId) {
         if (metadata == null || !(metadata.get("calculation") instanceof Map<?, ?> calculation)
                 || !(calculation.get("items") instanceof List<?> items)) {
@@ -152,7 +152,7 @@ public class CalculationFeedbackServiceImpl implements CalculationFeedbackServic
         for (Object candidate : items) {
             if (candidate instanceof Map<?, ?> item
                     && itemId.equals(item.get("item_id"))
-                    && "retrieved".equals(item.get("mode"))
+                    && "llm".equals(item.get("mode"))
                     && "computed".equals(item.get("status"))) {
                 return Optional.of(item);
             }
@@ -238,33 +238,22 @@ public class CalculationFeedbackServiceImpl implements CalculationFeedbackServic
     private void appendTrace(StringBuilder out, Map<String, Object> trace) {
         out.append("Trace (calculation_traces):\n");
         appendIfPresent(out, "Câu hỏi gốc", trace.get("question_raw"));
-        appendIfPresent(out, "Công thức", trace.get("formula_id"));
-        appendIfPresent(out, "Biểu thức", trace.get("expression"));
-        appendNamedValues(out, "Đầu vào", trace.get("inputs"));
-        appendNamedValues(out, "Kết quả", trace.get("outputs"));
-        if (trace.get("source") instanceof Map<?, ?> source) {
-            appendIfPresent(out, "Nguồn", joinNonNull(source.get("source"), source.get("heading_path"),
-                    source.get("chunk_id")));
+        appendIfPresent(out, "Truy vấn tài liệu", trace.get("retrieval_query"));
+        appendIfPresent(out, "Số đã biết", trace.get("known_params"));
+        if (trace.get("sources") instanceof List<?> sources) {
+            for (Object item : sources) {
+                if (item instanceof Map<?, ?> source) {
+                    appendIfPresent(out, "Nguồn " + source.get("ref"), joinNonNull(source.get("source"),
+                            source.get("heading_path"), source.get("chunk_id")));
+                }
+            }
         }
-        appendIfPresent(out, "Câu trích", trace.get("source_quote"));
+        appendIfPresent(out, "Lời giải của AI", trace.get("answer"));
         out.append("\nTrace đầy đủ (JSON):\n");
         try {
             out.append(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(trace));
         } catch (JsonProcessingException e) {
             out.append(trace);
-        }
-    }
-
-    private static void appendNamedValues(StringBuilder out, String label, Object values) {
-        if (!(values instanceof List<?> list) || list.isEmpty()) {
-            return;
-        }
-        out.append(label).append(":\n");
-        for (Object value : list) {
-            if (value instanceof Map<?, ?> entry) {
-                Object name = entry.get("label") != null ? entry.get("label") : entry.get("name");
-                out.append("  - ").append(name).append(" = ").append(entry.get("value")).append('\n');
-            }
         }
     }
 

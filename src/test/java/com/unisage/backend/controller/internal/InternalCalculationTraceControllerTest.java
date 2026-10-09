@@ -105,10 +105,10 @@ class InternalCalculationTraceControllerTest {
                 """.formatted(messageId, itemsJson);
     }
 
-    private String item(String itemId, String runId, String expression) {
+    private String item(String itemId, String runId, String answer) {
         return """
-                {"itemId": "%s", "runId": "%s", "trace": {"formula_id": "retrieved", "expression": "%s"}}
-                """.formatted(itemId, runId, expression);
+                {"itemId": "%s", "runId": "%s", "trace": {"mode": "llm", "answer": "%s"}}
+                """.formatted(itemId, runId, answer);
     }
 
     @Test
@@ -135,7 +135,7 @@ class InternalCalculationTraceControllerTest {
         CalculationTrace t1 = calculationTraceRepository.findByMessageIdAndItemId(assistant.getId(), "T1")
                 .orElseThrow();
         assertThat(t1.getRunId()).isEqualTo("run-2");
-        assertThat(t1.getTrace()).containsEntry("expression", "a*b*2");
+        assertThat(t1.getTrace()).containsEntry("answer", "a*b*2");
         assertThat(calculationTraceRepository.findByMessageIdAndItemId(assistant.getId(), "T2")).isPresent();
         assertThat(calculationTraceRepository.findAll().stream()
                 .filter(t -> t.getMessageId().equals(assistant.getId()))).hasSize(2);

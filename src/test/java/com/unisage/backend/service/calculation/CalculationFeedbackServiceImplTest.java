@@ -105,8 +105,8 @@ class CalculationFeedbackServiceImplTest {
 
     private Message ownedMessage() {
         return message(Conversation.builder().id(UUID.randomUUID()).user(owner).build(), List.of(
-                item("T1", "retrieved", "computed"),
-                item("T2", "retrieved", "computed"),
+                item("T1", "llm", "computed"),
+                item("T2", "llm", "computed"),
                 item("T3", "builtin", "computed")));
     }
 
@@ -197,7 +197,7 @@ class CalculationFeedbackServiceImplTest {
     void itemThatIsNotRetrievedAndComputed_isNotFound() {
         message(Conversation.builder().id(UUID.randomUUID()).user(owner).build(), List.of(
                 item("T1", "builtin", "computed"),
-                item("T2", "retrieved", "needs_input")));
+                item("T2", "llm", "needs_input")));
 
         assertCode(() -> service.submit(messageId, correct("T1"), owner.getId(), null),
                 ErrorCode.CALCULATION_ITEM_NOT_FOUND);
@@ -264,9 +264,10 @@ class CalculationFeedbackServiceImplTest {
         when(calculationTraceRepository.findByMessageIdAndItemId(messageId, "T1")).thenReturn(Optional.of(
                 CalculationTrace.builder().messageId(messageId).itemId("T1").runId("req-42").trace(Map.of(
                         "question_raw", "Học phí 20 tín chỉ?",
-                        "expression", "so_tc * don_gia_tc",
-                        "inputs", List.of(Map.of("name", "so_tc", "label", "Số tín chỉ", "value", "20")),
-                        "source_quote", "Đơn giá 420.000 đồng/tín chỉ")).build()));
+                        "known_params", Map.of("so_tin_chi", 20),
+                        "answer", "Học phí = 20 × 420.000 = 8.400.000đ [C1]",
+                        "sources", List.of(Map.of("ref", "C1", "source", "QD-hoc-phi.pdf",
+                                "chunk_id", "c_8")))).build()));
 
         CalculationFeedbackResponse response = service.submit(messageId,
                 wrong("T1", CalculationWrongReason.WRONG_RESULT, "Quy chế 2024 đã đổi"), owner.getId(), null);
@@ -287,9 +288,10 @@ class CalculationFeedbackServiceImplTest {
                 .contains("run_id: req-42")
                 .contains(TicketDescriptions.STAFF_ONLY_MARKER)
                 .contains("Câu hỏi gốc: Học phí 20 tín chỉ?")
-                .contains("Biểu thức: so_tc * don_gia_tc")
-                .contains("Số tín chỉ = 20")
-                .contains("\"source_quote\" : \"Đơn giá 420.000 đồng/tín chỉ\"");
+                .contains("Lời giải của AI: Học phí = 20 × 420.000 = 8.400.000đ [C1]")
+                .contains("Số đã biết: {so_tin_chi=20}")
+                .contains("Nguồn C1: QD-hoc-phi.pdf")
+                .contains("\"answer\" : \"Học phí = 20 × 420.000 = 8.400.000đ [C1]\"");
     }
 
     @Test
@@ -381,7 +383,7 @@ class CalculationFeedbackServiceImplTest {
     void guest_feedbackIsStored_butNoTicket() {
         GuestSession session = GuestSession.builder().id(UUID.randomUUID()).build();
         Message message = message(Conversation.builder().id(UUID.randomUUID()).guestSession(session).build(),
-                List.of(item("T1", "retrieved", "computed")));
+                List.of(item("T1", "llm", "computed")));
         when(guestSessionService.resolveAndTouch("guest-token"))
                 .thenReturn(Optional.of(new GuestSessionResolution(session, "guest-token")));
 
@@ -398,7 +400,7 @@ class CalculationFeedbackServiceImplTest {
     void guest_withAnotherSession_isNotFound() {
         GuestSession session = GuestSession.builder().id(UUID.randomUUID()).build();
         message(Conversation.builder().id(UUID.randomUUID()).guestSession(session).build(),
-                List.of(item("T1", "retrieved", "computed")));
+                List.of(item("T1", "llm", "computed")));
         when(guestSessionService.resolveAndTouch("other-token")).thenReturn(Optional.of(
                 new GuestSessionResolution(GuestSession.builder().id(UUID.randomUUID()).build(), "other-token")));
 

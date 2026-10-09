@@ -8,7 +8,7 @@ import com.unisage.backend.dto.response.CalculationFeedbackResponse;
 public interface CalculationFeedbackService {
 
     /**
-     * Records the caller's verdict on one retrieved-formula calculation item of their own assistant
+     * Records the caller's verdict on one AI-computed (mode llm) calculation item of their own assistant
      * message, and for a signed-in caller files/updates/closes that item's support ticket.
      * {@code guestSessionToken} is the raw cookie/header value; null for authenticated callers.
      */

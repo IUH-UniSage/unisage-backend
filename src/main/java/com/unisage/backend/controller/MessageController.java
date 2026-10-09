@@ -65,7 +65,7 @@ public class MessageController {
                 .body(ApiResponse.success(messageService.startTurn(request, callerId, guestSessionToken)));
     }
 
-    /** Đúng/Sai on one retrieved-formula calculation item; owner (user or guest session) only. */
+    /** Đúng/Sai on one AI-computed (mode llm) calculation item; owner (user or guest session) only. */
     @PostMapping("/{messageId}/calculation-feedback")
     public ResponseEntity<ApiResponse<CalculationFeedbackResponse>> calculationFeedback(
             @PathVariable UUID messageId,
