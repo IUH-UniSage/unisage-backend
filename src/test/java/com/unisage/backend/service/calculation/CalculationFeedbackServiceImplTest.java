@@ -181,6 +181,16 @@ class CalculationFeedbackServiceImplTest {
                 null), ErrorCode.CALCULATION_FEEDBACK_INVALID);
     }
 
+    @Test
+    void contentLengthOver2Kb_isRejectedBeforeAnyLookup() {
+        CalculationFeedbackRequest request = CalculationFeedbackRequest.builder()
+                .itemId("T1").verdict(CalculationVerdict.CORRECT).build();
+
+        assertCode(() -> service.submit(messageId, request, owner.getId(), null, 2049L),
+                ErrorCode.CALCULATION_FEEDBACK_INVALID);
+        verify(messageRepository, never()).findByIdForUpdate(any());
+    }
+
     // ── 404s ─────────────────────────────────────────────────────────────
 
     @Test

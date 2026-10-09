@@ -45,6 +45,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class CalculationFeedbackServiceImpl implements CalculationFeedbackService {
 
+    /** Body limit of a feedback request (contracts/chat-sse.md §5b). */
+    static final long MAX_REQUEST_BYTES = 2 * 1024;
+
     /** Resolution written when the user's own CORRECT verdict closes the item's ticket. */
     public static final String USER_SWITCHED_TO_CORRECT = "Người dùng đổi đánh giá thành Đúng";
 
@@ -63,6 +66,19 @@ public class CalculationFeedbackServiceImpl implements CalculationFeedbackServic
     @Transactional
     public CalculationFeedbackResponse submit(UUID messageId, CalculationFeedbackRequest request,
                                               UUID callerId, String guestSessionToken) {
+        // Overridden (not the interface default) so the transaction applies: a default method
+        // calling the 5-argument overload would bypass the Spring proxy.
+        return submit(messageId, request, callerId, guestSessionToken, 0L);
+    }
+
+    @Override
+    @Transactional
+    public CalculationFeedbackResponse submit(UUID messageId, CalculationFeedbackRequest request,
+                                              UUID callerId, String guestSessionToken,
+                                              long requestBytes) {
+        if (requestBytes > MAX_REQUEST_BYTES) {
+            throw new AppException(ErrorCode.CALCULATION_FEEDBACK_INVALID);
+        }
         String note = validate(request);
 
         // Locked: the metadata write below is a read-modify-write of the whole jsonb value.

@@ -20,7 +20,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 class MessageControllerTest {
@@ -68,18 +70,21 @@ class MessageControllerTest {
     }
 
     @Test
-    void calculationFeedback_bodyOver2Kb_isRejectedBeforeTheService() {
+    void calculationFeedback_onlyHandsTheRequestAndItsSizeToTheService() {
         CalculationFeedbackService feedbackService = mock(CalculationFeedbackService.class);
         MessageController feedbackController = new MessageController(
                 mock(MessageService.class), feedbackService, mock(SecurityUtil.class), cookieUtil);
         HttpServletRequest request = mock(HttpServletRequest.class);
         when(request.getContentLengthLong()).thenReturn(2049L);
+        UUID messageId = UUID.randomUUID();
         CalculationFeedbackRequest body = CalculationFeedbackRequest.builder()
                 .itemId("T1").verdict(CalculationVerdict.CORRECT).build();
+        when(feedbackService.submit(eq(messageId), eq(body), any(), any(), eq(2049L)))
+                .thenThrow(new AppException(ErrorCode.CALCULATION_FEEDBACK_INVALID));
 
-        assertThatThrownBy(() -> feedbackController.calculationFeedback(UUID.randomUUID(), body, request))
+        assertThatThrownBy(() -> feedbackController.calculationFeedback(messageId, body, request))
                 .isInstanceOfSatisfying(AppException.class, e ->
                         assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CALCULATION_FEEDBACK_INVALID));
-        verifyNoInteractions(feedbackService);
+        verify(feedbackService).submit(eq(messageId), eq(body), any(), any(), eq(2049L));
     }
 }
