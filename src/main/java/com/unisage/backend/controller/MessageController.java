@@ -7,13 +7,16 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.unisage.backend.dto.request.CalculationFeedbackRequest;
 import com.unisage.backend.dto.request.SendMessageRequest;
 import com.unisage.backend.dto.request.StartTurnRequest;
 import com.unisage.backend.dto.request.UpdateMessageRequest;
 import com.unisage.backend.dto.response.ApiResponse;
+import com.unisage.backend.dto.response.CalculationFeedbackResponse;
 import com.unisage.backend.dto.response.ChatTurnResponse;
 import com.unisage.backend.dto.response.MessageResponse;
 import com.unisage.backend.security.InternalSecretFilter;
+import com.unisage.backend.service.calculation.CalculationFeedbackService;
 import com.unisage.backend.service.conversation.MessageService;
 import com.unisage.backend.utils.CookieUtil;
 import com.unisage.backend.utils.SecurityUtil;
@@ -35,7 +38,10 @@ public class MessageController {
      */
     private static final String GUEST_SESSION_TOKEN_HEADER = "X-Guest-Session-Token";
 
+    /** contracts/chat-sse.md §5b: the feedback body is capped at 2 KB. */
+
     private final MessageService messageService;
+    private final CalculationFeedbackService calculationFeedbackService;
     private final SecurityUtil securityUtil;
     private final CookieUtil cookieUtil;
 
@@ -57,6 +63,20 @@ public class MessageController {
         String guestSessionToken = extractGuestSessionToken(httpRequest);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(messageService.startTurn(request, callerId, guestSessionToken)));
+    }
+
+    /** Đúng/Sai on one AI-computed (mode llm) calculation item; owner (user or guest session) only. */
+    @PostMapping("/{messageId}/calculation-feedback")
+    public ResponseEntity<ApiResponse<CalculationFeedbackResponse>> calculationFeedback(
+            @PathVariable UUID messageId,
+            @Valid @RequestBody CalculationFeedbackRequest request,
+            HttpServletRequest httpRequest) {
+        UUID callerId = securityUtil.getCurrentUserIdOrNull();
+        String guestSessionToken = extractGuestSessionToken(httpRequest);
+        return ResponseEntity.ok(ApiResponse.success(
+                calculationFeedbackService.submit(
+                        messageId, request, callerId, guestSessionToken,
+                        httpRequest.getContentLengthLong())));
     }
 
     @PatchMapping("/{id}")
