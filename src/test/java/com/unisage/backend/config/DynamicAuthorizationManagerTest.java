@@ -66,6 +66,15 @@ class DynamicAuthorizationManagerTest {
     }
 
     @Test
+    void citation_reachableByGuest() {
+        var anonymous = new AnonymousAuthenticationToken("key", "anonymousUser",
+                AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS"));
+
+        assertThat(granted(anonymous, "GET", "/documents/" + UUID.randomUUID() + "/citation")).isTrue();
+        assertThat(granted(anonymous, "GET", "/documents/" + UUID.randomUUID())).isFalse();
+    }
+
+    @Test
     void usersMe_grantedToActiveUserWithoutAnyPermissionRow() {
         when(userRepository.findByIdWithPermissions(userId))
                 .thenReturn(Optional.of(user(UserStatus.ACTIVE, roleWithoutPermissions())));

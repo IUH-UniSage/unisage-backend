@@ -1,6 +1,7 @@
 package com.unisage.backend.repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,6 +18,9 @@ public interface UserDepartmentAccessRepository
 
     @Query("SELECT COUNT(u) > 0 FROM UserDepartmentAccess u WHERE u.user.id = :userId AND u.department.id = :departmentId")
     boolean existsByUserIdAndDepartmentId(@Param("userId") UUID userId, @Param("departmentId") UUID departmentId);
+
+    @Query("SELECT u.accessLevel.level FROM UserDepartmentAccess u WHERE u.user.id = :userId AND u.department.id = :departmentId")
+    Optional<Integer> findAccessLevel(@Param("userId") UUID userId, @Param("departmentId") UUID departmentId);
 
     @Query("SELECT u FROM UserDepartmentAccess u WHERE u.user.id = :userId")
     List<UserDepartmentAccess> findByUserId(@Param("userId") UUID userId);

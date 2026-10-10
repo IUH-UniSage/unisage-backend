@@ -8,14 +8,20 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.unisage.backend.dto.response.CitationDocumentResponse;
+import com.unisage.backend.entity.AccessLevel;
+import com.unisage.backend.entity.Department;
 import com.unisage.backend.entity.Document;
+import com.unisage.backend.entity.Role;
+import com.unisage.backend.entity.User;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
+import com.unisage.backend.predefined.PredefinedRoles;
 import com.unisage.backend.repository.AccessLevelRepository;
 import com.unisage.backend.repository.CategoryRepository;
 import com.unisage.backend.repository.DepartmentRepository;
 import com.unisage.backend.repository.DocumentRepository;
 import com.unisage.backend.repository.DocumentVersionRepository;
+import com.unisage.backend.repository.UserDepartmentAccessRepository;
 import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.service.file.FileService;
 import com.unisage.backend.utils.SecurityUtil;
@@ -32,7 +38,13 @@ class DocumentServiceImplTest {
 
     private final DocumentRepository documentRepository = mock(DocumentRepository.class);
     private final FileService fileService = mock(FileService.class);
+    private final UserRepository userRepository = mock(UserRepository.class);
+    private final UserDepartmentAccessRepository userDepartmentAccessRepository =
+            mock(UserDepartmentAccessRepository.class);
+    private final SecurityUtil securityUtil = mock(SecurityUtil.class);
     private final UUID documentId = UUID.randomUUID();
+    private final UUID departmentId = UUID.randomUUID();
+    private final UUID userId = UUID.randomUUID();
 
     private DocumentServiceImpl service;
 
@@ -42,10 +54,11 @@ class DocumentServiceImplTest {
                 documentRepository,
                 mock(DepartmentRepository.class),
                 mock(CategoryRepository.class),
-                mock(UserRepository.class),
+                userRepository,
                 mock(AccessLevelRepository.class),
                 mock(DocumentVersionRepository.class),
-                mock(SecurityUtil.class),
+                userDepartmentAccessRepository,
+                securityUtil,
                 fileService);
     }
 
@@ -57,6 +70,36 @@ class DocumentServiceImplTest {
         document.setSourceUrl(sourceUrl);
         document.setIsPublic(true);
         return document;
+    }
+
+    /** Private document of {@code departmentId} that needs access level 3. */
+    private Document privateDocument() {
+        Department department = new Department();
+        department.setId(departmentId);
+        AccessLevel minLevel = new AccessLevel();
+        minLevel.setLevel(3);
+        Document document = document(OBJECT_KEY);
+        document.setIsPublic(false);
+        document.setDocPackage(department);
+        document.setMinAccessLevel(minLevel);
+        return document;
+    }
+
+    private void signedInAs(String roleName) {
+        Role role = new Role();
+        role.setName(roleName);
+        User user = new User();
+        user.setId(userId);
+        user.setRole(role);
+        when(securityUtil.getCurrentUserIdOrNull()).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+    }
+
+    private void assertForbidden() {
+        assertThatThrownBy(() -> service.getCitationById(documentId))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DOCUMENT_VIEW_FORBIDDEN);
     }
 
     @Test
@@ -102,5 +145,59 @@ class DocumentServiceImplTest {
 
         assertThatThrownBy(() -> service.getCitationById(documentId))
                 .isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void getCitationById_guestOpensPublicDocument() {
+        when(documentRepository.findById(documentId)).thenReturn(Optional.of(document(OBJECT_KEY)));
+        when(fileService.getPresignedUrl(OBJECT_KEY)).thenReturn("https://minio.test/signed");
+        when(securityUtil.getCurrentUserIdOrNull()).thenReturn(null);
+
+        assertThat(service.getCitationById(documentId).fileUrl()).isEqualTo("https://minio.test/signed");
+    }
+
+    @Test
+    void getCitationById_guestIsRefusedPrivateDocument() {
+        when(documentRepository.findById(documentId)).thenReturn(Optional.of(privateDocument()));
+        when(securityUtil.getCurrentUserIdOrNull()).thenReturn(null);
+
+        assertForbidden();
+    }
+
+    @Test
+    void getCitationById_opensPrivateDocumentAtExactRequiredLevel() {
+        when(documentRepository.findById(documentId)).thenReturn(Optional.of(privateDocument()));
+        when(fileService.getPresignedUrl(OBJECT_KEY)).thenReturn("https://minio.test/signed");
+        signedInAs("STUDENT");
+        when(userDepartmentAccessRepository.findAccessLevel(userId, departmentId)).thenReturn(Optional.of(3));
+
+        assertThat(service.getCitationById(documentId).fileUrl()).isEqualTo("https://minio.test/signed");
+    }
+
+    @Test
+    void getCitationById_refusesPrivateDocumentOneLevelShort() {
+        when(documentRepository.findById(documentId)).thenReturn(Optional.of(privateDocument()));
+        signedInAs("STUDENT");
+        when(userDepartmentAccessRepository.findAccessLevel(userId, departmentId)).thenReturn(Optional.of(2));
+
+        assertForbidden();
+    }
+
+    @Test
+    void getCitationById_refusesPrivateDocumentOfAnotherDepartment() {
+        when(documentRepository.findById(documentId)).thenReturn(Optional.of(privateDocument()));
+        signedInAs("STUDENT");
+        when(userDepartmentAccessRepository.findAccessLevel(userId, departmentId)).thenReturn(Optional.empty());
+
+        assertForbidden();
+    }
+
+    @Test
+    void getCitationById_superAdminOpensAnyPrivateDocument() {
+        when(documentRepository.findById(documentId)).thenReturn(Optional.of(privateDocument()));
+        when(fileService.getPresignedUrl(OBJECT_KEY)).thenReturn("https://minio.test/signed");
+        signedInAs(PredefinedRoles.SUPER_ADMIN);
+
+        assertThat(service.getCitationById(documentId).fileUrl()).isEqualTo("https://minio.test/signed");
     }
 }

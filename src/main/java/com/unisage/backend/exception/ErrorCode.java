@@ -28,6 +28,7 @@ public enum ErrorCode {
     DOCUMENT_PERMISSION_FORBIDDEN(HttpStatus.FORBIDDEN, 2310, "Ban không đủ quyền để tạo documemnt."),
     DOCUMENT_PUBLIC_ACCESS_LEVEL_CONFLICT(HttpStatus.BAD_REQUEST, 2311,
             "Tài liệu công khai không được đặt cấp độ truy cập tối thiểu."),
+    DOCUMENT_VIEW_FORBIDDEN(HttpStatus.FORBIDDEN, 2312, "Bạn không có quyền xem tài liệu này."),
 
     // Not found errors
     CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, 2101, "Category không tồn tại."),
