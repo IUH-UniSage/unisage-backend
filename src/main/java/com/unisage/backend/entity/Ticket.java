@@ -23,8 +23,10 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 /**
- * A user's report about one AI answer. At most one ticket per message (unique message_id); there is
- * no assignee and no delete — staff only move {@code status} and write {@code resolution}.
+ * A user's report about one AI answer. At most one regular Report per message, plus at most one
+ * {@code AI_CALCULATION_WRONG} ticket per calculation item of that message (partial unique indexes,
+ * V34); there is no assignee and no delete — staff only move {@code status} and write
+ * {@code resolution}.
  */
 @Entity
 @Table(name = "tickets")
@@ -61,4 +63,8 @@ public class Ticket extends BaseEntity {
 
     @Column(columnDefinition = "text")
     private String resolution;
+
+    /** {@code T1}..{@code T3} on an {@code AI_CALCULATION_WRONG} ticket, null on every other type. */
+    @Column(name = "calculation_item_id", length = 4, updatable = false)
+    private String calculationItemId;
 }

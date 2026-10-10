@@ -41,6 +41,7 @@ class ChatModelServiceImplTest {
         ReflectionTestUtils.setField(guard, "allowlistRaw", allowlist);
         Map<String, String> fakeDns = Map.of(
                 "api.openai.com", "93.184.216.34",
+                "api.z.ai", "93.184.216.35",
                 "localhost", "127.0.0.1");
         ReflectionTestUtils.setField(guard, "dnsResolver", (SsrfGuard.DnsResolver) host -> {
             String ip = fakeDns.get(host);
@@ -251,5 +252,41 @@ class ChatModelServiceImplTest {
                 .isInstanceOf(AppException.class)
                 .extracting(e -> ((AppException) e).getErrorCode())
                 .isEqualTo(ErrorCode.CHAT_MODEL_PROVIDER_UNSUPPORTED);
+    }
+
+    @Test
+    void create_zaiProvider_acceptedWithConcurrencyLimit() {
+        ChatModelRequest request = ChatModelRequest.builder()
+                .modelPurpose(ChatModelPurpose.EXTRACTION)
+                .sourceType(ChatModelSourceType.CLOUD_API)
+                .llmProvider("zai")
+                .llmModelName("glm-4.7-flash")
+                .apiKey("zai-key")
+                .apiBaseUrl("https://api.z.ai/api/paas/v4")
+                .maxConcurrency(1)
+                .build();
+
+        var response = chatModelService.create(request);
+
+        assertThat(response.llmProvider()).isEqualTo("zai");
+        assertThat(response.maxConcurrency()).isEqualTo(1);
+        assertThat(response.maxRpm()).isNull();
+    }
+
+    @Test
+    void create_withoutRateLimits_leavesBothUnlimited() {
+        ChatModelRequest request = ChatModelRequest.builder()
+                .modelPurpose(ChatModelPurpose.CHAT)
+                .sourceType(ChatModelSourceType.CLOUD_API)
+                .llmProvider("openai")
+                .llmModelName("gpt-4o-mini")
+                .apiKey("sk-abc123")
+                .apiBaseUrl("https://api.openai.com/v1")
+                .build();
+
+        var response = chatModelService.create(request);
+
+        assertThat(response.maxRpm()).isNull();
+        assertThat(response.maxConcurrency()).isNull();
     }
 }

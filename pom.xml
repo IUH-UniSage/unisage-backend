@@ -200,7 +200,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>-Dnet.bytebuddy.experimental=true</argLine>
+                    <argLine>-Dnet.bytebuddy.experimental=true -Duser.timezone=UTC</argLine>
                     <!-- One JVM per test class — avoids ThreadLocal state leaking between @SpringBootTest contexts. -->
                     <reuseForks>false</reuseForks>
                     <systemPropertyVariables>

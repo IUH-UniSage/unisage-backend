@@ -4,15 +4,28 @@ import java.util.List;
 import java.util.UUID;
 
 import com.unisage.backend.dto.request.SendMessageRequest;
+import com.unisage.backend.dto.request.StartTurnRequest;
 import com.unisage.backend.dto.request.UpdateMessageRequest;
+import com.unisage.backend.dto.request.internal.CancelClarificationRequest;
+import com.unisage.backend.dto.response.ChatTurnResponse;
 import com.unisage.backend.dto.response.MessageResponse;
+import com.unisage.backend.dto.response.internal.ClarificationStatusResponse;
 
 public interface MessageService {
 
     /** {@code guestSessionToken} is the raw cookie/header value; null for authenticated callers. */
     MessageResponse send(SendMessageRequest request, UUID callerId, String guestSessionToken);
 
+    /** Prompt context + USER message + ASSISTANT placeholder (stamped after it), in one transaction. */
+    ChatTurnResponse startTurn(StartTurnRequest request, UUID callerId, String guestSessionToken);
+
     MessageResponse update(UUID id, UpdateMessageRequest request);
+
+    /**
+     * unisage-agent cancelling an open clarification panel: flips only
+     * {@code metadata.clarification.status} from {@code open} to {@code cancelled} (idempotent).
+     */
+    ClarificationStatusResponse cancelClarification(UUID id, CancelClarificationRequest request);
 
     /**
      * {@code forContext = false} (the chat UI) returns the whole history, or its last {@code limit}

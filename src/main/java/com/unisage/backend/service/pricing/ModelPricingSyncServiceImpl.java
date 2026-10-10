@@ -1,8 +1,11 @@
 package com.unisage.backend.service.pricing;
 
 import java.math.BigDecimal;
+import java.sql.Date;
+import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -41,8 +44,9 @@ public class ModelPricingSyncServiceImpl implements ModelPricingSyncService {
 
     private static final String INSERT_PRICE_SQL = """
             INSERT INTO model_prices (id, provider, model_name, input_per_million, output_per_million,
-                                      cached_input_per_million, source, synced_at, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, 'LITELLM', ?, ?, ?)
+                                      cached_input_per_million, deprecation_date, source, synced_at,
+                                      created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'LITELLM', ?, ?, ?)
             ON CONFLICT (provider, model_name) DO NOTHING
             """;
 
@@ -57,6 +61,12 @@ public class ModelPricingSyncServiceImpl implements ModelPricingSyncService {
     private static final String TOUCH_SYNCED_AT_SQL = """
             UPDATE model_prices SET synced_at = ?
             WHERE provider = ? AND model_name = ? AND source = 'LITELLM'
+            """;
+
+    // Not a price change, so no history row; applies to SA-priced rows too.
+    private static final String UPDATE_DEPRECATION_SQL = """
+            UPDATE model_prices SET deprecation_date = ?
+            WHERE provider = ? AND model_name = ?
             """;
 
     static final String INSERT_CHANGE_SQL = """
@@ -93,8 +103,10 @@ public class ModelPricingSyncServiceImpl implements ModelPricingSyncService {
         LocalDateTime now = LocalDateTime.now(clock);
         Timestamp nowTs = Timestamp.valueOf(now);
         Map<String, StoredPrice> stored = loadStored();
+        List<ParsedPrice> inserts = new ArrayList<>();
         List<Object[]> changes = new ArrayList<>();
         List<Object[]> touched = new ArrayList<>();
+        List<Object[]> deprecations = new ArrayList<>();
         int created = 0;
         int updated = 0;
         int unchanged = 0;
@@ -102,14 +114,11 @@ public class ModelPricingSyncServiceImpl implements ModelPricingSyncService {
 
         for (ParsedPrice price : parsed.prices()) {
             StoredPrice current = stored.get(key(price.provider(), price.modelName()));
+            if (current != null && !Objects.equals(current.deprecationDate(), price.deprecationDate())) {
+                deprecations.add(new Object[] {sqlDate(price.deprecationDate()), price.provider(), price.modelName()});
+            }
             if (current == null) {
-                int rows = jdbcTemplate.update(INSERT_PRICE_SQL, UUID.randomUUID(), price.provider(),
-                        price.modelName(), price.inputPerMillion(), price.outputPerMillion(),
-                        price.cachedInputPerMillion(), nowTs, nowTs, nowTs);
-                if (rows == 1) {
-                    created++;
-                    changes.add(changeRow(price, null, ModelPriceChangeType.SYNC_CREATE, nowTs));
-                }
+                inserts.add(price);
             } else if (current.source() == ModelPriceSource.MANUAL) {
                 skippedManual++;
             } else if (current.samePrices(price)) {
@@ -125,13 +134,29 @@ public class ModelPricingSyncServiceImpl implements ModelPricingSyncService {
             }
         }
 
+        // Batched: the first sync inserts the whole price map (thousands of rows).
+        int[] inserted = jdbcTemplate.batchUpdate(INSERT_PRICE_SQL, inserts.stream()
+                .map(price -> new Object[] {UUID.randomUUID(), price.provider(), price.modelName(),
+                    price.inputPerMillion(), price.outputPerMillion(), price.cachedInputPerMillion(),
+                    sqlDate(price.deprecationDate()), nowTs, nowTs, nowTs})
+                .toList());
+        for (int i = 0; i < inserted.length; i++) {
+            // 0 = an SA price for the same model was created after loadStored(); theirs stands.
+            if (inserted[i] == 1 || inserted[i] == Statement.SUCCESS_NO_INFO) {
+                created++;
+                changes.add(changeRow(inserts.get(i), null, ModelPriceChangeType.SYNC_CREATE, nowTs));
+            }
+        }
+
         jdbcTemplate.batchUpdate(TOUCH_SYNCED_AT_SQL, touched);
+        jdbcTemplate.batchUpdate(UPDATE_DEPRECATION_SQL, deprecations);
         jdbcTemplate.batchUpdate(INSERT_CHANGE_SQL, changes);
         if (created + updated > 0) {
             modelRegistryVersionService.bump();
         }
-        log.info("model pricing sync: created={} updated={} unchanged={} skippedManual={} rejected={}",
-                created, updated, unchanged, skippedManual, parsed.rejected());
+        log.info("model pricing sync: created={} updated={} unchanged={} skippedManual={} rejected={} "
+                + "deprecationDatesChanged={}", created, updated, unchanged, skippedManual, parsed.rejected(),
+                deprecations.size());
 
         return ModelPricingSyncResponse.builder()
                 .created(created)
@@ -146,14 +171,16 @@ public class ModelPricingSyncServiceImpl implements ModelPricingSyncService {
     private Map<String, StoredPrice> loadStored() {
         Map<String, StoredPrice> stored = new HashMap<>();
         jdbcTemplate.query("""
-                SELECT provider, model_name, input_per_million, output_per_million, cached_input_per_million, source
+                SELECT provider, model_name, input_per_million, output_per_million, cached_input_per_million, source,
+                       deprecation_date
                 FROM model_prices
                 """, rs -> {
             stored.put(key(rs.getString("provider"), rs.getString("model_name")), new StoredPrice(
                     rs.getBigDecimal("input_per_million"),
                     rs.getBigDecimal("output_per_million"),
                     rs.getBigDecimal("cached_input_per_million"),
-                    ModelPriceSource.valueOf(rs.getString("source"))));
+                    ModelPriceSource.valueOf(rs.getString("source")),
+                    rs.getObject("deprecation_date", LocalDate.class)));
         });
         return stored;
     }
@@ -168,11 +195,16 @@ public class ModelPricingSyncServiceImpl implements ModelPricingSyncService {
         };
     }
 
+    private static Date sqlDate(LocalDate value) {
+        return value == null ? null : Date.valueOf(value);
+    }
+
     private static String key(String provider, String modelName) {
         return provider + "\u0000" + modelName;
     }
 
-    private record StoredPrice(BigDecimal input, BigDecimal output, BigDecimal cached, ModelPriceSource source) {
+    private record StoredPrice(BigDecimal input, BigDecimal output, BigDecimal cached, ModelPriceSource source,
+            LocalDate deprecationDate) {
 
         boolean samePrices(ParsedPrice price) {
             return equal(input, price.inputPerMillion())

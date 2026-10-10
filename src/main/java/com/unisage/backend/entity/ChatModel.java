@@ -120,6 +120,9 @@ public class ChatModel extends BaseEntity {
     @Column(name = "max_rpm")
     private Integer maxRpm;
 
+    @Column(name = "max_concurrency")
+    private Integer maxConcurrency;
+
     private Integer priority;
 
     @Builder.Default

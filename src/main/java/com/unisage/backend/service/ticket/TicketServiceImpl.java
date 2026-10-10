@@ -45,6 +45,11 @@ public class TicketServiceImpl implements TicketService {
     @Transactional
     public TicketResponse create(CreateTicketRequest request) {
         UUID userId = securityUtil.getCurrentUserId();
+        // Calculation tickets are one per item and carry calculation_item_id - only the calculation
+        // feedback flow can file them (the DB CHECK would reject one without an item anyway).
+        if (request.type() == TicketType.AI_CALCULATION_WRONG) {
+            throw new AppException(ErrorCode.TICKET_TYPE_NOT_REPORTABLE);
+        }
 
         // Unknown message, someone else's conversation and a non-assistant message all get the same
         // error so a caller cannot probe which message ids exist.
@@ -55,7 +60,7 @@ public class TicketServiceImpl implements TicketService {
         if (message.getRole() != MsgRole.ASSISTANT || !ownedByCaller) {
             throw new AppException(ErrorCode.TICKET_MESSAGE_INVALID);
         }
-        if (ticketRepository.existsByMessageId(message.getId())) {
+        if (ticketRepository.existsByMessageIdAndCalculationItemIdIsNull(message.getId())) {
             throw new AppException(ErrorCode.TICKET_ALREADY_EXISTS);
         }
 
@@ -71,10 +76,10 @@ public class TicketServiceImpl implements TicketService {
         try {
             ticket = ticketRepository.saveAndFlush(ticket);
         } catch (DataIntegrityViolationException e) {
-            // Two concurrent requests for the same message: the unique(message_id) constraint wins.
+            // Two concurrent requests for the same message: the partial unique index on Reports wins.
             throw new AppException(ErrorCode.TICKET_ALREADY_EXISTS);
         }
-        return mapToResponse(ticket);
+        return mapToResponse(ticket, false);
     }
 
     @Override
@@ -82,7 +87,7 @@ public class TicketServiceImpl implements TicketService {
     public PageResponse<List<TicketResponse>> getMyTickets(TicketStatus status, Pageable pageable) {
         UUID userId = securityUtil.getCurrentUserId();
         Page<Ticket> page = ticketRepository.findAll(buildSpec(userId, null, status, null), pageable);
-        return PageResponse.fromPage(page, this::mapToResponse);
+        return PageResponse.fromPage(page, ticket -> mapToResponse(ticket, false));
     }
 
     @Override
@@ -90,7 +95,7 @@ public class TicketServiceImpl implements TicketService {
     public TicketDetailResponse getMyTicket(UUID id) {
         Ticket ticket = ticketRepository.findByIdAndUserId(id, securityUtil.getCurrentUserId())
                 .orElseThrow(() -> new AppException(ErrorCode.TICKET_NOT_FOUND));
-        return mapToDetailResponse(ticket);
+        return mapToDetailResponse(ticket, false);
     }
 
     @Override
@@ -98,7 +103,7 @@ public class TicketServiceImpl implements TicketService {
     public PageResponse<List<TicketResponse>> getAll(String query, TicketStatus status, TicketType type,
                                                      Pageable pageable) {
         Page<Ticket> page = ticketRepository.findAll(buildSpec(null, query, status, type), pageable);
-        return PageResponse.fromPage(page, this::mapToResponse);
+        return PageResponse.fromPage(page, ticket -> mapToResponse(ticket, true));
     }
 
     @Override
@@ -106,7 +111,7 @@ public class TicketServiceImpl implements TicketService {
     public TicketDetailResponse getById(UUID id) {
         Ticket ticket = ticketRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.TICKET_NOT_FOUND));
-        return mapToDetailResponse(ticket);
+        return mapToDetailResponse(ticket, true);
     }
 
     @Override
@@ -132,7 +137,7 @@ public class TicketServiceImpl implements TicketService {
         if (resolution != null) {
             ticket.setResolution(resolution);
         }
-        return mapToDetailResponse(ticketRepository.save(ticket));
+        return mapToDetailResponse(ticketRepository.save(ticket), true);
     }
 
     /** All filters are optional; a null criterion is simply not added, so no null query parameters. */
@@ -155,14 +160,19 @@ public class TicketServiceImpl implements TicketService {
         };
     }
 
-    private TicketResponse mapToResponse(Ticket ticket) {
+    /**
+     * {@code staffView = false} is the ticket owner's own view: it never includes the staff-only
+     * part of a calculation ticket's description (the trace - SPEC-calculation-node §7.2).
+     */
+    private TicketResponse mapToResponse(Ticket ticket, boolean staffView) {
         return TicketResponse.builder()
                 .id(ticket.getId())
                 .messageId(ticket.getMessage().getId())
+                .calculationItemId(ticket.getCalculationItemId())
                 .type(ticket.getType())
                 .status(ticket.getStatus())
                 .title(ticket.getTitle())
-                .description(ticket.getDescription())
+                .description(TicketDescriptions.forViewer(ticket.getDescription(), staffView))
                 .resolution(ticket.getResolution())
                 .userId(ticket.getUser().getId())
                 .userName(ticket.getUser().getFullName())
@@ -172,7 +182,7 @@ public class TicketServiceImpl implements TicketService {
                 .build();
     }
 
-    private TicketDetailResponse mapToDetailResponse(Ticket ticket) {
+    private TicketDetailResponse mapToDetailResponse(Ticket ticket, boolean staffView) {
         Message message = ticket.getMessage();
         String question = messageRepository
                 .findFirstByConversationIdAndRoleAndCreatedAtBeforeOrderByCreatedAtDesc(
@@ -182,11 +192,12 @@ public class TicketServiceImpl implements TicketService {
         return TicketDetailResponse.builder()
                 .id(ticket.getId())
                 .messageId(message.getId())
+                .calculationItemId(ticket.getCalculationItemId())
                 .conversationId(message.getConversation().getId())
                 .type(ticket.getType())
                 .status(ticket.getStatus())
                 .title(ticket.getTitle())
-                .description(ticket.getDescription())
+                .description(TicketDescriptions.forViewer(ticket.getDescription(), staffView))
                 .resolution(ticket.getResolution())
                 .userId(ticket.getUser().getId())
                 .userName(ticket.getUser().getFullName())
