@@ -1,6 +1,7 @@
 package com.unisage.backend.entity;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -54,6 +55,10 @@ public class ModelPrice {
     @Enumerated(EnumType.STRING)
     @Column(name = "source", columnDefinition = "varchar(20)", nullable = false)
     private ModelPriceSource source;
+
+    /** LiteLLM's announced deprecation day; refreshed by sync, also on SA-priced rows. */
+    @Column(name = "deprecation_date")
+    private LocalDate deprecationDate;
 
     @Column(name = "synced_at")
     private LocalDateTime syncedAt;

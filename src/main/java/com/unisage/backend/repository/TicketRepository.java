@@ -22,11 +22,15 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID>, JpaSpecif
     /** UNISAGE-72: dashboard's "open support requests" tile. */
     long countByStatus(TicketStatus status);
 
-    boolean existsByMessageId(UUID messageId);
+    /** The regular Report of a message (at most one); calculation-item tickets are excluded. */
+    boolean existsByMessageIdAndCalculationItemIdIsNull(UUID messageId);
 
-    Optional<Ticket> findByMessageId(UUID messageId);
+    Optional<Ticket> findByMessageIdAndCalculationItemIdIsNull(UUID messageId);
 
-    List<Ticket> findByMessageIdIn(Collection<UUID> messageIds);
+    List<Ticket> findByMessageIdInAndCalculationItemIdIsNull(Collection<UUID> messageIds);
+
+    /** The {@code AI_CALCULATION_WRONG} ticket of one calculation item (at most one). */
+    Optional<Ticket> findByMessageIdAndCalculationItemId(UUID messageId, String calculationItemId);
 
     Optional<Ticket> findByIdAndUserId(UUID id, UUID userId);
 

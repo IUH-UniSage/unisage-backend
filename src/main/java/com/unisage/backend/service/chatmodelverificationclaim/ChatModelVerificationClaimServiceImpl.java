@@ -70,7 +70,8 @@ public class ChatModelVerificationClaimServiceImpl implements ChatModelVerificat
                 job.getCandidateModelSourceRef(),
                 job.getCandidateApiBaseUrl(),
                 job.getCandidateApiKeyEncrypted(),
-                model.getMaxRpm());
+                model.getMaxRpm(),
+                model.getMaxConcurrency());
         return new InternalVerificationClaimResponse(
                 job.getId(), job.getLeaseToken(), job.getAttempt(), job.getLeaseUntil(), credential);
     }

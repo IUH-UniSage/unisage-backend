@@ -1,12 +1,17 @@
 package com.unisage.backend.service.dashboard;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.unisage.backend.dto.response.DashboardSummaryResponse;
@@ -46,11 +51,16 @@ public class DashboardServiceImpl implements DashboardService {
     private final DocumentRepository documentRepository;
     private final TicketRepository ticketRepository;
     private final SystemHealthCheckService systemHealthCheckService;
+    private final Clock clock;
+
+    // "Today"/"this week" are calendar days in app.timezone; the DB columns they filter are UTC.
+    @Value("${app.timezone:Asia/Ho_Chi_Minh}")
+    private ZoneId zoneId;
 
     @Override
     public DashboardSummaryResponse getSummary() {
-        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startOfToday = startOfDayUtc(today());
+        LocalDateTime now = LocalDateTime.now(clock);
 
         return DashboardSummaryResponse.builder()
                 .users(buildUserStats(startOfToday))
@@ -89,10 +99,10 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     private WeeklyActivity buildWeeklyActivity() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = today();
         LocalDate from = today.minusDays(WEEKLY_ACTIVITY_DAYS - 1L);
         Map<LocalDate, Long> countsByDay = messageRepository
-                .countDailyAssistantMessagesSince(from.atStartOfDay())
+                .countDailyAssistantMessagesSince(startOfDayUtc(from), zoneId.getId())
                 .stream()
                 .collect(Collectors.toMap(DailyMessageCount::getDay, DailyMessageCount::getCount));
 
@@ -104,5 +114,13 @@ public class DashboardServiceImpl implements DashboardService {
             total += count;
         }
         return WeeklyActivity.builder().daily(daily).totalQuestions(total).build();
+    }
+
+    private LocalDate today() {
+        return ZonedDateTime.now(clock).withZoneSameInstant(zoneId).toLocalDate();
+    }
+
+    private LocalDateTime startOfDayUtc(LocalDate day) {
+        return day.atStartOfDay(zoneId).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
     }
 }

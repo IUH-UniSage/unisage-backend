@@ -1,9 +1,16 @@
 package com.unisage.backend.controller;
 
+import java.util.UUID;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.unisage.backend.dto.request.CalculationFeedbackRequest;
+import com.unisage.backend.entity.enums.CalculationVerdict;
+import com.unisage.backend.exception.AppException;
+import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.security.InternalSecretFilter;
+import com.unisage.backend.service.calculation.CalculationFeedbackService;
 import com.unisage.backend.service.conversation.MessageService;
 import com.unisage.backend.utils.CookieUtil;
 import com.unisage.backend.utils.SecurityUtil;
@@ -11,14 +18,19 @@ import com.unisage.backend.utils.SecurityUtil;
 import jakarta.servlet.http.HttpServletRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 class MessageControllerTest {
 
     private final CookieUtil cookieUtil = mock(CookieUtil.class);
     private final MessageController controller =
-            new MessageController(mock(MessageService.class), mock(SecurityUtil.class), cookieUtil);
+            new MessageController(mock(MessageService.class), mock(CalculationFeedbackService.class),
+                    mock(SecurityUtil.class), cookieUtil);
 
     private String extractGuestSessionToken(HttpServletRequest request) {
         return ReflectionTestUtils.invokeMethod(controller, "extractGuestSessionToken", request);
@@ -55,5 +67,24 @@ class MessageControllerTest {
         when(cookieUtil.extractGuestSessionTokenFromCookie(request)).thenReturn("real-cookie-token");
 
         assertThat(extractGuestSessionToken(request)).isEqualTo("real-cookie-token");
+    }
+
+    @Test
+    void calculationFeedback_onlyHandsTheRequestAndItsSizeToTheService() {
+        CalculationFeedbackService feedbackService = mock(CalculationFeedbackService.class);
+        MessageController feedbackController = new MessageController(
+                mock(MessageService.class), feedbackService, mock(SecurityUtil.class), cookieUtil);
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getContentLengthLong()).thenReturn(2049L);
+        UUID messageId = UUID.randomUUID();
+        CalculationFeedbackRequest body = CalculationFeedbackRequest.builder()
+                .itemId("T1").verdict(CalculationVerdict.CORRECT).build();
+        when(feedbackService.submit(eq(messageId), eq(body), any(), any(), eq(2049L)))
+                .thenThrow(new AppException(ErrorCode.CALCULATION_FEEDBACK_INVALID));
+
+        assertThatThrownBy(() -> feedbackController.calculationFeedback(messageId, body, request))
+                .isInstanceOfSatisfying(AppException.class, e ->
+                        assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CALCULATION_FEEDBACK_INVALID));
+        verify(feedbackService).submit(eq(messageId), eq(body), any(), any(), eq(2049L));
     }
 }

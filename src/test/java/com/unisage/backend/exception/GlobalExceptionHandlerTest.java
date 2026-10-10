@@ -37,4 +37,15 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().code()).isEqualTo(ErrorCode.SYS_UNCATEGORIZED.getCode());
     }
+
+    @Test
+    void unreadableBody_returnsValidationError_insteadOfGenericServerError() {
+        ResponseEntity<ApiResponse<Map<String, String>>> response = handler.handleNotReadable(
+                new org.springframework.http.converter.HttpMessageNotReadableException(
+                        "bad enum", new org.springframework.mock.http.MockHttpInputMessage(new byte[0])));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo(ErrorCode.VALIDATION_ERROR.getCode());
+    }
 }

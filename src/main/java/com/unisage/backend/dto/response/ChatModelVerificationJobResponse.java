@@ -17,6 +17,7 @@ import lombok.Builder;
 public record ChatModelVerificationJobResponse(
         UUID id,
         UUID chatModelId,
+        String chatModelDisplayName,
         ChatModelPurpose modelPurpose,
         ChatModelVerificationStatus status,
         Integer candidateGeneration,

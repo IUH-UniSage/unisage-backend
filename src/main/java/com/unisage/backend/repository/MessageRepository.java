@@ -6,7 +6,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import jakarta.persistence.LockModeType;
+
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -18,6 +21,14 @@ import com.unisage.backend.repository.projection.DailyMessageCount;
 public interface MessageRepository extends JpaRepository<Message, UUID> {
 
     List<Message> findByConversationIdOrderByCreatedAtAsc(UUID conversationId);
+
+    /**
+     * Row-locks the message for a read-modify-write of its {@code metadata} jsonb (clarification
+     * cancel, calculation feedback) so two concurrent writers cannot drop each other's keys.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM Message m WHERE m.id = :id")
+    Optional<Message> findByIdForUpdate(@Param("id") UUID id);
 
     /** The message of {@code role} sent immediately before {@code before} in a conversation. */
     Optional<Message> findFirstByConversationIdAndRoleAndCreatedAtBeforeOrderByCreatedAtDesc(
@@ -37,15 +48,19 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
         """, nativeQuery = true)
     long countAssistantWithCitationsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    /** UNISAGE-72: dashboard's weekly activity chart - one row per day since {@code from}. */
+    /**
+     * UNISAGE-72: dashboard's weekly activity chart - one row per day since {@code from} (UTC),
+     * days cut in {@code zone} ({@code created_at} is stored as UTC).
+     */
     @Query(value = """
-        SELECT CAST(created_at AS date) AS day, COUNT(*) AS count
+        SELECT CAST((created_at AT TIME ZONE 'UTC') AT TIME ZONE :zone AS date) AS day, COUNT(*) AS count
         FROM messages
         WHERE role = 'ASSISTANT' AND created_at >= :from
         GROUP BY day
         ORDER BY day
         """, nativeQuery = true)
-    List<DailyMessageCount> countDailyAssistantMessagesSince(@Param("from") LocalDateTime from);
+    List<DailyMessageCount> countDailyAssistantMessagesSince(
+            @Param("from") LocalDateTime from, @Param("zone") String zone);
 
     /** Bulk delete for the guest-session cleanup job — bypasses conversation-by-conversation loading. */
     @Modifying

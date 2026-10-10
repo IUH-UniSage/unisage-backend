@@ -70,6 +70,31 @@ class ModelPricingServiceImplTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void getAll_mergesProviderSupportAndDeprecation() {
+        save("openai", "gpt-4o-mini");
+        save("openai", "gpt-5.2-codex");
+        save("deepseek", "deepseek-chat");
+        save("anthropic", "claude-x");
+        jdbcTemplate.update("UPDATE model_prices SET deprecation_date = DATE '2000-01-01' WHERE model_name = 'gpt-4o-mini'");
+
+        var byName = service.getAll(null, null).stream()
+                .collect(java.util.stream.Collectors.toMap(p -> p.modelName(), p -> p));
+
+        // Probed and callable, but past LiteLLM's deprecation date.
+        assertThat(byName.get("gpt-4o-mini").supportedProviders()).containsExactly("openai");
+        assertThat(byName.get("gpt-4o-mini").supportStatus()).isEqualTo("tested");
+        assertThat(byName.get("gpt-4o-mini").deprecated()).isTrue();
+        // Retired according to the probe, with no LiteLLM date.
+        assertThat(byName.get("gpt-5.2-codex").deprecated()).isTrue();
+        assertThat(byName.get("gpt-5.2-codex").supportedProviders()).isEmpty();
+        // Not probed: provider-level default.
+        assertThat(byName.get("deepseek-chat").supportStatus()).isEqualTo("inferred");
+        assertThat(byName.get("deepseek-chat").supportedProviders()).containsExactly("openai");
+        assertThat(byName.get("claude-x").supportStatus()).isEqualTo("unsupported");
+        assertThat(byName.get("claude-x").deprecated()).isFalse();
+    }
+
+    @Test
     void update_pinsPriceAsManualAndRecordsOldAndNew() {
         UUID actor = signInAsAdmin();
         UUID id = save("openai", "gpt-4o-mini");

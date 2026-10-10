@@ -3,6 +3,7 @@ package com.unisage.backend.dto.request;
 import com.unisage.backend.entity.enums.ChatModelSourceType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.Builder;
 import org.openapitools.jackson.nullable.JsonNullable;
 
@@ -13,7 +14,8 @@ import org.openapitools.jackson.nullable.JsonNullable;
  * update has to: both mean "keep the old key", which is different from {@code ""} (400) and from
  * a new value (becomes a rotation candidate). {@link JsonNullable} is the only field on this DTO
  * with that tri/four-state shape — every other field keeps its plain type because it either has
- * no "absent" case that matters (required) or applies immediately regardless (priority, maxRpm).
+ * no "absent" case that matters (required) or applies immediately regardless (priority, maxRpm,
+ * maxConcurrency).
  *
  * <p>All 4 states are resolved in exactly one place — {@code ChatModelServiceImpl.update} — not
  * here and not in a mapper, per plan.md ("Xử lý 4 trạng thái ở 1 chỗ duy nhất"). The compact
@@ -45,8 +47,13 @@ public record ChatModelUpdateRequest(
     @NotBlank(message = "apiBaseUrl không được để trống")
     String apiBaseUrl,
 
-    @NotNull(message = "maxRpm không được để trống")
+    /** Requests per minute for this credential; null = no limit. */
+    @Positive(message = "maxRpm phải lớn hơn 0")
     Integer maxRpm,
+
+    /** In-flight requests at once for this credential; null = no limit. */
+    @Positive(message = "maxConcurrency phải lớn hơn 0")
+    Integer maxConcurrency,
 
     Integer priority
 ) {

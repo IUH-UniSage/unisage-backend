@@ -89,6 +89,7 @@ class ModelRegistrySnapshotServiceTest {
         assertThat(snapshot.purposes().get(ChatModelPurpose.EMBEDDING)).extracting(CredentialEntry::apiKey)
                 .containsExactly("sk-embed");
         assertThat(snapshot.purposes().get(ChatModelPurpose.EXTRACTION)).isEmpty();
+        assertThat(snapshot.purposes().get(ChatModelPurpose.RERANK)).isEmpty();
         assertThat(snapshot.embeddingIndexIdentity()).isNull();
     }
 

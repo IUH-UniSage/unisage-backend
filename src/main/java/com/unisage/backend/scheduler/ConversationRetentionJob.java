@@ -25,7 +25,7 @@ public class ConversationRetentionJob {
     private final ConversationService conversationService;
     private final SystemConfigResolver configResolver;
 
-    @Scheduled(cron = "${app.conversation.retention.cron:0 30 3 * * *}")
+    @Scheduled(cron = "${app.conversation.retention.cron:0 30 3 * * *}", zone = "${app.timezone:Asia/Ho_Chi_Minh}")
     public void trimOldConversations() {
         // Read live on every run, so an admin edit applies from the next run on.
         int keep = configResolver.getInt(MAX_CONVERSATIONS_KEY, 10);

@@ -75,6 +75,12 @@ public enum ErrorCode {
     SYSTEM_CONFIG_NOT_EDITABLE(HttpStatus.FORBIDDEN, 2147, "Cấu hình này không thể chỉnh sửa."),
     SYSTEM_CONFIG_FILE_SIZE_OUT_OF_RANGE(HttpStatus.BAD_REQUEST, 2155,
             "Kích thước file tối đa phải lớn hơn 0 và không vượt quá giới hạn tải lên của máy chủ (100 MB)."),
+    MESSAGE_METADATA_INVALID(HttpStatus.BAD_REQUEST, 2156,
+            "metadata chỉ chấp nhận khóa clarification_answers và không vượt quá 32 KB."),
+    CLARIFICATION_INVALID_STATUS_TRANSITION(HttpStatus.CONFLICT, 2157,
+            "Bảng hỏi không ở trạng thái cho phép chuyển sang trạng thái này."),
+    TICKET_TYPE_NOT_REPORTABLE(HttpStatus.BAD_REQUEST, 2158,
+            "Loại yêu cầu này chỉ được tạo qua nút phản hồi Đúng/Sai của kết quả tính toán."),
 
     // Internal API (/internal/**) — X-Internal-Secret is checked separately by
     // InternalSecretFilter (code 1007); this is the CIDR layer.
@@ -117,6 +123,15 @@ public enum ErrorCode {
     MODEL_PRICE_ALREADY_EXISTS(HttpStatus.CONFLICT, 2611, "Model này đã có giá, hãy sửa giá hiện có."),
     MODEL_PRICE_NOT_MANUAL(HttpStatus.BAD_REQUEST, 2612,
             "Chỉ khôi phục được giá đã chỉnh tay."),
+
+    // Calculation traces and feedback (27xx) - UNISAGE-99
+    CALCULATION_TRACE_INVALID(HttpStatus.BAD_REQUEST, 2700,
+            "Trace tính toán không hợp lệ (itemId trùng hoặc trace vượt quá 16 KB)."),
+    CALCULATION_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, 2701,
+            "Không tìm thấy kết quả tính toán theo quy chế để phản hồi."),
+    CALCULATION_FEEDBACK_INVALID(HttpStatus.BAD_REQUEST, 2702, "Phản hồi kết quả tính toán không hợp lệ."),
+    CALCULATION_FEEDBACK_LOCKED(HttpStatus.CONFLICT, 2703,
+            "Yêu cầu hỗ trợ của kết quả này đã được xử lý xong, không thể đổi phản hồi nữa."),
 
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),

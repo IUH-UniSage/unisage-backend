@@ -43,6 +43,7 @@ public class ChatModelVerificationJobServiceImpl implements ChatModelVerificatio
         return ChatModelVerificationJobResponse.builder()
                 .id(job.getId())
                 .chatModelId(job.getChatModel().getId())
+                .chatModelDisplayName(job.getChatModel().getDisplayName())
                 .modelPurpose(job.getChatModel().getModelPurpose())
                 .status(job.getStatus())
                 .candidateGeneration(job.getCandidateGeneration())

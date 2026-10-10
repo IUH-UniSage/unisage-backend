@@ -44,6 +44,10 @@ public final class PredefinedPublicPaths {
             new PublicPath("POST", "/conversations"),
             new PublicPath("GET", "/conversations/guest"),
             new PublicPath("POST", "/messages"),
+            new PublicPath("POST", "/messages/turn"),
+            // Đúng/Sai on a calculation result: guests may answer too; ownership (user or guest
+            // session) is checked in CalculationFeedbackServiceImpl, like /messages/turn.
+            new PublicPath("POST", "/messages/*/calculation-feedback"),
             new PublicPath("GET", "/messages/conversation/**"),
             // Remaining usage quota: a signed-in user reads their own, a guest reads the one tied to
             // their session cookie. Identity is never taken from the request.

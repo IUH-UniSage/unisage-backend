@@ -4,6 +4,7 @@ import com.unisage.backend.dto.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -67,6 +68,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
                 .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage(), errors));
+    }
+
+    /**
+     * Malformed JSON, or a value Jackson cannot bind (e.g. an unknown enum constant such as
+     * {@code "verdict": "MAYBE"}), is the client's fault - answer 400 instead of falling through to
+     * the generic 500 handler below.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleNotReadable(
+            HttpMessageNotReadableException exception) {
+
+        ErrorCode errorCode = ErrorCode.VALIDATION_ERROR;
+
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage(), null));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

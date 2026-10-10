@@ -142,6 +142,7 @@ public class ModelRegistryIntegrationSeeder implements CommandLineRunner {
             case CHAT -> "gpt-4o-mini";
             case EMBEDDING -> "text-embedding-3-small";
             case EXTRACTION -> "gpt-4o-mini";
+            case RERANK -> "gpt-4o-mini";
         };
     }
 }

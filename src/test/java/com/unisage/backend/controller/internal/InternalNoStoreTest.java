@@ -91,10 +91,10 @@ class InternalNoStoreTest {
 
         var headers = new org.springframework.http.HttpHeaders();
         headers.add("X-Internal-Secret", "unisage-internal-secret-key-2026");
-        // Body only for methods that can carry one — enough for POST/PUT endpoints to reach
+        // Body only for methods that can carry one — enough for POST/PUT/PATCH endpoints to reach
         // validation/handling and produce a response (even a 4xx one), which still must carry
         // no-store; this test only checks headers, never the status code.
-        Object body = (method == HttpMethod.POST || method == HttpMethod.PUT) ? "{}" : null;
+        Object body = (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.PATCH) ? "{}" : null;
         if (body != null) {
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
         }

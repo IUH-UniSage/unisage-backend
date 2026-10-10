@@ -134,7 +134,7 @@ class TicketServiceImplTest {
     @Test
     void create_rejectsSecondTicketForSameMessage() {
         when(messageRepository.findById(messageId)).thenReturn(Optional.of(message(MsgRole.ASSISTANT, caller)));
-        when(ticketRepository.existsByMessageId(messageId)).thenReturn(true);
+        when(ticketRepository.existsByMessageIdAndCalculationItemIdIsNull(messageId)).thenReturn(true);
 
         assertCode(() -> service.create(createRequest()), ErrorCode.TICKET_ALREADY_EXISTS);
         verify(ticketRepository, never()).saveAndFlush(any());
@@ -146,6 +146,58 @@ class TicketServiceImplTest {
         when(ticketRepository.saveAndFlush(any(Ticket.class))).thenThrow(new DataIntegrityViolationException("dup"));
 
         assertCode(() -> service.create(createRequest()), ErrorCode.TICKET_ALREADY_EXISTS);
+    }
+
+    @Test
+    void create_rejectsCalculationWrongType_whichOnlyTheFeedbackFlowFiles() {
+        when(messageRepository.findById(messageId)).thenReturn(Optional.of(message(MsgRole.ASSISTANT, caller)));
+        CreateTicketRequest request = CreateTicketRequest.builder()
+                .messageId(messageId).type(TicketType.AI_CALCULATION_WRONG).title("t").description("d").build();
+
+        assertCode(() -> service.create(request), ErrorCode.TICKET_TYPE_NOT_REPORTABLE);
+        verify(ticketRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void create_reportIsAllowedWhenOnlyCalculationTicketsExistOnTheMessage() {
+        // existsByMessageIdAndCalculationItemIdIsNull ignores calculation tickets (mock default: false).
+        when(messageRepository.findById(messageId)).thenReturn(Optional.of(message(MsgRole.ASSISTANT, caller)));
+
+        TicketResponse response = service.create(createRequest());
+
+        assertThat(response.calculationItemId()).isNull();
+        verify(ticketRepository).existsByMessageIdAndCalculationItemIdIsNull(messageId);
+    }
+
+    // ── calculation ticket visibility ──────────────────────────────────────────────────────────
+
+    private Ticket calculationTicket() {
+        Ticket t = ticket(TicketStatus.OPEN, null);
+        t.setType(TicketType.AI_CALCULATION_WRONG);
+        t.setCalculationItemId("T1");
+        t.setDescription("Lý do: Sai kết quả" + TicketDescriptions.STAFF_ONLY_MARKER + "Trace: {\"expression\": \"a*b\"}");
+        return t;
+    }
+
+    @Test
+    void getMyTicket_hidesTheStaffOnlyTraceFromTheOwner() {
+        Ticket t = calculationTicket();
+        when(ticketRepository.findByIdAndUserId(t.getId(), callerId)).thenReturn(Optional.of(t));
+
+        TicketDetailResponse detail = service.getMyTicket(t.getId());
+
+        assertThat(detail.description()).isEqualTo("Lý do: Sai kết quả");
+        assertThat(detail.calculationItemId()).isEqualTo("T1");
+    }
+
+    @Test
+    void getById_showsTheTraceToStaff() {
+        Ticket t = calculationTicket();
+        when(ticketRepository.findById(t.getId())).thenReturn(Optional.of(t));
+
+        TicketDetailResponse detail = service.getById(t.getId());
+
+        assertThat(detail.description()).contains("Trace:").contains("a*b");
     }
 
     // ── my tickets ─────────────────────────────────────────────────────────────────────────────
