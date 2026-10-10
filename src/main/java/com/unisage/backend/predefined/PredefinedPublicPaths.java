@@ -20,11 +20,7 @@ public final class PredefinedPublicPaths {
             // list/detail/update stay on TICKET_* Permission rows.
             new PublicPath("POST", "/tickets"),
             new PublicPath("GET", "/tickets/my"),
-            new PublicPath("GET", "/tickets/my/*"),
-            // Chat citations: open the file behind a cited source. Returns only a preview/download
-            // URL for one document (no admin fields). Document-level access control is not
-            // implemented yet (see DocumentServiceImpl.resolveFileUrl).
-            new PublicPath("GET", "/documents/*/citation")
+            new PublicPath("GET", "/tickets/my/*")
     );
 
     public static final List<PublicPath> PUBLIC_PATHS = List.of(
@@ -49,6 +45,11 @@ public final class PredefinedPublicPaths {
             // session) is checked in CalculationFeedbackServiceImpl, like /messages/turn.
             new PublicPath("POST", "/messages/*/calculation-feedback"),
             new PublicPath("GET", "/messages/conversation/**"),
+            // Chat citations: open the file behind a cited source, for guests too. Returns only a
+            // preview/download URL for one document (no admin fields); a private document is
+            // refused unless the caller's department access clears it
+            // (DocumentServiceImpl.getCitationById).
+            new PublicPath("GET", "/documents/*/citation"),
             // Remaining usage quota: a signed-in user reads their own, a guest reads the one tied to
             // their session cookie. Identity is never taken from the request.
             new PublicPath("GET", "/usage-limits/me"),

@@ -24,11 +24,13 @@ import com.unisage.backend.entity.User;
 import com.unisage.backend.entity.enums.DocStatus;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
+import com.unisage.backend.predefined.PredefinedRoles;
 import com.unisage.backend.repository.AccessLevelRepository;
 import com.unisage.backend.repository.CategoryRepository;
 import com.unisage.backend.repository.DepartmentRepository;
 import com.unisage.backend.repository.DocumentRepository;
 import com.unisage.backend.repository.DocumentVersionRepository;
+import com.unisage.backend.repository.UserDepartmentAccessRepository;
 import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.service.file.FileService;
 import com.unisage.backend.utils.SecurityUtil;
@@ -46,6 +48,7 @@ public class DocumentServiceImpl implements DocumentService {
     private final UserRepository userRepository;
     private final AccessLevelRepository accessLevelRepository;
     private final DocumentVersionRepository documentVersionRepository;
+    private final UserDepartmentAccessRepository userDepartmentAccessRepository;
     private final SecurityUtil securityUtil;
     private final FileService fileService;
 
@@ -186,10 +189,14 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
+    @Transactional
     public CitationDocumentResponse getCitationById(UUID id) {
         Document document = documentRepository.findById(id)
                 .filter(d -> d.getDeletedAt() == null)
                 .orElseThrow(() -> new AppException(ErrorCode.DOCUMENT_NOT_FOUND));
+        if (!canViewCitation(document)) {
+            throw new AppException(ErrorCode.DOCUMENT_VIEW_FORBIDDEN);
+        }
         return CitationDocumentResponse.builder()
                 .id(document.getId())
                 .title(document.getTitle())
@@ -275,27 +282,40 @@ public class DocumentServiceImpl implements DocumentService {
         return minAccessLevel;
     }
 
+    /**
+     * Same rule the agent applies to Qdrant chunks: a public document is open to everyone, guests
+     * included; a private one needs SUPER_ADMIN (the {@code *} wildcard of the JWT's
+     * {@code department_access}) or a department access row for the document's department whose
+     * level clears {@code minAccessLevel}.
+     */
+    private boolean canViewCitation(Document document) {
+        if (Boolean.TRUE.equals(document.getIsPublic())) {
+            return true;
+        }
+        UUID userId = securityUtil.getCurrentUserIdOrNull();
+        if (userId == null) {
+            return false;
+        }
+        User requester = userRepository.findById(userId).orElse(null);
+        if (requester == null) {
+            return false;
+        }
+        if (requester.getRole() != null && PredefinedRoles.SUPER_ADMIN.equals(requester.getRole().getName())) {
+            return true;
+        }
+        if (document.getDocPackage() == null) {
+            return false;
+        }
+        int required = document.getMinAccessLevel() != null ? document.getMinAccessLevel().getLevel() : 0;
+        return userDepartmentAccessRepository.findAccessLevel(userId, document.getDocPackage().getId())
+                .map(level -> level >= required)
+                .orElse(false);
+    }
+
     private String resolveFileUrl(Document document) {
         if (document.getSourceUrl() == null) {
             return null;
         }
-        if (Boolean.TRUE.equals(document.getIsPublic())) {
-            return fileService.getPresignedUrl(document.getSourceUrl());
-        }
-
-        // UUID userId = securityUtil.getCurrentUserIdOrNull();
-        // if (userId == null) {
-        //     return null;
-        // }
-
-        // User requester = userRepository.findById(userId).orElse(null);
-        // int effectiveLevel = requester != null && requester.getAccessLevel() != null
-        //         ? requester.getAccessLevel().getLevel() : 0;
-        // int required = document.getMinAccessLevel() != null ? document.getMinAccessLevel().getLevel() : 0;
-        // if (effectiveLevel < required) {
-        //     return null;
-        // }
-
         return fileService.getPresignedUrl(document.getSourceUrl());
     }
 
