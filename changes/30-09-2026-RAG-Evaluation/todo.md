@@ -211,6 +211,15 @@ chạy lại được nhiều lần/ngày), rồi mới chạy bộ official.
 
 ### Task 5: Chạy graph in-process với wrapper ghi lại
 
+**Xong code 11-10-2026 (chờ chạy thật):** `evals/recording.py` (`RecordingTrace`, `RecordingRetrieval`,
+hook bọc `run_generation_synthesis`/`search_web` để lấy context sau rerank và trang web; ContextVar theo
+từng câu), `evals/run.py` (`task eval:run`), `evals/metrics.py` (outcome, intent, Recall@5, rò rỉ trên
+mọi chunk truy xuất + citation, số khớp, verdict theo `scoring-rules.md`, Wilson). Khởi động y như app
+(`lifespan` → registry/budget/pricing từ backend-java, `get_graph_models()`); không cần agent API,
+worker, gateway. Persona: mã department → UUID qua `departments.json` do `evals.ingest` lưu. Usage
+đọc từ `UsageRecorder` (không gửi về backend vì id tin nhắn là giả). Test: 19 test mới (gồm smoke
+test chạy graph thật với model giả); toàn suite 1.892 pass.
+
 **Description:** Viết `evals/recording.py`: `RecordingRetrieval` (bọc
 `RetrievalService`, lưu chunk + metadata), `RecordingTrace` (lưu danh sách node
 để suy ra intent), token sink đo TTFT. Chạy `run_graph()` cho 1 câu hỏi trên
