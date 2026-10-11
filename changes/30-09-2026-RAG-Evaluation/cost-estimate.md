@@ -6,7 +6,7 @@
 > ```bash
 > cd unisage-agent
 > MODEL_REGISTRY_ENABLED=false .venv/bin/python -m evals.cost_estimate \
->   --dataset ../unisage-gateway/dataset --prices litellm_prices.json --sample 60 \
+>   --dataset ../unisage-gateway/dataset/official --prices litellm_prices.json --sample 60 \
 >   --scenario gemini-2.5-flash-lite gemini-embedding-001 \
 >   --scenario gemini-2.5-flash gemini-embedding-001 \
 >   --scenario gpt-4o-mini text-embedding-3-small \

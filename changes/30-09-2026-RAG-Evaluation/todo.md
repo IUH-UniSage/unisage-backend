@@ -189,8 +189,17 @@ chạy lại được nhiều lần/ngày), rồi mới chạy bộ official.
   gõ trong chat). 3 câu có `review_note`. Bộ câu hỏi: 557 câu. **Bộ đánh giá demo = `source_set=demo`
   + câu không cần tài liệu = 406 dòng** (access 152, normal 114, unanswerable 50, calculation 40,
   off_topic 26, social 18, web_search 6). Runner chọn bộ này bằng `--subset demo`.
-- Đề xuất chờ duyệt: thêm `question_user` cho ~122 câu có đáp án cũ của bộ demo, báo cáo hai cột
-  (câu chính xác / câu người dùng); câu người dùng mơ hồ thì hệ thống hỏi lại cũng tính đạt.
+- **Xong 11-10-2026:** `question_user` cho mọi câu có đáp án của cả hai bộ (457 dòng: 306 demo, 151
+  official; 4 subagent viết, câu trùng nội dung dùng chung một bản). Runner chạy `--variant
+  exact|user|both`, report hai cột; câu người dùng mơ hồ mà hệ thống hỏi lại thì tính đạt.
+- **Xong 11-10-2026:** `task eval:ingest set=demo|official`, `task eval:link` (ghép tài liệu ingest tay
+  theo tiêu đề), hết quota thì `ingest_status=quota` + chờ `EVAL_QUOTA_WAIT_MINUTES` rồi chạy tiếp.
+- **OCR (11-10-2026):** Thông báo 867 tuyển sinh 2026 (`5dfcb0672f15`) là bản scan, chưa `selected`.
+  Parser OCR bằng Tesseract nhưng mặc định tiếng Anh → mất dấu; thêm `INGEST_OCR_LANGUAGE=vie+eng`
+  (thiếu traineddata thì lùi về eng). Với `vie` văn bản có dấu, nhưng ký hiệu chỉ số dưới vẫn sai
+  (ĐXT → `Đxr`, XT1 → `XT)`). Công thức `ĐXT = Max(XT1;XT2;XT3)` có bản text sạch ở
+  `bc0962c377a7` (demo, chunk 0 giữ trọn công thức + định nghĩa XT1–XT3; phân số quy đổi ĐGNL bị
+  méo khi trích xuất).
 
 **Acceptance criteria:**
 - [x] Tests pass: `pytest tests/evals/test_ingest.py` (7 test: luồng đầy đủ, `empty_text`, chạy tiếp không upload lại, poll tới khi task kết thúc, tài liệu public, department lạ, lọc `--only`)
@@ -540,6 +549,10 @@ thành `SingleTurnSample` của RAGAS (ánh xạ ở `spec.md` §4) rồi chạy
   key, rồi mới fallback; 504 → timeout 90 s, retry 2 lần. Ghi điểm từng dòng ngay khi xong; chạy lại
   chỉ chấm dòng thiếu hoặc `NaN`. Cuối lần chạy in số lời gọi, số 429/503/504, số dòng dùng fallback
   theo từng key (key che bớt).
+- **Hết quota thì tự chạy tiếp (yêu cầu 11-10-2026):** khi mọi key đều hết RPD, runner không thoát
+  mà ngủ tới giờ reset (0h giờ Thái Bình Dương = 14h/15h giờ VN, đọc `retryDelay` nếu có), rồi chấm
+  tiếp các dòng còn thiếu; `--quota-wait 0` thì dừng có checkpoint và lần chạy sau tiếp tục. Cùng cơ chế
+  với `evals.ingest` (`ingest_status=quota`, `EVAL_QUOTA_WAIT_MINUTES`).
 - Trước khi chạy ước tính chi phí; vượt `--max-cost` (mặc định 4 USD) thì dừng. Ghi token và chi
   phí thực tế (callback đếm token của RAGAS).
 - Ghim phiên bản `ragas` trong nhóm dependency `eval` của `pyproject.toml` (không vào image
