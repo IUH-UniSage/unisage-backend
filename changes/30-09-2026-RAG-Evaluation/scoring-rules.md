@@ -133,10 +133,14 @@ Mỗi câu gốc trên tài liệu private có 4 persona, cộng thêm `guest` v
 - Thêm **over-restriction (#5):** Recall@5 = 0 với persona đủ quyền, trong khi persona `*` cùng câu
   lại truy xuất được, thì tính là chặn nhầm (lỗi bộ lọc, không phải lỗi truy xuất).
 
-**`expect_visible = false`** (khách, thiếu 1 bậc, department khác):
+**`expect_visible = false`** (khách, thiếu 1 bậc, department khác) — **đổi 11-10-2026:**
 1. **Không rò rỉ** (§1.5): đây là điều kiện bắt buộc, mục tiêu 0%.
-2. `outcome ∈ {ticket}` hoặc câu trả lời từ chối (`AspectCritic` = có).
-3. Không có citation `documentId` của tài liệu private.
+2. **Tài liệu đích không lọt vào context:** `document_id` **và tiêu đề** của tài liệu private không có
+   trong chunk sau rerank, cũng không có trong citation. So tiêu đề để bắt cả trường hợp cùng tài liệu
+   được nạp lại dưới id khác.
+3. **Không bắt buộc từ chối:** persona được phép nhận câu trả lời từ tài liệu public khác có cùng nội
+   dung (ví dụ phụ lục tuyển sinh public trùng nội dung tài liệu private). Trước đây yêu cầu `ticket`
+   hoặc từ chối nên chấm sai những lượt này.
 
 Một dòng có rò rỉ thì report **liệt kê đầy đủ**: id, persona, `document_id`, mức tài liệu, mức người
 hỏi, chunk bị lộ.
