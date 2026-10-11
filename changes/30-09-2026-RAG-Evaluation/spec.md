@@ -185,7 +185,7 @@ Quy tắc một câu trả lời thế nào là đạt, theo từng nhóm câu h
 |---|---|---|---|---|
 | 1 | **Recall@k** (k=5) | % câu có đáp án mà ít nhất một `expected_doc_ids` nằm trong top-k sau rerank | Deterministic, so ở mức **tài liệu** (chunk id đổi khi ingest lại) | Mỗi lần |
 | 2 | **Faithfulness** | Tỷ lệ khẳng định trong câu trả lời được context truy xuất ủng hộ (0–1) | RAGAS `Faithfulness` | Mỗi lần |
-| 3 | **Answer correctness** | Độ khớp khẳng định giữa câu trả lời và `expected_answer` (0–1, F1) | RAGAS `FactualCorrectness` | Mỗi lần |
+| 3 | **Answer correctness** | **Độ phủ**: tỷ lệ ý của `expected_answer` có trong câu trả lời (0–1, `answer_coverage`, dùng để xét đạt). Kèm để tham khảo: precision (tỷ lệ khẳng định của câu trả lời được `expected_answer` ủng hộ) và F1 gốc của RAGAS | RAGAS `FactualCorrectness`, giữ cả hai chiều kiểm tra (đổi 11-10-2026: F1 cho 0 điểm với câu trả lời đúng có thêm chi tiết, vì `expected_answer` viết ngắn; recall của RAGAS cũng vậy vì dùng lại TP chiều câu trả lời). Không thêm lời gọi | Mỗi lần |
 | 3b | **Context recall** | Tỷ lệ ý của `expected_answer` có trong context truy xuất (0–1) | RAGAS `LLMContextRecall` | Mỗi lần |
 | 3c | **Response relevancy** | Câu trả lời có đúng trọng tâm câu hỏi (0–1) | RAGAS `ResponseRelevancy` (LLM + embedding) | Mỗi lần |
 | 3d | **Context precision / recall mức tài liệu** | So `document_id` truy xuất với `expected_doc_ids` theo thứ hạng | RAGAS `IDBasedContextPrecision` / `IDBasedContextRecall` (không gọi LLM) | Mỗi lần |

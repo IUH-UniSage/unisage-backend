@@ -566,11 +566,12 @@ thành `SingleTurnSample` của RAGAS (ánh xạ ở `spec.md` §4) rồi chạy
   phí thực tế (callback đếm token của RAGAS).
 - Ghim phiên bản `ragas` trong nhóm dependency `eval` của `pyproject.toml` (không vào image
   production).
+  **Vị trí code (11-10-2026):** `evals/judge/` (`cli.py`, `ragas_metrics.py`, `gemini_pool.py`, `prompts/`, `requirements.txt`); chạy bằng `task eval:judge -- --out runs/<run>`. Tiêu chí #3 chấm bằng `answer_coverage` (spec §4).
   **Đổi khi làm (11-10-2026):** `ragas==0.4.3` kéo theo `instructor`, gói này chặn trần
   `jiter<0.15` và `rich<15`, nên nếu đặt chung lock với service thì `openai` và `pydantic-ai` của
   service bị hạ phiên bản. Vì vậy judge chạy trong môi trường riêng, ghim ở
-  `evals/requirements-judge.txt`:
-  `uv run --isolated --no-project --with-requirements evals/requirements-judge.txt python -m evals.judge --out <run>`.
+  `evals/judge/requirements.txt`:
+  `uv run --isolated --no-project --with-requirements evals/judge/requirements.txt python -m evals.judge --out <run>`.
   RAGAS 0.4 không còn `AspectCritic` cho LLM kiểu mới, nên metric từ chối dùng `DiscreteMetric`
   (bản tương đương trong 0.4). `ResponseRelevancy` dùng `AnswerRelevancy` với `strictness=1`,
   đúng 1 lời gọi như ước tính ở §5.
