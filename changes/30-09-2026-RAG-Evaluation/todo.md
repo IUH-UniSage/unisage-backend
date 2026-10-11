@@ -566,18 +566,26 @@ thành `SingleTurnSample` của RAGAS (ánh xạ ở `spec.md` §4) rồi chạy
   phí thực tế (callback đếm token của RAGAS).
 - Ghim phiên bản `ragas` trong nhóm dependency `eval` của `pyproject.toml` (không vào image
   production).
+  **Đổi khi làm (11-10-2026):** `ragas==0.4.3` kéo theo `instructor`, gói này chặn trần
+  `jiter<0.15` và `rich<15`, nên nếu đặt chung lock với service thì `openai` và `pydantic-ai` của
+  service bị hạ phiên bản. Vì vậy judge chạy trong môi trường riêng, ghim ở
+  `evals/requirements-judge.txt`:
+  `uv run --isolated --no-project --with-requirements evals/requirements-judge.txt python -m evals.judge --out <run>`.
+  RAGAS 0.4 không còn `AspectCritic` cho LLM kiểu mới, nên metric từ chối dùng `DiscreteMetric`
+  (bản tương đương trong 0.4). `ResponseRelevancy` dùng `AnswerRelevancy` với `strictness=1`,
+  đúng 1 lời gọi như ước tính ở §5.
 
 **Acceptance criteria:**
-- [ ] Điểm của từng metric ghi lại theo `id` câu hỏi vào `results.jsonl`; metric lỗi → `NaN` + lý do, không crash
-- [ ] Dừng trước khi gọi API khi ước tính > `--max-cost`
-- [ ] Test bể key: giới hạn RPM mỗi key, loại key hết RPD, 503 không đổi key, dừng có checkpoint khi mọi key hết RPD (client giả)
+- [x] Điểm của từng metric ghi lại theo `id` câu hỏi vào `results.jsonl`; metric lỗi → `NaN` + lý do, không crash
+- [x] Dừng trước khi gọi API khi ước tính > `--max-cost`
+- [x] Test bể key: giới hạn RPM mỗi key, loại key hết RPD, 503 không đổi key, dừng có checkpoint khi mọi key hết RPD (client giả)
 - [ ] Trước lần chạy đầu: ghi RPM/RPD thật của từng project (AI Studio) vào report; xác nhận 22 key nằm ở 22 project khác nhau
-- [ ] `--metrics` chọn được tập con (vd chỉ ID-based cho ablation, không tốn tiền)
+- [x] `--metrics` chọn được tập con (vd chỉ ID-based cho ablation, không tốn tiền)
 - [ ] Chi phí thực tế cả bộ ≤ trần người dùng đã duyệt
 
 **Verification:**
-- [ ] Tests pass: `pytest tests/evals/test_judge.py` (ánh xạ sample, ước tính chi phí, chặn ngân sách; LLM giả)
-- [ ] Manual check: `--limit 20` chạy thật, đọc điểm + chi phí; rồi chạy trọn bộ
+- [x] Tests pass: `pytest tests/evals/test_judge.py` (ánh xạ sample, ước tính chi phí, chặn ngân sách; LLM giả); `tests/evals/test_judge_ragas.py` chạy metric RAGAS thật qua client Gemini giả, trong môi trường judge
+- [ ] Manual check: `--limit 20` chạy thật, đọc điểm + chi phí; rồi chạy trọn bộ (chờ `GEMINI_API_KEYS` trong `.env.eval`; `--dry-run` trên run demo 20 dòng: ~180 lời gọi, ~0,13 USD)
 
 **Dependencies:** Task 10; người dùng duyệt trần chi phí
 
