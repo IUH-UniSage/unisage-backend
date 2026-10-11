@@ -175,7 +175,7 @@ chạy lại được nhiều lần/ngày), rồi mới chạy bộ official.
 - `evals/ingest.py` (xong code): luồng upload thật qua gateway với token admin: `POST /documents`
   (multipart, `title`, file `<title>.pdf`, `docPackageId` = UUID tra từ mã department qua
   `/departments/roots` + `/children`, `minAccessLevelId` cho tài liệu private) → `/ingestion/chunking`
-  (`markdown_aware` 800/120 như wizard) → `/ingestion/embedding` → poll `/ingestion/jobs/{id}`. Ghi
+  (`markdown_aware` 800/120 như wizard; đổi 11-10-2026: `semantic` 800 token, overlap 0,2, ngưỡng 0,3, nạp lại bằng `task eval:ingest env=eval -- --rechunk`) → `/ingestion/embedding` → poll `/ingestion/jobs/{id}`. Ghi
   `document_id` + `ingest_status` (uploaded / embedding / done / empty_text / error) sau mỗi bước; chạy
   lại bỏ dòng `done`, không upload lại dòng đã có `document_id`; tối đa 4 tài liệu embedding cùng lúc;
   từ chối chạy khi `APP_ENV != eval`. Lệnh: `task eval:ingest:demo env=eval -- --limit 1` (thử),
