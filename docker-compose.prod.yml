@@ -6,8 +6,30 @@ services:
       POSTGRES_DB: assistant_DB
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+    # UNISAGE-102 (ADR-0008): WAL summaries for Differential backups and WAL archiving for the
+    # Transaction log backups. The wrapper creates the archive folder on the shared volume.
+    entrypoint: ["sh", "-c", "mkdir -p /wal-archive && chown postgres:postgres /wal-archive && exec docker-entrypoint.sh \"$$@\"", "--"]
+    command:
+      - postgres
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+      - -c
+      - summarize_wal=on
+      # A Differential needs the summaries back to its Full; the 10-day default is shorter than
+      # a monthly or yearly Full cycle.
+      - -c
+      - wal_summary_keep_time=400d
+      - -c
+      - archive_mode=on
+      # Copy to .tmp then rename, so the backend never ships a half-written segment.
+      - -c
+      - archive_command=test ! -f /wal-archive/%f && cp %p /wal-archive/%f.tmp && mv /wal-archive/%f.tmp /wal-archive/%f
+      - -c
+      - archive_timeout=300
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - pg_wal_archive:/wal-archive
+      - ./docker/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
     networks:
       - unisage-prod
 
@@ -37,6 +59,9 @@ services:
       - DB_HOST=unisage-db
       - DB_PORT=5432
       - MINIO_ENDPOINT=http://unisage-minio:9000
+      - BACKUP_WAL_ARCHIVE_DIR=/wal-archive
+    volumes:
+      - pg_wal_archive:/wal-archive
     networks:
       - unisage-prod
 
@@ -49,3 +74,4 @@ networks:
 volumes:
   postgres_data:
   minio_data:
+  pg_wal_archive:
