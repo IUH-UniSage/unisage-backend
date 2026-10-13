@@ -13,12 +13,14 @@ import org.springframework.stereotype.Component;
 
 import io.minio.BucketExistsArgs;
 import io.minio.DownloadObjectArgs;
+import io.minio.GetObjectArgs;
 import io.minio.ListObjectsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectsArgs;
 import io.minio.Result;
+import io.minio.StatObjectArgs;
 import io.minio.UploadObjectArgs;
 import io.minio.messages.DeleteRequest;
 import io.minio.messages.DeleteResult;
@@ -84,6 +86,57 @@ public class BackupStorage {
                     .bucket(properties.getBucket()).object(key).filename(target.toString()).build());
         } catch (Exception e) {
             throw new BackupException("cannot download " + key, e);
+        }
+    }
+
+    /** One stored object, as listed under a prefix. */
+    public record StoredObject(String key, Instant lastModified, long size) {
+    }
+
+    public List<StoredObject> list(String prefix) {
+        ensureBucket();
+        try {
+            List<StoredObject> objects = new ArrayList<>();
+            for (Result<Item> result : minioClient.listObjects(ListObjectsArgs.builder()
+                    .bucket(properties.getBucket()).prefix(prefix).recursive(true).build())) {
+                Item item = result.get();
+                objects.add(new StoredObject(item.objectName(), item.lastModified().toInstant(), item.size()));
+            }
+            return objects;
+        } catch (Exception e) {
+            throw new BackupException("cannot list objects under " + prefix, e);
+        }
+    }
+
+    /** Downloads every object under {@code prefix} into {@code dir}, keeping the relative paths. */
+    public void downloadPrefix(String prefix, Path dir) {
+        for (StoredObject object : list(prefix)) {
+            Path target = dir.resolve(object.key().substring(prefix.length()));
+            try {
+                Files.createDirectories(target.getParent());
+            } catch (IOException e) {
+                throw new BackupException("cannot create " + target.getParent(), e);
+            }
+            download(object.key(), target);
+        }
+    }
+
+    public long size(String key) {
+        try {
+            return minioClient.statObject(StatObjectArgs.builder()
+                    .bucket(properties.getBucket()).object(key).build()).size();
+        } catch (Exception e) {
+            throw new BackupException("cannot read the size of " + key, e);
+        }
+    }
+
+    /** The caller closes the stream. */
+    public InputStream open(String key) {
+        try {
+            return minioClient.getObject(GetObjectArgs.builder()
+                    .bucket(properties.getBucket()).object(key).build());
+        } catch (Exception e) {
+            throw new BackupException("cannot read " + key, e);
         }
     }
 

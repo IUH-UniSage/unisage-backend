@@ -78,6 +78,51 @@ public class BackupCoordinator {
                 .ifPresent(slot -> runQdrant(slot, settings.qdrantRetentionCount()));
     }
 
+    /**
+     * A Full outside the schedule: the "Sao lưu ngay" button, or the safety copy taken before a
+     * restore. Retention is left to the scheduled runs so this never purges a backup a restore is
+     * about to use. Returns the recorded run, SUCCEEDED or FAILED.
+     */
+    public BackupRun runFullNow() {
+        BackupRun run = recorder.start(BackupType.FULL, null, nowSlot(), null);
+        finish(run, () -> postgresBackupService.takeFull(run));
+        return run;
+    }
+
+    public BackupRun runDifferentialNow() {
+        BackupRun base = backupRunRepository
+                .findFirstByBackupTypeAndStatusAndPurgedAtIsNullOrderByStartedAtDesc(BackupType.FULL, BackupStatus.SUCCEEDED)
+                .orElseThrow(() -> new BackupException("there is no successful Full backup to take a Differential against"));
+        BackupRun run = recorder.start(BackupType.DIFFERENTIAL, null, nowSlot(), base.getId());
+        finish(run, () -> postgresBackupService.takeDifferential(run, base));
+        return run;
+    }
+
+    public BackupRun shipWalNow() {
+        BackupRun run = recorder.start(BackupType.WAL, null, nowSlot(), null);
+        finish(run, walShippingService::ship);
+        return run;
+    }
+
+    public boolean walArchivingConfigured() {
+        String archiveDir = properties.getWalArchiveDir();
+        return archiveDir != null && !archiveDir.isBlank();
+    }
+
+    /** Snapshots the given collections now; retention is left to the scheduled runs. */
+    public List<BackupRun> snapshotQdrantNow(List<String> collections) {
+        LocalDateTime slot = nowSlot();
+        return collections.stream().map(collection -> {
+            BackupRun run = recorder.start(BackupType.QDRANT_SNAPSHOT, collection, slot, null);
+            finish(run, () -> qdrantSnapshotService.snapshot(collection));
+            return run;
+        }).toList();
+    }
+
+    private LocalDateTime nowSlot() {
+        return LocalDateTime.now(clock.withZone(zone)).truncatedTo(ChronoUnit.MINUTES);
+    }
+
     private Optional<LocalDateTime> dueSlot(BackupType type, Optional<LocalDateTime> latestSlot) {
         return latestSlot.filter(slot -> backupRunRepository
                 .findFirstByBackupTypeOrderByScheduledForDescStartedAtDesc(type)
@@ -109,8 +154,7 @@ public class BackupCoordinator {
         if (intervalMinutes <= 0) {
             return false;
         }
-        String archiveDir = properties.getWalArchiveDir();
-        if (archiveDir == null || archiveDir.isBlank()) {
+        if (!walArchivingConfigured()) {
             if (!walUnconfiguredLogged) {
                 log.warn("Transaction log backups are on but app.backup.wal-archive-dir is not set; skipping them");
                 walUnconfiguredLogged = true;

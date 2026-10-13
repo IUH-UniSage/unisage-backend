@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -29,4 +31,10 @@ public interface BackupRunRepository extends JpaRepository<BackupRun, UUID> {
     List<BackupRun> findByBaseRunIdAndPurgedAtIsNull(UUID baseRunId);
 
     List<BackupRun> findByStatus(BackupStatus status);
+
+    Optional<BackupRun> findFirstByBackupTypeOrderByStartedAtDesc(BackupType backupType);
+
+    Page<BackupRun> findAllByOrderByStartedAtDesc(Pageable pageable);
+
+    Page<BackupRun> findByBackupTypeOrderByStartedAtDesc(BackupType backupType, Pageable pageable);
 }

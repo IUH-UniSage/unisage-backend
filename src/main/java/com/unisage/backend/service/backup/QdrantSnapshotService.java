@@ -1,5 +1,7 @@
 package com.unisage.backend.service.backup;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -61,6 +63,16 @@ public class QdrantSnapshotService {
                 // The copy in storage is what matters; a leftover only uses Qdrant disk.
                 log.warn("Could not delete snapshot {} from Qdrant: {}", snapshot.name(), e.getMessage());
             }
+        }
+    }
+
+    /** Replaces {@code collection} in Qdrant with the snapshot stored under {@code key}. */
+    public void restore(String collection, String key) {
+        long size = storage.size(key);
+        try (InputStream body = storage.open(key)) {
+            qdrantClient.uploadSnapshot(collection, key.substring(key.lastIndexOf('/') + 1), body, size);
+        } catch (IOException e) {
+            throw new BackupException("cannot read " + key, e);
         }
     }
 

@@ -114,6 +114,10 @@ public final class PredefinedPermissions {
     public static final String SYSTEM_CONFIG_READ   = "SYSTEM_CONFIG_READ";
     public static final String SYSTEM_CONFIG_UPDATE = "SYSTEM_CONFIG_UPDATE";
 
+    // ─── Backup & restore (UNISAGE-102) ───────────────────────────────────
+    public static final String BACKUP_ALL  = "BACKUP_ALL";
+    public static final String BACKUP_READ = "BACKUP_READ";
+
     // ─── SystemHealth ─────────────────────────────────────────────────────
     // Read-only: nothing here is admin-editable, so no corresponding _UPDATE/_ALL.
     public static final String SYSTEM_HEALTH_READ = "SYSTEM_HEALTH_READ";

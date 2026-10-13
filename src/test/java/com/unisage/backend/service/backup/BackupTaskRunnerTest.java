@@ -1,4 +1,4 @@
-package com.unisage.backend.scheduler;
+package com.unisage.backend.service.backup;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -7,47 +7,42 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 
-import com.unisage.backend.service.backup.BackupCoordinator;
-
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
-class BackupJobTest {
+class BackupTaskRunnerTest {
 
-    private final BackupCoordinator coordinator = mock(BackupCoordinator.class);
     private final QueueingExecutor executor = new QueueingExecutor();
-    private final BackupJob job = new BackupJob(coordinator, executor);
+    private final BackupTaskRunner runner = new BackupTaskRunner(executor);
 
     @Test
-    void tick_whileABackupIsStillRunning_isSkipped() {
-        job.tick();
-        job.tick();
+    void submit_whileATaskIsStillRunning_isRefused() {
+        assertThat(runner.submit("first", () -> { })).isTrue();
 
+        assertThat(runner.submit("second", () -> { })).isFalse();
+        assertThat(runner.isBusy()).isTrue();
         assertThat(executor.queued).hasSize(1);
     }
 
     @Test
-    void tick_afterThePreviousOneFinished_runsAgain() {
-        job.tick();
+    void submit_afterThePreviousOneFinished_runsAgain() {
+        List<String> ran = new ArrayList<>();
+        runner.submit("first", () -> ran.add("first"));
         executor.runAll();
-        job.tick();
+        runner.submit("second", () -> ran.add("second"));
         executor.runAll();
 
-        verify(coordinator, times(2)).runDueBackups();
+        assertThat(ran).containsExactly("first", "second");
+        assertThat(runner.isBusy()).isFalse();
     }
 
     @Test
-    void tick_afterAFailure_runsAgain() {
-        doThrow(new IllegalStateException("boom")).when(coordinator).runDueBackups();
-
-        job.tick();
+    void submit_afterAFailure_runsAgain() {
+        runner.submit("boom", () -> {
+            throw new IllegalStateException("boom");
+        });
         executor.runAll();
-        job.tick();
 
-        assertThat(executor.queued).hasSize(1);
+        assertThat(runner.submit("next", () -> { })).isTrue();
     }
 
     /** Holds tasks until the test runs them, so "still running" is deterministic. */

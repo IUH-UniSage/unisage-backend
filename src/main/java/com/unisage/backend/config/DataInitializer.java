@@ -379,6 +379,14 @@ public class DataInitializer implements CommandLineRunner {
                 "/system-configs/**", PermissionMethod.PUT, ResourceType.SYSTEM_CONFIG,
                 "Cập nhật cấu hình hệ thống"),
 
+            // ── Backup & restore (UNISAGE-102) ───────────────────────────
+            def(PredefinedPermissions.BACKUP_ALL,
+                "/admin/backups/**", PermissionMethod.ALL, ResourceType.SYSTEM,
+                "Toàn quyền sao lưu và khôi phục dữ liệu"),
+            def(PredefinedPermissions.BACKUP_READ,
+                "/admin/backups/**", PermissionMethod.GET, ResourceType.SYSTEM,
+                "Xem lịch sử sao lưu và khôi phục"),
+
             // ── SystemHealth ─────────────────────────────────────────────
             def(PredefinedPermissions.SYSTEM_HEALTH_READ,
                 "/admin/health/**", PermissionMethod.GET, ResourceType.SYSTEM,

@@ -46,6 +46,17 @@ public class BackupProperties {
     @Value("${app.backup.wal-archive-dir:}")
     private String walArchiveDir;
 
+    /**
+     * The folder shared with the unisage-db container at /restore (ADR-0010). Blank means a
+     * Postgres restore cannot be started from the app.
+     */
+    @Value("${app.backup.restore-dir:}")
+    private String restoreDir;
+
+    /** How long a prepared restore may wait for the unisage-db container to pick it up. */
+    @Value("${app.backup.restore-handoff-minutes:5}")
+    private long restoreHandoffMinutes;
+
     @Value("${app.backup.qdrant.url:http://localhost:6333}")
     private String qdrantUrl;
 
