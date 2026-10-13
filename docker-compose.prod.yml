@@ -6,9 +6,10 @@ services:
       POSTGRES_DB: assistant_DB
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-    # UNISAGE-102 (ADR-0008): WAL summaries for Differential backups and WAL archiving for the
-    # Transaction log backups. The wrapper creates the archive folder on the shared volume.
-    entrypoint: ["sh", "-c", "mkdir -p /wal-archive && chown postgres:postgres /wal-archive && exec docker-entrypoint.sh \"$$@\"", "--"]
+    # UNISAGE-102: WAL summaries for Differential backups and WAL archiving for the Transaction
+    # log backups (ADR-0008). The entrypoint keeps the container up across a Postgres stop so the
+    # backend can restore a backup through the shared /restore folder (ADR-0010).
+    entrypoint: ["sh", "/usr/local/bin/unisage-entrypoint.sh"]
     command:
       - postgres
       - -c
@@ -30,6 +31,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - pg_wal_archive:/wal-archive
       - ./docker/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./docker/postgres/unisage-entrypoint.sh:/usr/local/bin/unisage-entrypoint.sh:ro
+      - pg_restore:/restore
     networks:
       - unisage-prod
 
@@ -60,8 +63,10 @@ services:
       - DB_PORT=5432
       - MINIO_ENDPOINT=http://unisage-minio:9000
       - BACKUP_WAL_ARCHIVE_DIR=/wal-archive
+      - BACKUP_RESTORE_DIR=/restore
     volumes:
       - pg_wal_archive:/wal-archive
+      - pg_restore:/restore
     networks:
       - unisage-prod
 
@@ -75,3 +80,4 @@ volumes:
   postgres_data:
   minio_data:
   pg_wal_archive:
+  pg_restore:
