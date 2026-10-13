@@ -81,6 +81,10 @@ public enum ErrorCode {
             "Bảng hỏi không ở trạng thái cho phép chuyển sang trạng thái này."),
     TICKET_TYPE_NOT_REPORTABLE(HttpStatus.BAD_REQUEST, 2158,
             "Loại yêu cầu này chỉ được tạo qua nút phản hồi Đúng/Sai của kết quả tính toán."),
+    SYSTEM_CONFIG_BACKUP_VALUE_INVALID(HttpStatus.BAD_REQUEST, 2159,
+            "Giá trị cấu hình sao lưu không hợp lệ: tần suất là OFF, DAILY, WEEKLY, MONTHLY hoặc YEARLY "
+                    + "(Full không được OFF), giờ theo dạng HH:mm, chu kỳ Transaction log từ 0 đến 1440 phút, "
+                    + "số bản giữ lại từ 1 đến 365."),
 
     // Internal API (/internal/**) — X-Internal-Secret is checked separately by
     // InternalSecretFilter (code 1007); this is the CIDR layer.

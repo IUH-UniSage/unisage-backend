@@ -179,4 +179,28 @@ class SystemConfigServiceImplTest {
                 .isInstanceOf(AppException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.SYSTEM_CONFIG_FILE_SIZE_OUT_OF_RANGE);
     }
+
+    @Test
+    void updateValue_backupFrequency_unknownValue_throwsBackupValueError() {
+        SystemConfig existing = config("maintenance.backup.full.frequency", "WEEKLY", ValueType.STRING, true);
+        when(systemConfigRepository.findByConfigKey("maintenance.backup.full.frequency"))
+                .thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.updateValue("maintenance.backup.full.frequency",
+                UpdateSystemConfigRequest.builder().value("HOURLY").build()))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.SYSTEM_CONFIG_BACKUP_VALUE_INVALID);
+    }
+
+    @Test
+    void updateValue_backupTime_validValue_updates() {
+        SystemConfig existing = config("maintenance.backup.full.time", "02:00", ValueType.STRING, true);
+        when(systemConfigRepository.findByConfigKey("maintenance.backup.full.time"))
+                .thenReturn(Optional.of(existing));
+
+        SystemConfigResponse result = service.updateValue("maintenance.backup.full.time",
+                UpdateSystemConfigRequest.builder().value("23:45").build());
+
+        assertThat(result.value()).isEqualTo("23:45");
+    }
 }

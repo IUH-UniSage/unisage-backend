@@ -1,0 +1,62 @@
+-- UNISAGE-102: schedule and retention of the automatic backups (see ADR-0008 / ADR-0009), edited
+-- on the Settings page like every other MAINTENANCE row. BackupJob reads them live every minute,
+-- so an edit applies from the next tick on. Off by default: a backend running outside Docker has
+-- no pg_basebackup and no WAL archive directory (see .env.example "Backup").
+--
+-- Frequencies are OFF / DAILY / WEEKLY / MONTHLY / YEARLY (Full has no OFF); weekly runs on Sunday,
+-- monthly on the 1st and yearly on 1 January, at the configured HH:mm in app.timezone.
+-- SystemConfigServiceImpl rejects any other value (BackupSettings.isValid).
+INSERT INTO system_configs
+    (id, created_at, is_active, config_key, value, value_type, category, label, description, is_editable)
+VALUES
+    (gen_random_uuid(), now(), true,
+     'maintenance.backup.enabled', 'false', 'BOOLEAN', 'MAINTENANCE',
+     'Bật sao lưu tự động',
+     'Bật để hệ thống tự sao lưu cơ sở dữ liệu và dữ liệu vector theo lịch bên dưới. Bản sao lưu được lưu trong MinIO (bucket unisage-backups).',
+     true),
+    (gen_random_uuid(), now(), true,
+     'maintenance.backup.full.frequency', 'WEEKLY', 'STRING', 'MAINTENANCE',
+     'Tần suất sao lưu Full',
+     'Bản sao lưu đầy đủ toàn bộ cơ sở dữ liệu, là điểm xuất phát của mọi lần khôi phục. Không thể tắt vì bản Differential cần nó.',
+     true),
+    (gen_random_uuid(), now(), true,
+     'maintenance.backup.full.time', '02:00', 'STRING', 'MAINTENANCE',
+     'Giờ sao lưu Full',
+     'Giờ bắt đầu chạy, theo múi giờ của hệ thống. Hằng tuần chạy vào Chủ nhật, hằng tháng vào ngày 1, hằng năm vào ngày 1/1.',
+     true),
+    (gen_random_uuid(), now(), true,
+     'maintenance.backup.differential.frequency', 'DAILY', 'STRING', 'MAINTENANCE',
+     'Tần suất sao lưu Differential',
+     'Chỉ lưu phần dữ liệu thay đổi kể từ bản Full gần nhất nên nhỏ và nhanh. Khi khôi phục chỉ cần bản Full cộng bản Differential mới nhất.',
+     true),
+    (gen_random_uuid(), now(), true,
+     'maintenance.backup.differential.time', '03:00', 'STRING', 'MAINTENANCE',
+     'Giờ sao lưu Differential',
+     'Giờ bắt đầu chạy, theo múi giờ của hệ thống. Hằng tuần chạy vào Chủ nhật, hằng tháng vào ngày 1, hằng năm vào ngày 1/1.',
+     true),
+    (gen_random_uuid(), now(), true,
+     'maintenance.backup.wal.interval_minutes', '15', 'NUMBER', 'MAINTENANCE',
+     'Chu kỳ sao lưu Transaction log (phút)',
+     'Cứ sau chừng này phút, nhật ký giao dịch (WAL) được đẩy lên MinIO để có thể khôi phục tới đúng một thời điểm. Khi có sự cố, dữ liệu mất tối đa bằng chu kỳ này. Đặt 0 để tắt, tối đa 1440.',
+     true),
+    (gen_random_uuid(), now(), true,
+     'maintenance.backup.retention.full_count', '4', 'NUMBER', 'MAINTENANCE',
+     'Số bản Full giữ lại',
+     'Giữ chừng này bản Full gần nhất. Bản cũ hơn bị xóa cùng các bản Differential và nhật ký giao dịch chỉ dùng được với nó. Từ 1 đến 365.',
+     true),
+    (gen_random_uuid(), now(), true,
+     'maintenance.backup.qdrant.frequency', 'DAILY', 'STRING', 'MAINTENANCE',
+     'Tần suất snapshot Qdrant',
+     'Chụp lại dữ liệu vector (các đoạn tài liệu đã nạp) của từng collection Qdrant và lưu lên MinIO, để không phải nạp lại tài liệu khi mất Qdrant.',
+     true),
+    (gen_random_uuid(), now(), true,
+     'maintenance.backup.qdrant.time', '03:30', 'STRING', 'MAINTENANCE',
+     'Giờ snapshot Qdrant',
+     'Giờ bắt đầu chạy, theo múi giờ của hệ thống. Hằng tuần chạy vào Chủ nhật, hằng tháng vào ngày 1, hằng năm vào ngày 1/1.',
+     true),
+    (gen_random_uuid(), now(), true,
+     'maintenance.backup.qdrant.retention_count', '7', 'NUMBER', 'MAINTENANCE',
+     'Số snapshot Qdrant giữ lại',
+     'Giữ chừng này snapshot gần nhất cho mỗi collection, snapshot cũ hơn sẽ bị xóa. Từ 1 đến 365.',
+     true)
+ON CONFLICT (config_key) DO NOTHING;
