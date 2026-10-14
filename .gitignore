@@ -33,3 +33,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# UNISAGE-102: restore jobs shared with the unisage-db container (docker-compose.yml)
+/.backup-restore/

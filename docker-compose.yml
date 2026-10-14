@@ -8,8 +8,34 @@ services:
       POSTGRES_DB: assistant_DB
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 123456
+    # UNISAGE-102: WAL summaries for Differential backups and WAL archiving for the Transaction
+    # log backups (ADR-0008). The entrypoint keeps the container up across a Postgres stop so the
+    # backend can restore a backup through the shared /restore folder (ADR-0010).
+    entrypoint: ["sh", "/usr/local/bin/unisage-entrypoint.sh"]
+    command:
+      - postgres
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+      - -c
+      - summarize_wal=on
+      # A Differential needs the summaries back to its Full; the 10-day default is shorter than
+      # a monthly or yearly Full cycle.
+      - -c
+      - wal_summary_keep_time=400d
+      - -c
+      - archive_mode=on
+      # Copy to .tmp then rename, so the backend never ships a half-written segment.
+      - -c
+      - archive_command=test ! -f /wal-archive/%f && cp %p /wal-archive/%f.tmp && mv /wal-archive/%f.tmp /wal-archive/%f
+      - -c
+      - archive_timeout=300
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - pg_wal_archive:/wal-archive
+      - ./docker/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./docker/postgres/unisage-entrypoint.sh:/usr/local/bin/unisage-entrypoint.sh:ro
+      # A host folder, so a backend run outside Docker (BACKUP_RESTORE_DIR) can reach it too.
+      - ${BACKUP_RESTORE_HOST_DIR:-./.backup-restore}:/restore
 
   unisage-minio:
     image: minio/minio:latest   # pin a specific release tag before deploying past dev
@@ -42,6 +68,12 @@ services:
       - MINIO_ENDPOINT=http://unisage-minio:9000
       - MINIO_PUBLIC_ENDPOINT=http://localhost:9100
       - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
+      - BACKUP_WAL_ARCHIVE_DIR=/wal-archive
+      - BACKUP_RESTORE_DIR=/restore
+      - QDRANT_URL=${QDRANT_URL:-http://host.docker.internal:6333}
+    volumes:
+      - pg_wal_archive:/wal-archive
+      - ${BACKUP_RESTORE_HOST_DIR:-./.backup-restore}:/restore
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -82,3 +114,4 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  pg_wal_archive:

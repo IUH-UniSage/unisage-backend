@@ -81,6 +81,27 @@ public enum ErrorCode {
             "Bảng hỏi không ở trạng thái cho phép chuyển sang trạng thái này."),
     TICKET_TYPE_NOT_REPORTABLE(HttpStatus.BAD_REQUEST, 2158,
             "Loại yêu cầu này chỉ được tạo qua nút phản hồi Đúng/Sai của kết quả tính toán."),
+    SYSTEM_CONFIG_BACKUP_VALUE_INVALID(HttpStatus.BAD_REQUEST, 2159,
+            "Giá trị cấu hình sao lưu không hợp lệ: tần suất là OFF, DAILY, WEEKLY, MONTHLY hoặc YEARLY "
+                    + "(Full không được OFF), giờ theo dạng HH:mm, chu kỳ Transaction log từ 0 đến 1440 phút, "
+                    + "số bản giữ lại từ 1 đến 365."),
+    BACKUP_TASK_BUSY(HttpStatus.CONFLICT, 2160,
+            "Đang có một tác vụ sao lưu hoặc khôi phục chạy, vui lòng thử lại sau khi nó xong."),
+    BACKUP_RUN_NOT_FOUND(HttpStatus.NOT_FOUND, 2161, "Không tìm thấy bản sao lưu."),
+    BACKUP_RUN_NOT_RESTORABLE(HttpStatus.BAD_REQUEST, 2162,
+            "Bản sao lưu này không dùng để khôi phục được (chưa thành công, đã bị xóa theo chính sách giữ lại, "
+                    + "hoặc không đúng loại)."),
+    BACKUP_RESTORE_UNAVAILABLE(HttpStatus.BAD_REQUEST, 2163,
+            "Chưa thể khôi phục cơ sở dữ liệu từ ứng dụng: thư mục khôi phục chưa được cấu hình hoặc container "
+                    + "Postgres chưa chạy unisage-entrypoint.sh (xem ADR-0010)."),
+    BACKUP_RESTORE_TARGET_INVALID(HttpStatus.BAD_REQUEST, 2164,
+            "Thời điểm khôi phục phải nằm trong khoảng có thể khôi phục (sau bản Full cũ nhất còn giữ và không "
+                    + "muộn hơn hiện tại), và cần bật sao lưu Transaction log."),
+    BACKUP_RESTORE_REQUEST_INVALID(HttpStatus.BAD_REQUEST, 2165,
+            "Chọn đúng một trong hai: một bản sao lưu, hoặc một thời điểm khôi phục."),
+    BACKUP_TYPE_NOT_MANUAL(HttpStatus.BAD_REQUEST, 2166,
+            "Chưa chạy được loại sao lưu này: Differential cần một bản Full thành công, Transaction log cần "
+                    + "cấu hình thư mục WAL archive (BACKUP_WAL_ARCHIVE_DIR)."),
 
     // Internal API (/internal/**) — X-Internal-Secret is checked separately by
     // InternalSecretFilter (code 1007); this is the CIDR layer.

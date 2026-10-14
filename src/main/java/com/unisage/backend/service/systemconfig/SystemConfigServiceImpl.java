@@ -14,6 +14,7 @@ import com.unisage.backend.entity.enums.ValueType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.SystemConfigRepository;
+import com.unisage.backend.service.backup.BackupSettings;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +54,9 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         validateValue(request.value(), config.getValueType());
         if (MAX_FILE_SIZE_KEY.equals(configKey)) {
             validateMaxFileSize(request.value());
+        }
+        if (!BackupSettings.isValid(configKey, request.value())) {
+            throw new AppException(ErrorCode.SYSTEM_CONFIG_BACKUP_VALUE_INVALID);
         }
         config.setValue(request.value());
 
