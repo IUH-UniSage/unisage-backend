@@ -63,6 +63,10 @@ public class Message extends BaseEntity {
     @Column(name = "retrieval_score")
     private Float retrievalScore;
 
+    /** Total time of an assistant turn in ms (agent receives the question -> answer stored). */
+    @Column(name = "response_time_ms")
+    private Integer responseTimeMs;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata;
