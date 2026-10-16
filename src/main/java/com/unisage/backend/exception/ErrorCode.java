@@ -134,6 +134,10 @@ public enum ErrorCode {
     CALCULATION_FEEDBACK_LOCKED(HttpStatus.CONFLICT, 2703,
             "Yêu cầu hỗ trợ của kết quả này đã được xử lý xong, không thể đổi phản hồi nữa."),
 
+    // Message retrieval traces (271x)
+    MESSAGE_TRACE_INVALID(HttpStatus.BAD_REQUEST, 2710,
+            "Trace truy xuất của tin nhắn không hợp lệ (vượt quá 256 KB)."),
+
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),
     FILE_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2402, "Không thể xoá file khỏi hệ thống lưu trữ."),
