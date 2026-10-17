@@ -16,6 +16,7 @@ import com.unisage.backend.dto.response.PageResponse;
 import com.unisage.backend.dto.response.TicketDetailResponse;
 import com.unisage.backend.dto.response.TicketResponse;
 import com.unisage.backend.entity.Message;
+import com.unisage.backend.entity.MessageTrace;
 import com.unisage.backend.entity.Ticket;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.entity.enums.MsgRole;
@@ -24,6 +25,7 @@ import com.unisage.backend.entity.enums.TicketType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.MessageRepository;
+import com.unisage.backend.repository.MessageTraceRepository;
 import com.unisage.backend.repository.TicketRepository;
 import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.utils.SecurityUtil;
@@ -38,6 +40,7 @@ public class TicketServiceImpl implements TicketService {
 
     private final TicketRepository ticketRepository;
     private final MessageRepository messageRepository;
+    private final MessageTraceRepository messageTraceRepository;
     private final UserRepository userRepository;
     private final SecurityUtil securityUtil;
 
@@ -189,6 +192,8 @@ public class TicketServiceImpl implements TicketService {
                         message.getConversation().getId(), MsgRole.USER, message.getCreatedAt())
                 .map(Message::getContent)
                 .orElse(null);
+        // Retrieval diagnostics are for staff: the owner never sees chunk text, scores or the trace id.
+        MessageTrace trace = staffView ? messageTraceRepository.findById(message.getId()).orElse(null) : null;
         return TicketDetailResponse.builder()
                 .id(ticket.getId())
                 .messageId(message.getId())
@@ -204,6 +209,10 @@ public class TicketServiceImpl implements TicketService {
                 .userEmail(ticket.getUser().getEmail())
                 .questionContent(question)
                 .messageContent(message.getContent())
+                .citations(staffView ? message.getCitations() : null)
+                .traceId(trace != null ? trace.getTraceId() : null)
+                .contextChunks(trace != null ? trace.getChunks() : null)
+                .webSources(trace != null ? trace.getWebSources() : null)
                 .createdAt(ticket.getCreatedAt())
                 .updatedAt(ticket.getUpdatedAt())
                 .build();

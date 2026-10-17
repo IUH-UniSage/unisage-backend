@@ -145,6 +145,27 @@ class MessageServiceImplTest {
     }
 
     @Test
+    void update_storesTheTurnsResponseTime() {
+        UUID messageId = UUID.randomUUID();
+        UUID conversationId = UUID.randomUUID();
+        Conversation conversation = conversation(conversationId);
+        Message message = assistantMessage(messageId, conversation, MsgStatus.STREAMING, "partial answer");
+        when(messageRepository.findById(messageId)).thenReturn(Optional.of(message));
+
+        UpdateMessageRequest request = UpdateMessageRequest.builder()
+                .conversationId(conversationId)
+                .content("final answer")
+                .status(MsgStatus.COMPLETED)
+                .responseTimeMs(16240)
+                .build();
+
+        MessageResponse response = messageService.update(messageId, request);
+
+        assertThat(message.getResponseTimeMs()).isEqualTo(16240);
+        assertThat(response.responseTimeMs()).isEqualTo(16240);
+    }
+
+    @Test
     void update_streamingToError_succeeds() {
         UUID messageId = UUID.randomUUID();
         UUID conversationId = UUID.randomUUID();

@@ -196,6 +196,9 @@ public class MessageServiceImpl implements MessageService {
         if (request.metadata() != null) {
             message.setMetadata(request.metadata());
         }
+        if (request.responseTimeMs() != null) {
+            message.setResponseTimeMs(request.responseTimeMs());
+        }
 
         message = messageRepository.save(message);
 
@@ -358,6 +361,7 @@ public class MessageServiceImpl implements MessageService {
                 .citations(message.getCitations())
                 .retrievalScore(message.getRetrievalScore())
                 .metadata(message.getMetadata())
+                .responseTimeMs(message.getResponseTimeMs())
                 .createdAt(message.getCreatedAt())
                 .ticketId(ticketId)
                 .build();
