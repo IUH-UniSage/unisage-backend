@@ -2,6 +2,7 @@ package com.unisage.backend.service.document;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -25,6 +26,7 @@ import com.unisage.backend.entity.enums.DocStatus;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.predefined.PredefinedRoles;
+import com.unisage.backend.integration.AgentIndexClient;
 import com.unisage.backend.repository.AccessLevelRepository;
 import com.unisage.backend.repository.CategoryRepository;
 import com.unisage.backend.repository.DepartmentRepository;
@@ -51,6 +53,7 @@ public class DocumentServiceImpl implements DocumentService {
     private final UserDepartmentAccessRepository userDepartmentAccessRepository;
     private final SecurityUtil securityUtil;
     private final FileService fileService;
+    private final AgentIndexClient agentIndexClient;
 
     @Override
     @Transactional
@@ -103,6 +106,8 @@ public class DocumentServiceImpl implements DocumentService {
         Document document = documentRepository.findById(id)
                 .filter(d -> d.getDeletedAt() == null)
                 .orElseThrow(() -> new AppException(ErrorCode.DOCUMENT_NOT_FOUND));
+        IndexedAccess accessBefore = IndexedAccess.of(document);
+        String sourceBefore = document.getSourceUrl();
 
         if (request.docPackageId() != null) {
             Department docPackage = departmentRepository.findById(request.docPackageId())
@@ -164,8 +169,41 @@ public class DocumentServiceImpl implements DocumentService {
             document.setIsPublic(request.isPublic());
         }
 
+        syncIndex(document, accessBefore, sourceBefore);
         document = documentRepository.save(document);
         return mapToResponse(document);
+    }
+
+    /**
+     * Keeps the agent's vector index in step with the edit (changes/17-10-2026-Embedding-Reindex
+     * R2). A new file makes every point stale: drop them and mark the document OUTDATED so it is
+     * ingested again. An access change rewrites the points' payload in place. Called inside the
+     * transaction, so an agent failure rolls the edit back rather than leaving a payload that grants
+     * the wrong people access.
+     */
+    private void syncIndex(Document document, IndexedAccess accessBefore, String sourceBefore) {
+        if (!Objects.equals(sourceBefore, document.getSourceUrl())) {
+            agentIndexClient.deleteIndex(document.getId());
+            if (document.getStatus() != DocStatus.PENDING) {
+                document.setStatus(DocStatus.OUTDATED);
+            }
+            return;
+        }
+        IndexedAccess accessAfter = IndexedAccess.of(document);
+        if (document.getStatus() != DocStatus.PENDING && !accessAfter.equals(accessBefore)) {
+            agentIndexClient.updateIndexMetadata(
+                    document.getId(), accessAfter.departmentId(), accessAfter.accessLevel(), accessAfter.isPublic());
+        }
+    }
+
+    /** The fields the agent copies into every point's payload — same derivation as the ingest wizard. */
+    private record IndexedAccess(UUID departmentId, int accessLevel, boolean isPublic) {
+        static IndexedAccess of(Document document) {
+            return new IndexedAccess(
+                    document.getDocPackage() != null ? document.getDocPackage().getId() : null,
+                    document.getMinAccessLevel() != null ? document.getMinAccessLevel().getLevel() : 0,
+                    Boolean.TRUE.equals(document.getIsPublic()));
+        }
     }
 
     @Override
@@ -229,6 +267,8 @@ public class DocumentServiceImpl implements DocumentService {
                 .orElseThrow(() -> new AppException(ErrorCode.DOCUMENT_NOT_FOUND));
         document.setDeletedAt(LocalDateTime.now());
         documentRepository.save(document);
+        // Retrieval does not know about deletedAt: the points must go, or the document keeps answering.
+        agentIndexClient.deleteIndex(document.getId());
     }
 
     @Override

@@ -29,6 +29,8 @@ public enum ErrorCode {
     DOCUMENT_PUBLIC_ACCESS_LEVEL_CONFLICT(HttpStatus.BAD_REQUEST, 2311,
             "Tài liệu công khai không được đặt cấp độ truy cập tối thiểu."),
     DOCUMENT_VIEW_FORBIDDEN(HttpStatus.FORBIDDEN, 2312, "Bạn không có quyền xem tài liệu này."),
+    DOCUMENT_INDEX_SYNC_FAILED(HttpStatus.BAD_GATEWAY, 2313,
+            "Không cập nhật được chỉ mục tìm kiếm của tài liệu, vui lòng thử lại."),
 
     // Not found errors
     CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, 2101, "Category không tồn tại."),

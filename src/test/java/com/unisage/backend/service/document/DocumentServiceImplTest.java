@@ -16,6 +16,7 @@ import com.unisage.backend.entity.User;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.predefined.PredefinedRoles;
+import com.unisage.backend.integration.AgentIndexClient;
 import com.unisage.backend.repository.AccessLevelRepository;
 import com.unisage.backend.repository.CategoryRepository;
 import com.unisage.backend.repository.DepartmentRepository;
@@ -42,6 +43,7 @@ class DocumentServiceImplTest {
     private final UserDepartmentAccessRepository userDepartmentAccessRepository =
             mock(UserDepartmentAccessRepository.class);
     private final SecurityUtil securityUtil = mock(SecurityUtil.class);
+    private final AgentIndexClient agentIndexClient = mock(AgentIndexClient.class);
     private final UUID documentId = UUID.randomUUID();
     private final UUID departmentId = UUID.randomUUID();
     private final UUID userId = UUID.randomUUID();
@@ -59,7 +61,8 @@ class DocumentServiceImplTest {
                 mock(DocumentVersionRepository.class),
                 userDepartmentAccessRepository,
                 securityUtil,
-                fileService);
+                fileService,
+                agentIndexClient);
     }
 
     private Document document(String sourceUrl) {
