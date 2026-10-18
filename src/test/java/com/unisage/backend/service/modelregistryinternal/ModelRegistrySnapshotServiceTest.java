@@ -7,9 +7,9 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityService;
+import com.unisage.backend.service.embeddingindexpointer.TestEmbeddingIndexPointers;
 import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
 
 import com.unisage.backend.dto.response.internal.InternalEmbeddingIndexIdentityResponse;
@@ -20,6 +20,7 @@ import com.unisage.backend.entity.enums.ChatModelPurpose;
 import com.unisage.backend.entity.enums.ChatModelSourceType;
 import com.unisage.backend.entity.enums.ChatModelStatus;
 import com.unisage.backend.repository.ChatModelRepository;
+import com.unisage.backend.repository.EmbeddingReindexRunRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -46,8 +47,9 @@ class ModelRegistrySnapshotServiceTest {
         modelRegistryVersionService = mock(ModelRegistryVersionService.class);
         embeddingIndexIdentityService = mock(EmbeddingIndexIdentityService.class);
         service = new ModelRegistryInternalServiceImpl(
-                chatModelRepository, modelRegistryVersionService, embeddingIndexIdentityService);
-        ReflectionTestUtils.setField(service, "embeddingCollectionName", "unisage_chunks");
+                chatModelRepository, modelRegistryVersionService, embeddingIndexIdentityService,
+                TestEmbeddingIndexPointers.over(embeddingIndexIdentityService, "unisage_chunks"),
+                mock(EmbeddingReindexRunRepository.class));
     }
 
     private ChatModel activeRow(ChatModelPurpose purpose, int priority, String apiKey) {

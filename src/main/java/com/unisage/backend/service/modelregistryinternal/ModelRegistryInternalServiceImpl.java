@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,13 +17,17 @@ import com.unisage.backend.dto.response.internal.CredentialHealthReportResponse;
 import com.unisage.backend.dto.response.internal.InternalEmbeddingIndexIdentityResponse;
 import com.unisage.backend.dto.response.internal.InternalModelRegistrySnapshotResponse;
 import com.unisage.backend.dto.response.internal.InternalModelRegistrySnapshotResponse.CredentialEntry;
+import com.unisage.backend.dto.response.internal.InternalModelRegistrySnapshotResponse.EmbeddingReindexEntry;
 import com.unisage.backend.entity.ChatModel;
 import com.unisage.backend.entity.enums.ChatModelPurpose;
 import com.unisage.backend.entity.enums.CredentialHealthErrorType;
+import com.unisage.backend.entity.enums.EmbeddingReindexStatus;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
+import com.unisage.backend.repository.EmbeddingReindexRunRepository;
 import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityService;
+import com.unisage.backend.service.embeddingindexpointer.EmbeddingIndexPointerService;
 import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
 import com.unisage.backend.utils.SecretRedactor;
 
@@ -37,10 +40,9 @@ public class ModelRegistryInternalServiceImpl implements ModelRegistryInternalSe
     private final ChatModelRepository chatModelRepository;
     private final ModelRegistryVersionService modelRegistryVersionService;
     private final EmbeddingIndexIdentityService embeddingIndexIdentityService;
+    private final EmbeddingIndexPointerService embeddingIndexPointerService;
+    private final EmbeddingReindexRunRepository embeddingReindexRunRepository;
 
-    /** Collection Python is configured against — same property key ChatModelServiceImpl uses. */
-    @Value("${model-registry.embedding-collection-name:unisage_chunks}")
-    private String embeddingCollectionName;
 
     /**
      * Backs plan.md "Internal API contract" endpoint #3. The revision check and the
@@ -106,11 +108,21 @@ public class ModelRegistryInternalServiceImpl implements ModelRegistryInternalSe
             purposes.get(model.getModelPurpose()).add(toCredentialEntry(model));
         }
 
+        String embeddingCollection = embeddingIndexPointerService.activeCollection();
         InternalEmbeddingIndexIdentityResponse embeddingIndexIdentity =
-                embeddingIndexIdentityService.getIdentity(embeddingCollectionName).orElse(null);
+                embeddingIndexIdentityService.getIdentity(embeddingCollection).orElse(null);
+        // An open run makes Python refuse new embeds and apply payload edits/deletes to the target
+        // collection too (changes/17-10-2026-Embedding-Reindex/plan.md D4).
+        EmbeddingReindexEntry embeddingReindex = embeddingReindexRunRepository
+                .findFirstByBaseCollectionAndStatusInOrderByCreatedAtDesc(
+                        embeddingIndexPointerService.baseCollection(),
+                        List.of(EmbeddingReindexStatus.QUEUED, EmbeddingReindexStatus.RUNNING))
+                .map(run -> new EmbeddingReindexEntry(run.getId(), run.getStatus(), run.getTargetCollection()))
+                .orElse(null);
 
         return new InternalModelRegistrySnapshotResponse(
-                version, OffsetDateTime.now(ZoneOffset.UTC), purposes, embeddingIndexIdentity);
+                version, OffsetDateTime.now(ZoneOffset.UTC), purposes, embeddingIndexIdentity,
+                embeddingCollection, embeddingReindex);
     }
 
     private CredentialEntry toCredentialEntry(ChatModel model) {
