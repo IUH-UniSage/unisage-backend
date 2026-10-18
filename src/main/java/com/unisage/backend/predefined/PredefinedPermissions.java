@@ -89,6 +89,8 @@ public final class PredefinedPermissions {
     /** PATCH /chat-models/{id}/status and /chat-models/{id}/priority — CHAT_MODEL_ALL already covers both for SUPER_ADMIN. */
     public static final String CHAT_MODEL_ACTIVATE = "CHAT_MODEL_ACTIVATE";
     public static final String CHAT_MODEL_VERIFY = "CHAT_MODEL_VERIFY";
+    /** POST /chat-models/embedding-index/** — start or cancel an embedding re-index (UNISAGE-103). */
+    public static final String CHAT_MODEL_REINDEX = "CHAT_MODEL_REINDEX";
 
     // ─── Conversation ─────────────────────────────────────────────────────
     public static final String CONVERSATION_ALL    = "CONVERSATION_ALL";

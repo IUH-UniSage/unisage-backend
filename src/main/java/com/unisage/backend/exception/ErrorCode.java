@@ -102,6 +102,16 @@ public enum ErrorCode {
     VERIFICATION_JOB_NOT_FOUND(HttpStatus.NOT_FOUND, 2519, "Job xác minh không tồn tại."),
     REGISTRY_RESET_JOB_RUNNING(HttpStatus.CONFLICT, 2520,
             "Còn job xác minh đang chạy với lease chưa hết hạn, thử lại sau."),
+    // Embedding re-index (252x) - UNISAGE-103
+    EMBEDDING_REINDEX_IN_PROGRESS(HttpStatus.CONFLICT, 2521, "Đang có một lượt re-index chưa kết thúc."),
+    EMBEDDING_REINDEX_NOT_NEEDED(HttpStatus.CONFLICT, 2522,
+            "Model này trùng danh tính với chỉ mục hiện tại, hãy kích hoạt trực tiếp."),
+    EMBEDDING_REINDEX_MODEL_INVALID(HttpStatus.BAD_REQUEST, 2523,
+            "Chỉ re-index sang model embedding đã xác minh, đang tắt và chưa bị xoá."),
+    EMBEDDING_REINDEX_RUN_NOT_FOUND(HttpStatus.NOT_FOUND, 2524, "Lượt re-index không tồn tại."),
+    EMBEDDING_REINDEX_RUN_NOT_OPEN(HttpStatus.CONFLICT, 2525, "Lượt re-index đã kết thúc."),
+    EMBEDDING_REINDEX_LEASE_LOST(HttpStatus.CONFLICT, 2526,
+            "Lượt re-index đã hết hạn hoặc bị lấy lại bởi tiến trình khác."),
 
     // Cost Tracking (26xx)
     USAGE_LOG_INVALID_PAYLOAD(HttpStatus.BAD_REQUEST, 2600, "Payload usage log không hợp lệ."),
