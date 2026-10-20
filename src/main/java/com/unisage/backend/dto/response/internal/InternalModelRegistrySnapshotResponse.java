@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import com.unisage.backend.entity.enums.ChatModelPurpose;
 import com.unisage.backend.entity.enums.ChatModelSourceType;
+import com.unisage.backend.entity.enums.EmbeddingReindexStatus;
 
 /**
  * {@code GET /internal/model-registry/snapshot} response — plan.md "Internal API contract"
@@ -20,7 +21,11 @@ public record InternalModelRegistrySnapshotResponse(
     long version,
     OffsetDateTime generatedAt,
     Map<ChatModelPurpose, List<CredentialEntry>> purposes,
-    InternalEmbeddingIndexIdentityResponse embeddingIndexIdentity
+    InternalEmbeddingIndexIdentityResponse embeddingIndexIdentity,
+    /** The live Qdrant collection; {@link #embeddingIndexIdentity} is its identity. */
+    String embeddingCollection,
+    /** The open re-index run of this environment, or null. */
+    EmbeddingReindexEntry embeddingReindex
 ) {
 
     @Override
@@ -28,7 +33,9 @@ public record InternalModelRegistrySnapshotResponse(
         return "InternalModelRegistrySnapshotResponse[version=" + version
                 + ", generatedAt=" + generatedAt
                 + ", purposes=" + redactedPurposeCounts()
-                + ", embeddingIndexIdentity=" + embeddingIndexIdentity + "]";
+                + ", embeddingIndexIdentity=" + embeddingIndexIdentity
+                + ", embeddingCollection=" + embeddingCollection
+                + ", embeddingReindex=" + embeddingReindex + "]";
     }
 
     private String redactedPurposeCounts() {
@@ -76,4 +83,7 @@ public record InternalModelRegistrySnapshotResponse(
                     + ", maxConcurrency=" + maxConcurrency + "]";
         }
     }
+
+    /** An open re-index run — Python writes payload edits/deletes to {@link #targetCollection} too. */
+    public record EmbeddingReindexEntry(UUID runId, EmbeddingReindexStatus status, String targetCollection) {}
 }

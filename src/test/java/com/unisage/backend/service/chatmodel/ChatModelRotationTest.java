@@ -8,7 +8,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openapitools.jackson.nullable.JsonNullable;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import com.unisage.backend.dto.request.ChatModelRequest;
 import com.unisage.backend.dto.request.ChatModelUpdateRequest;
@@ -31,6 +30,7 @@ import com.unisage.backend.service.chatmodelcandidatepromotion.ChatModelCandidat
 import com.unisage.backend.service.chatmodelverificationresult.ChatModelVerificationResultService;
 import com.unisage.backend.service.chatmodelverificationresult.ChatModelVerificationResultServiceImpl;
 import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityService;
+import com.unisage.backend.service.embeddingindexpointer.TestEmbeddingIndexPointers;
 import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
 import com.unisage.backend.utils.SsrfGuard;
 
@@ -68,15 +68,14 @@ class ChatModelRotationTest {
         applicationEventPublisher = mock(org.springframework.context.ApplicationEventPublisher.class);
         chatModelService = new ChatModelServiceImpl(
                 chatModelRepository, chatModelVerificationRepository, new SsrfGuard(),
-                mock(EmbeddingIndexIdentityService.class), modelRegistryVersionService,
-                applicationEventPublisher);
+                TestEmbeddingIndexPointers.over(mock(EmbeddingIndexIdentityService.class), "unisage_chunks"),
+                modelRegistryVersionService, applicationEventPublisher);
         promotionService = new ChatModelCandidatePromotionServiceImpl(
                 chatModelRepository, chatModelVerificationRepository,
-                mock(EmbeddingIndexIdentityService.class), modelRegistryVersionService);
+                TestEmbeddingIndexPointers.over(mock(EmbeddingIndexIdentityService.class), "unisage_chunks"),
+                modelRegistryVersionService);
         resultService = new ChatModelVerificationResultServiceImpl(
                 chatModelRepository, chatModelVerificationRepository, promotionService);
-        ReflectionTestUtils.setField(chatModelService, "embeddingCollectionName", "unisage_chunks");
-        ReflectionTestUtils.setField(promotionService, "embeddingCollectionName", "unisage_chunks");
 
         when(chatModelRepository.save(any(ChatModel.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(chatModelVerificationRepository.save(any(ChatModelVerification.class)))

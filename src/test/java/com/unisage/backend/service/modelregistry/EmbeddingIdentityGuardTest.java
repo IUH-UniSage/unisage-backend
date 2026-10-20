@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import com.unisage.backend.service.chatmodelcandidatepromotion.ChatModelCandidatePromotionService;
 import com.unisage.backend.service.chatmodelcandidatepromotion.ChatModelCandidatePromotionServiceImpl;
 import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityService;
+import com.unisage.backend.service.embeddingindexpointer.TestEmbeddingIndexPointers;
 import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityServiceImpl;
 import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
 
@@ -31,7 +32,6 @@ import com.unisage.backend.repository.EmbeddingIndexIdentityRepository;
 import com.unisage.backend.repository.EmbeddingIndexIdentityWriter;
 import com.unisage.backend.service.chatmodel.ChatModelServiceImpl;
 import com.unisage.backend.utils.SsrfGuard;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -69,12 +69,11 @@ class EmbeddingIdentityGuardTest {
         applicationEventPublisher = mock(org.springframework.context.ApplicationEventPublisher.class);
         chatModelService = new ChatModelServiceImpl(
                 chatModelRepository, chatModelVerificationRepository, new SsrfGuard(),
-                embeddingIndexIdentityService, modelRegistryVersionService, applicationEventPublisher);
+                TestEmbeddingIndexPointers.over(embeddingIndexIdentityService, COLLECTION),
+                modelRegistryVersionService, applicationEventPublisher);
         promotionService = new ChatModelCandidatePromotionServiceImpl(
                 chatModelRepository, chatModelVerificationRepository,
-                embeddingIndexIdentityService, modelRegistryVersionService);
-        ReflectionTestUtils.setField(chatModelService, "embeddingCollectionName", COLLECTION);
-        ReflectionTestUtils.setField(promotionService, "embeddingCollectionName", COLLECTION);
+                TestEmbeddingIndexPointers.over(embeddingIndexIdentityService, COLLECTION), modelRegistryVersionService);
 
         when(chatModelRepository.save(any(ChatModel.class))).thenAnswer(inv -> inv.getArgument(0));
         when(chatModelVerificationRepository.save(any(ChatModelVerification.class))).thenAnswer(inv -> inv.getArgument(0));
