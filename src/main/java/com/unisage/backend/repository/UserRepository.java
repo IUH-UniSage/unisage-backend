@@ -1,6 +1,5 @@
 package com.unisage.backend.repository;
 import com.unisage.backend.entity.User;
-import com.unisage.backend.entity.enums.UserStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -8,7 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,11 +15,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByPhone(String phone);
     Optional<User> findByEmail(String email);
     Optional<User> findByCode(String code);
-
-    /** UNISAGE-72: dashboard's "active users" tile. */
-    long countByStatus(UserStatus status);
-
-    long countByStatusAndLastLoginAfter(UserStatus status, LocalDateTime after);
 
     @Override
     @EntityGraph(attributePaths = {"createdBy", "updatedBy"})
