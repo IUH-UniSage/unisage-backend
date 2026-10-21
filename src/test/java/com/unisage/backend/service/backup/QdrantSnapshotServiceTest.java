@@ -4,6 +4,8 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.HexFormat;
 
 import org.junit.jupiter.api.Test;
@@ -26,13 +28,15 @@ import static org.mockito.Mockito.when;
 class QdrantSnapshotServiceTest {
 
     private static final byte[] BODY = "snapshot bytes".getBytes(StandardCharsets.UTF_8);
-    private static final String KEY = "qdrant/unisage_chunks/s1.snapshot";
+    private static final String KEY = "qdrant/unisage_chunks/unisage_chunks_2026-10-13_09-05-09.snapshot";
 
     private final QdrantSnapshotClient client = mock(QdrantSnapshotClient.class);
     private final BackupStorage storage = mock(BackupStorage.class);
+    private final BackupProperties properties = mock(BackupProperties.class);
+    private final BackupRunRecorder recorder = mock(BackupRunRecorder.class);
 
     private final QdrantSnapshotService service = new QdrantSnapshotService(
-            client, storage, mock(BackupRunRepository.class), mock(BackupRunRecorder.class));
+            client, storage, properties, mock(BackupRunRepository.class), recorder);
 
     @Test
     void snapshot_uploadsWithMatchingChecksum_andDeletesItFromQdrant() throws Exception {
@@ -59,6 +63,8 @@ class QdrantSnapshotServiceTest {
 
     @SuppressWarnings("unchecked")
     private void givenSnapshot(String checksum) throws Exception {
+        when(properties.getZone()).thenReturn(ZoneId.of("Asia/Ho_Chi_Minh"));
+        when(recorder.nowUtc()).thenReturn(LocalDateTime.of(2026, 10, 13, 2, 5, 9));
         when(client.createSnapshot("unisage_chunks")).thenReturn(new Snapshot("s1.snapshot", BODY.length, checksum));
         when(client.download(eq("unisage_chunks"), eq("s1.snapshot"), any()))
                 .thenAnswer(call -> ((BodyHandler<String>) call.getArgument(2)).handle(new ByteArrayInputStream(BODY)));

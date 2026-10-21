@@ -1,6 +1,7 @@
 package com.unisage.backend.service.backup;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
@@ -60,9 +61,10 @@ class PostgresBackupServiceTest {
     }
 
     @Test
-    void stamp_isSortableUtc() {
-        assertThat(PostgresBackupService.stamp(LocalDateTime.of(2026, 10, 13, 2, 5, 9)))
-                .isEqualTo("20261013T020509Z");
+    void stamp_isReadableSortableLocalTime() {
+        assertThat(PostgresBackupService.stamp(LocalDateTime.of(2026, 10, 13, 2, 5, 9),
+                ZoneId.of("Asia/Ho_Chi_Minh")))
+                .isEqualTo("2026-10-13_09-05-09");
     }
 
     private static BackupRun full(String prefix, LocalDateTime startedAt) {

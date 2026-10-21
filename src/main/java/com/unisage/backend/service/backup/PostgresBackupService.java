@@ -2,6 +2,7 @@ package com.unisage.backend.service.backup;
 
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -37,7 +38,9 @@ public class PostgresBackupService {
     static final String WAL_PREFIX = "postgres/wal/";
     static final String MANIFEST = "backup_manifest";
 
-    private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'");
+    // app.timezone wall time, e.g. 2026-10-21_09-45-58: readable in MinIO and in a downloaded
+    // file's name, still sortable, and free of ':' so it is a valid file name everywhere.
+    private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
 
     private final BackupProperties properties;
     private final PgToolRunner pgToolRunner;
@@ -46,7 +49,7 @@ public class PostgresBackupService {
     private final BackupRunRecorder recorder;
 
     public BackupArtifact takeFull(BackupRun run) {
-        String stamp = stamp(run.getStartedAt());
+        String stamp = stamp(run.getStartedAt(), properties.getZone());
         Path dir = properties.getWorkDir().resolve("full-" + stamp);
         try {
             pgToolRunner.run("pg_basebackup", baseBackupArgs(dir, "unisage-full-" + stamp));
@@ -57,7 +60,7 @@ public class PostgresBackupService {
     }
 
     public BackupArtifact takeDifferential(BackupRun run, BackupRun full) {
-        String stamp = stamp(run.getStartedAt());
+        String stamp = stamp(run.getStartedAt(), properties.getZone());
         Path manifest = properties.getWorkDir().resolve("full-manifest-" + stamp);
         Path dir = properties.getWorkDir().resolve("differential-" + stamp);
         try {
@@ -95,8 +98,8 @@ public class PostgresBackupService {
         storage.deleteOlderThan(WAL_PREFIX, oldestKept.getStartedAt().toInstant(ZoneOffset.UTC));
     }
 
-    static String stamp(LocalDateTime utc) {
-        return STAMP.format(utc);
+    static String stamp(LocalDateTime utc, ZoneId zone) {
+        return STAMP.format(utc.atOffset(ZoneOffset.UTC).atZoneSameInstant(zone));
     }
 
     private List<String> baseBackupArgs(Path dir, String label) {

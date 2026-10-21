@@ -71,10 +71,16 @@ File nằm trong bucket `unisage-backups` (`app.backup.bucket`), tách khỏi `u
 quyền truy cập hay lifecycle rule của bucket này không ảnh hưởng bucket kia:
 
 ```
-postgres/full/<yyyyMMddTHHmmssZ>/{base.tar.gz, pg_wal.tar.gz, backup_manifest}
-postgres/differential/<yyyyMMddTHHmmssZ>/{...}
+postgres/full/<yyyy-MM-dd_HH-mm-ss>/{base.tar.gz, pg_wal.tar.gz, backup_manifest}
+postgres/differential/<yyyy-MM-dd_HH-mm-ss>/{...}
 postgres/wal/<tên segment WAL>
 ```
+
+Tên thư mục là giờ bắt đầu theo `app.timezone` (giờ Việt Nam), ví dụ `2026-10-21_09-45-58`: đọc
+được ngay trong MinIO và trong tên file tải về, vẫn sắp xếp đúng theo thời gian, và không có `:`
+nên dùng làm tên file được trên mọi hệ điều hành. Bản tạo trước thay đổi này giữ tên cũ
+`yyyyMMddTHHmmssZ` (UTC); code không đọc lại thời gian từ tên nên hai kiểu cùng tồn tại được. Tên
+segment WAL do Postgres đặt và `restore_command` cần đúng tên đó, nên không đổi.
 
 ### 4. Lưu giữ: giữ N bản Full, xoá kèm Differential và WAL cũ hơn
 

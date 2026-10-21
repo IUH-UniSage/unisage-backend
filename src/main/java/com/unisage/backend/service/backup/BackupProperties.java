@@ -1,6 +1,7 @@
 package com.unisage.backend.service.backup;
 
 import java.nio.file.Path;
+import java.time.ZoneId;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -65,4 +66,8 @@ public class BackupProperties {
 
     @Value("${app.backup.qdrant.timeout-minutes:30}")
     private long qdrantTimeoutMinutes;
+
+    /** Backup folder and file names carry this wall time, so they read like the admin page. */
+    @Value("${app.timezone:Asia/Ho_Chi_Minh}")
+    private ZoneId zone;
 }

@@ -34,6 +34,7 @@ public class QdrantSnapshotService {
 
     private final QdrantSnapshotClient qdrantClient;
     private final BackupStorage storage;
+    private final BackupProperties properties;
     private final BackupRunRepository backupRunRepository;
     private final BackupRunRecorder recorder;
 
@@ -43,7 +44,9 @@ public class QdrantSnapshotService {
 
     public BackupArtifact snapshot(String collection) {
         Snapshot snapshot = qdrantClient.createSnapshot(collection);
-        String key = PREFIX + collection + "/" + snapshot.name();
+        // Named by when it was taken rather than by Qdrant's generated name, like the Postgres folders.
+        String key = PREFIX + collection + "/" + collection + "_"
+                + PostgresBackupService.stamp(recorder.nowUtc(), properties.getZone()) + ".snapshot";
         try {
             String sha256 = qdrantClient.download(collection, snapshot.name(), body -> {
                 MessageDigest digest = sha256();

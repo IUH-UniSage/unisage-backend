@@ -57,7 +57,8 @@ collection, mỗi collection một dòng `backup_runs` (`target` = tên collecti
 ### 2. Stream thẳng vào MinIO, kiểm tra checksum, rồi xoá trên Qdrant
 
 `QdrantSnapshotService.snapshot`: tạo snapshot (`wait=true`), tải về và stream thẳng vào
-`unisage-backups/qdrant/<collection>/<tên snapshot>` qua `DigestInputStream`, không ghi ra đĩa
+`unisage-backups/qdrant/<collection>/<collection>_<yyyy-MM-dd_HH-mm-ss>.snapshot` (giờ theo
+`app.timezone`, như tên thư mục Postgres ở ADR-0008) qua `DigestInputStream`, không ghi ra đĩa
 backend. Sau đó so SHA-256 với `checksum` Qdrant trả về; lệch thì xoá object và đánh dấu FAILED.
 Cuối cùng (kể cả khi lỗi) xoá snapshot trên node Qdrant để đĩa Qdrant không đầy dần. Chỉ xoá
 snapshot do job này tạo; snapshot tạo tay vẫn được giữ.
