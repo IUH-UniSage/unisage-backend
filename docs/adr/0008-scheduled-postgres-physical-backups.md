@@ -42,7 +42,7 @@ Bản tóm tắt rất nhỏ so với WAL.
 
 ### 2. Lịch chạy nằm trong `system_configs`, backend tự quyết định lúc nào tới hạn
 
-V35 thêm các dòng nhóm MAINTENANCE `maintenance.backup.*` (bật/tắt, tần suất + giờ cho Full,
+V38 thêm các dòng nhóm MAINTENANCE `maintenance.backup.*` (bật/tắt, tần suất + giờ cho Full,
 Differential, Qdrant, chu kỳ phút cho Transaction log, số bản giữ lại). Trang Cài đặt hiện có tự
 hiển thị chúng, không cần màn hình mới. `SystemConfigServiceImpl.updateValue` kiểm tra giá trị qua
 `BackupSettings.isValid` (Full không được OFF; giờ `HH:mm`; WAL 0–1440 phút; giữ 1–365 bản), lỗi
@@ -62,7 +62,7 @@ mốc đó vẫn còn hạn tới khi có Full.
 
 ### 3. Lịch sử chạy ở bảng `backup_runs`, file ở bucket MinIO riêng
 
-`backup_runs` (V36) ghi mỗi lần chạy: loại, trạng thái RUNNING/SUCCEEDED/FAILED, mốc lịch, thời
+`backup_runs` (V39) ghi mỗi lần chạy: loại, trạng thái RUNNING/SUCCEEDED/FAILED, mốc lịch, thời
 gian, Full gốc của Differential (`base_run_id`), prefix trong storage, dung lượng, lỗi. Bảng
 không kế thừa `BaseEntity` vì do scheduler ghi, không phải người dùng (giống `system_health_checks`).
 Khi ứng dụng khởi động lại, các dòng còn RUNNING được chuyển thành FAILED.
@@ -165,7 +165,7 @@ mới nhất. Full cũ hơn bị xoá cùng các Differential của nó, và WAL
 
 - `service/backup/` (`BackupCoordinator`, `PostgresBackupService`, `WalShippingService`,
   `BackupSettings`, `BackupStorage`, `PgToolRunner`), `scheduler/BackupJob.java`
-- `db/migration/V35__backup_schedule_settings.sql`, `V36__backup_runs.sql`
+- `db/migration/V38__backup_schedule_settings.sql`, `V39__backup_runs.sql`
 - `docker-compose.yml`, `docker-compose.prod.yml`, `docker/postgres/pg_hba.conf`, `Dockerfile`
 - ADR-0009 (snapshot Qdrant dùng chung lịch và hạ tầng này)
 - PostgreSQL 17: `pg_basebackup --incremental`, `pg_combinebackup`, `summarize_wal`, continuous

@@ -100,7 +100,7 @@ qua lượt đó.
 | GET | `/restores/postgres/status` | phase và thông báo của job gần nhất |
 | POST | `/restores/qdrant` | `{backupRunId}` của một snapshot |
 
-Quyền `BACKUP_ALL` / `BACKUP_READ` (V37), cấp `BACKUP_ALL` cho `SUPER_ADMIN`.
+Quyền `BACKUP_ALL` / `BACKUP_READ` (V40), cấp `BACKUP_ALL` cho `SUPER_ADMIN`.
 
 ## Consequences
 
@@ -151,6 +151,6 @@ Quyền `BACKUP_ALL` / `BACKUP_READ` (V37), cấp `BACKUP_ALL` cho `SUPER_ADMIN`
 - `docker/postgres/unisage-entrypoint.sh`, `docker-compose.yml`, `docker-compose.prod.yml`
 - `service/backup/RestoreJobs.java`, `PostgresRestoreService.java`, `QdrantRestoreService.java`,
   `BackupTaskRunner.java`, `BackupAdminService.java`, `controller/BackupController.java`
-- `db/migration/V37__backup_restores.sql`
+- `db/migration/V40__backup_restores.sql`
 - ADR-0008, ADR-0009
 - PostgreSQL 17: Continuous Archiving and PITR, `pg_combinebackup`
