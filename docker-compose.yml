@@ -38,7 +38,7 @@ services:
       - ${BACKUP_RESTORE_HOST_DIR:-./.backup-restore}:/restore
 
   unisage-minio:
-    image: minio/minio:latest   # pin a specific release tag before deploying past dev
+    image: cgr.dev/chainguard/minio:latest   # minio/minio was removed from Docker Hub (Sep 2026); pin a digest/tag before deploying past dev
     container_name: unisage-minio
     ports:
       - "9100:9000"   # S3 API
