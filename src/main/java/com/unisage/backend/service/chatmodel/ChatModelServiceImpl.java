@@ -16,13 +16,12 @@ import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
 import com.unisage.backend.repository.ChatModelVerificationRepository;
-import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityService;
+import com.unisage.backend.service.embeddingindexpointer.EmbeddingIndexPointerService;
 import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
 import com.unisage.backend.event.VerificationRequestedEvent;
-import com.unisage.backend.utils.EmbeddingFingerprintMatcher;
+import com.unisage.backend.utils.EmbeddingIdentityMismatches;
 import com.unisage.backend.utils.SsrfGuard;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -65,13 +64,9 @@ public class ChatModelServiceImpl implements ChatModelService {
     private final ChatModelRepository chatModelRepository;
     private final ChatModelVerificationRepository chatModelVerificationRepository;
     private final SsrfGuard ssrfGuard;
-    private final EmbeddingIndexIdentityService embeddingIndexIdentityService;
+    private final EmbeddingIndexPointerService embeddingIndexPointerService;
     private final ModelRegistryVersionService modelRegistryVersionService;
     private final ApplicationEventPublisher applicationEventPublisher;
-
-    /** Single-collection reality of the current system (plan.md "Embedding identity guard"). */
-    @Value("${model-registry.embedding-collection-name:unisage_chunks}")
-    private String embeddingCollectionName;
 
     @Override
     @Transactional
@@ -418,10 +413,11 @@ public class ChatModelServiceImpl implements ChatModelService {
      * than propagating as a 500.
      */
     private void activateEmbedding(ChatModel model) {
-        Optional<InternalEmbeddingIndexIdentityResponse> identity =
-                embeddingIndexIdentityService.getIdentity(embeddingCollectionName);
+        // Compared with the live collection: a model that differs needs a re-index into a new
+        // collection first (POST /chat-models/embedding-index/reindex), which activates it on cutover.
+        Optional<InternalEmbeddingIndexIdentityResponse> identity = embeddingIndexPointerService.activeIdentity();
         if (identity.isPresent()) {
-            List<String> mismatches = embeddingIdentityMismatches(model, identity.get());
+            List<String> mismatches = EmbeddingIdentityMismatches.of(model, identity.get());
             if (!mismatches.isEmpty()) {
                 throw new AppException(ErrorCode.EMBEDDING_REINDEX_REQUIRED,
                         Map.of("mismatchedFields", String.join(",", mismatches)));
@@ -439,29 +435,6 @@ public class ChatModelServiceImpl implements ChatModelService {
             throw new AppException(ErrorCode.EMBEDDING_ACTIVE_CONFLICT);
         }
         modelRegistryVersionService.bump();
-    }
-
-    private List<String> embeddingIdentityMismatches(ChatModel model, InternalEmbeddingIndexIdentityResponse identity) {
-        List<String> mismatches = new java.util.ArrayList<>();
-        if (!Objects.equals(model.getLlmProvider(), identity.provider())) {
-            mismatches.add("provider");
-        }
-        if (!Objects.equals(model.getLlmModelName(), identity.modelName())) {
-            mismatches.add("modelName");
-        }
-        if (!Objects.equals(model.getModelSourceRef(), identity.modelSourceRef())) {
-            mismatches.add("modelSourceRef");
-        }
-        if (!Objects.equals(model.getApiBaseUrl(), identity.apiBaseUrl())) {
-            mismatches.add("apiBaseUrl");
-        }
-        if (!Objects.equals(model.getEmbeddingDimension(), identity.dimension())) {
-            mismatches.add("dimension");
-        }
-        if (!EmbeddingFingerprintMatcher.matches(model.getEmbeddingFingerprint(), identity.fingerprint())) {
-            mismatches.add("fingerprint");
-        }
-        return mismatches;
     }
 
     @Override

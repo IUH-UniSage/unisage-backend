@@ -1,5 +1,7 @@
 package com.unisage.backend.service.ticket;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,6 +15,7 @@ import com.unisage.backend.dto.response.TicketDetailResponse;
 import com.unisage.backend.dto.response.TicketResponse;
 import com.unisage.backend.entity.Conversation;
 import com.unisage.backend.entity.Message;
+import com.unisage.backend.entity.MessageTrace;
 import com.unisage.backend.entity.Ticket;
 import com.unisage.backend.entity.User;
 import com.unisage.backend.entity.enums.MsgRole;
@@ -21,6 +24,7 @@ import com.unisage.backend.entity.enums.TicketType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.MessageRepository;
+import com.unisage.backend.repository.MessageTraceRepository;
 import com.unisage.backend.repository.TicketRepository;
 import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.utils.SecurityUtil;
@@ -40,6 +44,7 @@ class TicketServiceImplTest {
 
     private TicketRepository ticketRepository;
     private MessageRepository messageRepository;
+    private MessageTraceRepository messageTraceRepository;
     private UserRepository userRepository;
     private TicketServiceImpl service;
     private User caller;
@@ -48,10 +53,12 @@ class TicketServiceImplTest {
     void setUp() {
         ticketRepository = mock(TicketRepository.class);
         messageRepository = mock(MessageRepository.class);
+        messageTraceRepository = mock(MessageTraceRepository.class);
         userRepository = mock(UserRepository.class);
         SecurityUtil securityUtil = mock(SecurityUtil.class);
         when(securityUtil.getCurrentUserId()).thenReturn(callerId);
-        service = new TicketServiceImpl(ticketRepository, messageRepository, userRepository, securityUtil);
+        service = new TicketServiceImpl(
+                ticketRepository, messageRepository, messageTraceRepository, userRepository, securityUtil);
 
         caller = User.builder().id(callerId).email("a@b.c").firstName("A").lastName("B").build();
         when(userRepository.findById(callerId)).thenReturn(Optional.of(caller));
@@ -198,6 +205,39 @@ class TicketServiceImplTest {
         TicketDetailResponse detail = service.getById(t.getId());
 
         assertThat(detail.description()).contains("Trace:").contains("a*b");
+    }
+
+    @Test
+    void getById_showsTheRetrievalTraceToStaff() {
+        Ticket t = ticket(TicketStatus.OPEN, null);
+        t.getMessage().setCitations(List.of(Map.of("index", 1, "title", "Quy chế")));
+        when(ticketRepository.findById(t.getId())).thenReturn(Optional.of(t));
+        when(messageTraceRepository.findById(messageId)).thenReturn(Optional.of(MessageTrace.builder()
+                .messageId(messageId).traceId("trace-1")
+                .chunks(List.of(Map.of("chunkId", "c1"))).webSources(List.of(Map.of("url", "https://iuh.edu.vn")))
+                .build()));
+
+        TicketDetailResponse detail = service.getById(t.getId());
+
+        assertThat(detail.traceId()).isEqualTo("trace-1");
+        assertThat(detail.contextChunks()).extracting(c -> c.get("chunkId")).containsExactly("c1");
+        assertThat(detail.webSources()).extracting(w -> w.get("url")).containsExactly("https://iuh.edu.vn");
+        assertThat(detail.citations()).hasSize(1);
+    }
+
+    @Test
+    void getMyTicket_neverShowsTheRetrievalTraceToTheOwner() {
+        Ticket t = ticket(TicketStatus.OPEN, null);
+        t.getMessage().setCitations(List.of(Map.of("index", 1, "title", "Quy chế")));
+        when(ticketRepository.findByIdAndUserId(t.getId(), callerId)).thenReturn(Optional.of(t));
+
+        TicketDetailResponse detail = service.getMyTicket(t.getId());
+
+        assertThat(detail.traceId()).isNull();
+        assertThat(detail.contextChunks()).isNull();
+        assertThat(detail.webSources()).isNull();
+        assertThat(detail.citations()).isNull();
+        verify(messageTraceRepository, never()).findById(any());
     }
 
     // ── my tickets ─────────────────────────────────────────────────────────────────────────────

@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -71,7 +73,10 @@ public class DocumentController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<PageResponse<List<DocumentResponse>>>> getAllDocuments(Pageable pageable) {
+    public ResponseEntity<ApiResponse<PageResponse<List<DocumentResponse>>>> getAllDocuments(
+            // Newest first, like every other list: findAllActive has no ORDER BY, so without this
+            // Postgres returned heap order and a fresh upload landed on the last page.
+            @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(documentService.getAll(pageable)));
     }
 

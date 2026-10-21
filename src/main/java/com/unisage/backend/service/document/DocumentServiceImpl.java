@@ -2,6 +2,7 @@ package com.unisage.backend.service.document;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -24,11 +25,14 @@ import com.unisage.backend.entity.User;
 import com.unisage.backend.entity.enums.DocStatus;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
+import com.unisage.backend.predefined.PredefinedRoles;
+import com.unisage.backend.integration.AgentIndexClient;
 import com.unisage.backend.repository.AccessLevelRepository;
 import com.unisage.backend.repository.CategoryRepository;
 import com.unisage.backend.repository.DepartmentRepository;
 import com.unisage.backend.repository.DocumentRepository;
 import com.unisage.backend.repository.DocumentVersionRepository;
+import com.unisage.backend.repository.UserDepartmentAccessRepository;
 import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.service.file.FileService;
 import com.unisage.backend.utils.SecurityUtil;
@@ -46,8 +50,10 @@ public class DocumentServiceImpl implements DocumentService {
     private final UserRepository userRepository;
     private final AccessLevelRepository accessLevelRepository;
     private final DocumentVersionRepository documentVersionRepository;
+    private final UserDepartmentAccessRepository userDepartmentAccessRepository;
     private final SecurityUtil securityUtil;
     private final FileService fileService;
+    private final AgentIndexClient agentIndexClient;
 
     @Override
     @Transactional
@@ -100,6 +106,8 @@ public class DocumentServiceImpl implements DocumentService {
         Document document = documentRepository.findById(id)
                 .filter(d -> d.getDeletedAt() == null)
                 .orElseThrow(() -> new AppException(ErrorCode.DOCUMENT_NOT_FOUND));
+        IndexedAccess accessBefore = IndexedAccess.of(document);
+        String sourceBefore = document.getSourceUrl();
 
         if (request.docPackageId() != null) {
             Department docPackage = departmentRepository.findById(request.docPackageId())
@@ -161,8 +169,41 @@ public class DocumentServiceImpl implements DocumentService {
             document.setIsPublic(request.isPublic());
         }
 
+        syncIndex(document, accessBefore, sourceBefore);
         document = documentRepository.save(document);
         return mapToResponse(document);
+    }
+
+    /**
+     * Keeps the agent's vector index in step with the edit (changes/17-10-2026-Embedding-Reindex
+     * R2). A new file makes every point stale: drop them and mark the document OUTDATED so it is
+     * ingested again. An access change rewrites the points' payload in place. Called inside the
+     * transaction, so an agent failure rolls the edit back rather than leaving a payload that grants
+     * the wrong people access.
+     */
+    private void syncIndex(Document document, IndexedAccess accessBefore, String sourceBefore) {
+        if (!Objects.equals(sourceBefore, document.getSourceUrl())) {
+            agentIndexClient.deleteIndex(document.getId());
+            if (document.getStatus() != DocStatus.PENDING) {
+                document.setStatus(DocStatus.OUTDATED);
+            }
+            return;
+        }
+        IndexedAccess accessAfter = IndexedAccess.of(document);
+        if (document.getStatus() != DocStatus.PENDING && !accessAfter.equals(accessBefore)) {
+            agentIndexClient.updateIndexMetadata(
+                    document.getId(), accessAfter.departmentId(), accessAfter.accessLevel(), accessAfter.isPublic());
+        }
+    }
+
+    /** The fields the agent copies into every point's payload — same derivation as the ingest wizard. */
+    private record IndexedAccess(UUID departmentId, int accessLevel, boolean isPublic) {
+        static IndexedAccess of(Document document) {
+            return new IndexedAccess(
+                    document.getDocPackage() != null ? document.getDocPackage().getId() : null,
+                    document.getMinAccessLevel() != null ? document.getMinAccessLevel().getLevel() : 0,
+                    Boolean.TRUE.equals(document.getIsPublic()));
+        }
     }
 
     @Override
@@ -186,10 +227,14 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
+    @Transactional
     public CitationDocumentResponse getCitationById(UUID id) {
         Document document = documentRepository.findById(id)
                 .filter(d -> d.getDeletedAt() == null)
                 .orElseThrow(() -> new AppException(ErrorCode.DOCUMENT_NOT_FOUND));
+        if (!canViewCitation(document)) {
+            throw new AppException(ErrorCode.DOCUMENT_VIEW_FORBIDDEN);
+        }
         return CitationDocumentResponse.builder()
                 .id(document.getId())
                 .title(document.getTitle())
@@ -222,6 +267,8 @@ public class DocumentServiceImpl implements DocumentService {
                 .orElseThrow(() -> new AppException(ErrorCode.DOCUMENT_NOT_FOUND));
         document.setDeletedAt(LocalDateTime.now());
         documentRepository.save(document);
+        // Retrieval does not know about deletedAt: the points must go, or the document keeps answering.
+        agentIndexClient.deleteIndex(document.getId());
     }
 
     @Override
@@ -275,27 +322,40 @@ public class DocumentServiceImpl implements DocumentService {
         return minAccessLevel;
     }
 
+    /**
+     * Same rule the agent applies to Qdrant chunks: a public document is open to everyone, guests
+     * included; a private one needs SUPER_ADMIN (the {@code *} wildcard of the JWT's
+     * {@code department_access}) or a department access row for the document's department whose
+     * level clears {@code minAccessLevel}.
+     */
+    private boolean canViewCitation(Document document) {
+        if (Boolean.TRUE.equals(document.getIsPublic())) {
+            return true;
+        }
+        UUID userId = securityUtil.getCurrentUserIdOrNull();
+        if (userId == null) {
+            return false;
+        }
+        User requester = userRepository.findById(userId).orElse(null);
+        if (requester == null) {
+            return false;
+        }
+        if (requester.getRole() != null && PredefinedRoles.SUPER_ADMIN.equals(requester.getRole().getName())) {
+            return true;
+        }
+        if (document.getDocPackage() == null) {
+            return false;
+        }
+        int required = document.getMinAccessLevel() != null ? document.getMinAccessLevel().getLevel() : 0;
+        return userDepartmentAccessRepository.findAccessLevel(userId, document.getDocPackage().getId())
+                .map(level -> level >= required)
+                .orElse(false);
+    }
+
     private String resolveFileUrl(Document document) {
         if (document.getSourceUrl() == null) {
             return null;
         }
-        if (Boolean.TRUE.equals(document.getIsPublic())) {
-            return fileService.getPresignedUrl(document.getSourceUrl());
-        }
-
-        // UUID userId = securityUtil.getCurrentUserIdOrNull();
-        // if (userId == null) {
-        //     return null;
-        // }
-
-        // User requester = userRepository.findById(userId).orElse(null);
-        // int effectiveLevel = requester != null && requester.getAccessLevel() != null
-        //         ? requester.getAccessLevel().getLevel() : 0;
-        // int required = document.getMinAccessLevel() != null ? document.getMinAccessLevel().getLevel() : 0;
-        // if (effectiveLevel < required) {
-        //     return null;
-        // }
-
         return fileService.getPresignedUrl(document.getSourceUrl());
     }
 

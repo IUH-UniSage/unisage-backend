@@ -4,13 +4,12 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.unisage.backend.dto.response.internal.InternalEmbeddingIndexIdentityResponse;
-import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityService;
+import com.unisage.backend.service.embeddingindexpointer.EmbeddingIndexPointerService;
 import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
 import com.unisage.backend.entity.ChatModel;
 import com.unisage.backend.entity.ChatModelVerification;
@@ -36,11 +35,8 @@ public class ChatModelCandidatePromotionServiceImpl implements ChatModelCandidat
 
     private final ChatModelRepository chatModelRepository;
     private final ChatModelVerificationRepository chatModelVerificationRepository;
-    private final EmbeddingIndexIdentityService embeddingIndexIdentityService;
+    private final EmbeddingIndexPointerService embeddingIndexPointerService;
     private final ModelRegistryVersionService modelRegistryVersionService;
-
-    @Value("${model-registry.embedding-collection-name:unisage_chunks}")
-    private String embeddingCollectionName;
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
@@ -123,8 +119,7 @@ public class ChatModelCandidatePromotionServiceImpl implements ChatModelCandidat
             return true;
         }
 
-        Optional<InternalEmbeddingIndexIdentityResponse> identity =
-                embeddingIndexIdentityService.getIdentity(embeddingCollectionName);
+        Optional<InternalEmbeddingIndexIdentityResponse> identity = embeddingIndexPointerService.activeIdentity();
         if (identity.isEmpty()) {
             // Nothing established yet to compare against — can't be a mismatch caused by this
             // candidate; the row was ACTIVE so an identity should already exist in practice, but

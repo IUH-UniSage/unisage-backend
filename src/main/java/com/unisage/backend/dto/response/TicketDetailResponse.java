@@ -1,6 +1,8 @@
 package com.unisage.backend.dto.response;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.unisage.backend.entity.enums.TicketStatus;
@@ -28,6 +30,14 @@ public record TicketDetailResponse(
     String questionContent,
     /** The reported AI answer. */
     String messageContent,
+    /** Sources the answer cites ({@code [n]} markers), as stored on the message. Staff view only. */
+    List<Map<String, Object>> citations,
+    /** Id on every agent log line of the turn that produced the answer. Staff view only; null if none. */
+    String traceId,
+    /** Every chunk given to the LLM for the answer, cited or not. Staff view only; null if no trace. */
+    List<Map<String, Object>> contextChunks,
+    /** Every web page given to the LLM (content or link only). Staff view only; null if no trace. */
+    List<Map<String, Object>> webSources,
     LocalDateTime createdAt,
     LocalDateTime updatedAt
 ) {}

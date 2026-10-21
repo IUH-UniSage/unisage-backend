@@ -21,6 +21,8 @@ public record MessageResponse(
     List<Map<String, Object>> citations,
     Float retrievalScore,
     Map<String, Object> metadata,
+    /** Total time of the assistant turn in ms, or null when not measured. */
+    Integer responseTimeMs,
     LocalDateTime createdAt,
     /** The support ticket filed for this message, or null when none. */
     UUID ticketId

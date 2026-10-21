@@ -9,7 +9,7 @@ import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
 import com.unisage.backend.repository.ChatModelVerificationRepository;
-import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityService;
+import com.unisage.backend.service.embeddingindexpointer.EmbeddingIndexPointerService;
 import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
 import com.unisage.backend.utils.SsrfGuard;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,7 +58,7 @@ class ChatModelServiceImplTest {
                 chatModelRepository,
                 chatModelVerificationRepository,
                 testSsrfGuard(allowlist),
-                mock(EmbeddingIndexIdentityService.class),
+                mock(EmbeddingIndexPointerService.class),
                 mock(ModelRegistryVersionService.class),
                 mock(org.springframework.context.ApplicationEventPublisher.class));
     }

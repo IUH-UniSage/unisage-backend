@@ -28,6 +28,9 @@ public enum ErrorCode {
     DOCUMENT_PERMISSION_FORBIDDEN(HttpStatus.FORBIDDEN, 2310, "Ban không đủ quyền để tạo documemnt."),
     DOCUMENT_PUBLIC_ACCESS_LEVEL_CONFLICT(HttpStatus.BAD_REQUEST, 2311,
             "Tài liệu công khai không được đặt cấp độ truy cập tối thiểu."),
+    DOCUMENT_VIEW_FORBIDDEN(HttpStatus.FORBIDDEN, 2312, "Bạn không có quyền xem tài liệu này."),
+    DOCUMENT_INDEX_SYNC_FAILED(HttpStatus.BAD_GATEWAY, 2313,
+            "Không cập nhật được chỉ mục tìm kiếm của tài liệu, vui lòng thử lại."),
 
     // Not found errors
     CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, 2101, "Category không tồn tại."),
@@ -122,6 +125,16 @@ public enum ErrorCode {
     VERIFICATION_JOB_NOT_FOUND(HttpStatus.NOT_FOUND, 2519, "Job xác minh không tồn tại."),
     REGISTRY_RESET_JOB_RUNNING(HttpStatus.CONFLICT, 2520,
             "Còn job xác minh đang chạy với lease chưa hết hạn, thử lại sau."),
+    // Embedding re-index (252x) - UNISAGE-103
+    EMBEDDING_REINDEX_IN_PROGRESS(HttpStatus.CONFLICT, 2521, "Đang có một lượt re-index chưa kết thúc."),
+    EMBEDDING_REINDEX_NOT_NEEDED(HttpStatus.CONFLICT, 2522,
+            "Model này trùng danh tính với chỉ mục hiện tại, hãy kích hoạt trực tiếp."),
+    EMBEDDING_REINDEX_MODEL_INVALID(HttpStatus.BAD_REQUEST, 2523,
+            "Chỉ re-index sang model embedding đã xác minh, đang tắt và chưa bị xoá."),
+    EMBEDDING_REINDEX_RUN_NOT_FOUND(HttpStatus.NOT_FOUND, 2524, "Lượt re-index không tồn tại."),
+    EMBEDDING_REINDEX_RUN_NOT_OPEN(HttpStatus.CONFLICT, 2525, "Lượt re-index đã kết thúc."),
+    EMBEDDING_REINDEX_LEASE_LOST(HttpStatus.CONFLICT, 2526,
+            "Lượt re-index đã hết hạn hoặc bị lấy lại bởi tiến trình khác."),
 
     // Cost Tracking (26xx)
     USAGE_LOG_INVALID_PAYLOAD(HttpStatus.BAD_REQUEST, 2600, "Payload usage log không hợp lệ."),
@@ -153,6 +166,10 @@ public enum ErrorCode {
     CALCULATION_FEEDBACK_INVALID(HttpStatus.BAD_REQUEST, 2702, "Phản hồi kết quả tính toán không hợp lệ."),
     CALCULATION_FEEDBACK_LOCKED(HttpStatus.CONFLICT, 2703,
             "Yêu cầu hỗ trợ của kết quả này đã được xử lý xong, không thể đổi phản hồi nữa."),
+
+    // Message retrieval traces (271x)
+    MESSAGE_TRACE_INVALID(HttpStatus.BAD_REQUEST, 2710,
+            "Trace truy xuất của tin nhắn không hợp lệ (vượt quá 256 KB)."),
 
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),

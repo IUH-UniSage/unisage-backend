@@ -326,6 +326,9 @@ public class DataInitializer implements CommandLineRunner {
             def(PredefinedPermissions.CHAT_MODEL_VERIFY,
                 "/chat-models/*/verify", PermissionMethod.POST, ResourceType.CHAT_MODEL,
                 "Xác minh lại mô hình chat"),
+            def(PredefinedPermissions.CHAT_MODEL_REINDEX,
+                "/chat-models/embedding-index/**", PermissionMethod.POST, ResourceType.CHAT_MODEL,
+                "Re-index chỉ mục embedding sang model khác"),
 
             // ── Conversation ─────────────────────────────────────────────
             def(PredefinedPermissions.CONVERSATION_ALL,
@@ -505,6 +508,7 @@ public class DataInitializer implements CommandLineRunner {
             // but seeded explicitly so the permission exists as its own row for role granularity.
             permKey(PredefinedPermissions.CHAT_MODEL_ACTIVATE),
             permKey(PredefinedPermissions.CHAT_MODEL_VERIFY),
+            permKey(PredefinedPermissions.CHAT_MODEL_REINDEX),
             permKey(PredefinedPermissions.DASHBOARD_READ),
             permKey(PredefinedPermissions.USAGE_LOG_READ),
             // BUDGET_ALL (granted by the _ALL loop above) already covers /budgets/**, but

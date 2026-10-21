@@ -7,6 +7,7 @@ import java.util.UUID;
 import com.unisage.backend.entity.enums.MsgStatus;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Builder;
 
 @Builder
@@ -24,5 +25,7 @@ public record UpdateMessageRequest(
 
     List<Map<String, Object>> citations,
     Float retrievalScore,
-    Map<String, Object> metadata
+    Map<String, Object> metadata,
+    @PositiveOrZero(message = "responseTimeMs không được âm")
+    Integer responseTimeMs
 ) {}

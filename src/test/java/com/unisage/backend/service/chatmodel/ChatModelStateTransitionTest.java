@@ -24,12 +24,14 @@ import com.unisage.backend.entity.enums.VerificationResultType;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ChatModelRepository;
+import com.unisage.backend.repository.EmbeddingReindexRunRepository;
 import com.unisage.backend.repository.ChatModelVerificationRepository;
 import com.unisage.backend.service.chatmodelcandidatepromotion.ChatModelCandidatePromotionService;
 import com.unisage.backend.service.chatmodelcandidatepromotion.ChatModelCandidatePromotionServiceImpl;
 import com.unisage.backend.service.chatmodelverificationresult.ChatModelVerificationResultService;
 import com.unisage.backend.service.chatmodelverificationresult.ChatModelVerificationResultServiceImpl;
 import com.unisage.backend.service.embeddingindexidentity.EmbeddingIndexIdentityService;
+import com.unisage.backend.service.embeddingindexpointer.TestEmbeddingIndexPointers;
 import com.unisage.backend.service.modelregistryinternal.ModelRegistryInternalServiceImpl;
 import com.unisage.backend.service.modelregistryversion.ModelRegistryVersionService;
 import com.unisage.backend.utils.SsrfGuard;
@@ -76,19 +78,19 @@ class ChatModelStateTransitionTest {
         });
         chatModelService = new ChatModelServiceImpl(
                 chatModelRepository, chatModelVerificationRepository, ssrfGuard,
-                embeddingIndexIdentityService, modelRegistryVersionService, applicationEventPublisher);
-        // @Value fields aren't populated outside a Spring context — match the property's own default.
-        ReflectionTestUtils.setField(chatModelService, "embeddingCollectionName", "unisage_chunks");
+                TestEmbeddingIndexPointers.over(embeddingIndexIdentityService, "unisage_chunks"),
+                modelRegistryVersionService, applicationEventPublisher);
         when(chatModelRepository.save(any(ChatModel.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(chatModelVerificationRepository.save(any(ChatModelVerification.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         modelRegistryInternalService = new ModelRegistryInternalServiceImpl(
-                chatModelRepository, modelRegistryVersionService, embeddingIndexIdentityService);
-        ReflectionTestUtils.setField(modelRegistryInternalService, "embeddingCollectionName", "unisage_chunks");
+                chatModelRepository, modelRegistryVersionService, embeddingIndexIdentityService,
+                TestEmbeddingIndexPointers.over(embeddingIndexIdentityService, "unisage_chunks"),
+                mock(EmbeddingReindexRunRepository.class));
         promotionService = new ChatModelCandidatePromotionServiceImpl(
-                chatModelRepository, chatModelVerificationRepository, embeddingIndexIdentityService, modelRegistryVersionService);
-        ReflectionTestUtils.setField(promotionService, "embeddingCollectionName", "unisage_chunks");
+                chatModelRepository, chatModelVerificationRepository,
+                TestEmbeddingIndexPointers.over(embeddingIndexIdentityService, "unisage_chunks"), modelRegistryVersionService);
         resultService = new ChatModelVerificationResultServiceImpl(
                 chatModelRepository, chatModelVerificationRepository, promotionService);
     }
