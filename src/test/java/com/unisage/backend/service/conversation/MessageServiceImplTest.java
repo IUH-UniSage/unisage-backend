@@ -54,6 +54,7 @@ class MessageServiceImplTest {
     private ConversationRepository conversationRepository;
     private ChatModelRepository chatModelRepository;
     private UsageLimitService usageLimitService;
+    private MessageRateLimiter messageRateLimiter;
     private GuestSessionService guestSessionService;
     private TicketRepository ticketRepository;
     private MessageServiceImpl messageService;
@@ -64,6 +65,7 @@ class MessageServiceImplTest {
         conversationRepository = mock(ConversationRepository.class);
         chatModelRepository = mock(ChatModelRepository.class);
         usageLimitService = mock(UsageLimitService.class);
+        messageRateLimiter = mock(MessageRateLimiter.class);
         guestSessionService = mock(GuestSessionService.class);
         ticketRepository = mock(TicketRepository.class);
         SystemConfigResolver configResolver = mock(SystemConfigResolver.class);
@@ -71,7 +73,7 @@ class MessageServiceImplTest {
 
         messageService = new MessageServiceImpl(
                 messageRepository, conversationRepository, chatModelRepository, usageLimitService,
-                guestSessionService, ticketRepository, configResolver);
+                messageRateLimiter, guestSessionService, ticketRepository, configResolver);
 
         when(messageRepository.save(any(Message.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(guestSessionService.resolveAndTouch(any())).thenReturn(Optional.empty());
