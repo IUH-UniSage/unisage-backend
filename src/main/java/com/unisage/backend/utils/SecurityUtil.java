@@ -34,6 +34,11 @@ public class SecurityUtil {
         return getCurrentUserPrincipal().getUserId();
     }
 
+    /** The caller's user code (e.g. "SA-001"), kept with records that outlive the user row. */
+    public String getCurrentUserCode() {
+        return getCurrentUserPrincipal().getCode();
+    }
+
     /**
      * Like {@link #getCurrentUserId()} but returns null instead of throwing
      * when the caller is unauthenticated (guest chat).

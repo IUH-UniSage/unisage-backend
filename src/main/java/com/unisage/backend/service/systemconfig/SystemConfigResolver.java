@@ -42,6 +42,10 @@ public class SystemConfigResolver {
         }
     }
 
+    public String getString(String configKey, String fallback) {
+        return findValue(configKey).orElse(fallback);
+    }
+
     public boolean getBoolean(String configKey, boolean fallback) {
         Optional<String> value = findValue(configKey);
         if (value.isEmpty()) return fallback;
