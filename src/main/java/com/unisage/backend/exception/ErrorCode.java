@@ -45,8 +45,6 @@ public enum ErrorCode {
     CONVERSATION_ALREADY_CLAIMED(HttpStatus.BAD_REQUEST, 2129, "Hội thoại này đã thuộc về một người dùng khác."),
     USAGE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, 2130,
             "Bạn đã dùng hết hạn mức sử dụng. Vui lòng quay lại sau thời điểm được thông báo."),
-    MESSAGE_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, 2159,
-            "Bạn gửi tin quá nhanh. Vui lòng chờ một chút rồi thử lại."),
     ACCESS_LEVEL_NOT_FOUND(HttpStatus.NOT_FOUND, 2131, "Access Level không tồn tại."),
     TICKET_NOT_FOUND(HttpStatus.NOT_FOUND, 2139, "Yêu cầu hỗ trợ không tồn tại."),
     AUDIT_LOG_NOT_FOUND(HttpStatus.NOT_FOUND, 2144, "Nhật ký hệ thống không tồn tại."),

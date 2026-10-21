@@ -61,7 +61,6 @@ public class MessageServiceImpl implements MessageService {
     private final ConversationRepository conversationRepository;
     private final ChatModelRepository chatModelRepository;
     private final UsageLimitService usageLimitService;
-    private final MessageRateLimiter messageRateLimiter;
     private final GuestSessionService guestSessionService;
     private final TicketRepository ticketRepository;
     private final SystemConfigResolver configResolver;
@@ -92,7 +91,6 @@ public class MessageServiceImpl implements MessageService {
         }
 
         if (request.role() == MsgRole.USER) {
-            messageRateLimiter.checkAndRecord(conversation.getUser(), conversation.getGuestSession());
             usageLimitService.checkAndConsumeQuestion(
                     conversation.getUser(), conversation.getGuestSession(), request.content());
         }
@@ -129,8 +127,6 @@ public class MessageServiceImpl implements MessageService {
         List<Message> previous = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversation.getId());
         List<MessageResponse> context = toResponses(previous, null, true);
 
-        // Rate first (cheap, no row lock), then the token quota.
-        messageRateLimiter.checkAndRecord(conversation.getUser(), conversation.getGuestSession());
         usageLimitService.checkAndConsumeQuestion(
                 conversation.getUser(), conversation.getGuestSession(), request.content());
 
