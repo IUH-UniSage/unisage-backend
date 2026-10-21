@@ -128,15 +128,19 @@ public class EmbeddingReindexInternalServiceImpl implements EmbeddingReindexInte
         }
 
         pointerService.pointTo(run.getTargetCollection());
-        chatModelRepository.deactivateOtherActiveEmbedding(model.getId());
-        if (chatModelRepository.updateStatusIfCurrent(model.getId(), ChatModelStatus.INACTIVE, ChatModelStatus.ACTIVE) == 0) {
-            // Unreachable while the row lock is held; rolls the pointer move back with it.
-            throw new AppException(ErrorCode.CHAT_MODEL_STATUS_CONFLICT);
+        if (!run.isRebuild()) {
+            // A rebuild keeps the live model: only the pointer moves.
+            chatModelRepository.deactivateOtherActiveEmbedding(model.getId());
+            if (chatModelRepository.updateStatusIfCurrent(model.getId(), ChatModelStatus.INACTIVE, ChatModelStatus.ACTIVE) == 0) {
+                // Unreachable while the row lock is held; rolls the pointer move back with it.
+                throw new AppException(ErrorCode.CHAT_MODEL_STATUS_CONFLICT);
+            }
         }
         finish(run, EmbeddingReindexStatus.SUCCEEDED, null);
         modelRegistryVersionService.bump();
-        log.info("Embedding re-index {} cut over: {} -> {} (model {})",
-                run.getId(), run.getSourceCollection(), run.getTargetCollection(), model.getId());
+        log.info("Embedding re-index {} cut over{}: {} -> {} (model {})",
+                run.getId(), run.isRebuild() ? " (rebuild)" : "",
+                run.getSourceCollection(), run.getTargetCollection(), model.getId());
         return new InternalEmbeddingReindexStatusResponse(EmbeddingReindexStatus.SUCCEEDED);
     }
 
@@ -155,8 +159,10 @@ public class EmbeddingReindexInternalServiceImpl implements EmbeddingReindexInte
 
     /** Why the target model can no longer take over, or null when it still can. */
     private static String targetModelProblem(EmbeddingReindexRun run, ChatModel model) {
-        if (!EmbeddingReindexServiceImpl.isReindexTarget(model)) {
-            return "Model đích không còn ở trạng thái đã xác minh và đang tắt.";
+        if (!EmbeddingReindexServiceImpl.isTargetFor(run, model)) {
+            return run.isRebuild()
+                    ? "Model đang dùng không còn ở trạng thái đã xác minh và đang bật."
+                    : "Model đích không còn ở trạng thái đã xác minh và đang tắt.";
         }
         if (!Objects.equals(model.getRevision(), run.getTargetModelRevision())) {
             return "Model đích đã bị sửa trong lúc re-index.";
@@ -205,6 +211,7 @@ public class EmbeddingReindexInternalServiceImpl implements EmbeddingReindexInte
                 credential,
                 model.getRevision(),
                 model.getEmbeddingDimension(),
-                model.getEmbeddingFingerprint());
+                model.getEmbeddingFingerprint(),
+                run.isRebuild());
     }
 }
