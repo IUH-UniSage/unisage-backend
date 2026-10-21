@@ -1,12 +1,14 @@
 package com.unisage.backend.controller;
 
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,6 +19,7 @@ import com.unisage.backend.dto.request.ManualBackupRequest;
 import com.unisage.backend.dto.request.PostgresRestoreRequest;
 import com.unisage.backend.dto.request.QdrantRestoreRequest;
 import com.unisage.backend.dto.response.ApiResponse;
+import com.unisage.backend.dto.response.BackupFileResponse;
 import com.unisage.backend.dto.response.BackupOverviewResponse;
 import com.unisage.backend.dto.response.BackupRunResponse;
 import com.unisage.backend.dto.response.PageResponse;
@@ -56,6 +59,11 @@ public class BackupController {
             @RequestParam(required = false) BackupType type,
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(backupAdminService.runs(type, pageable)));
+    }
+
+    @GetMapping("/runs/{id}/files")
+    public ResponseEntity<ApiResponse<List<BackupFileResponse>>> files(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success(backupAdminService.files(id)));
     }
 
     @PostMapping("/runs")

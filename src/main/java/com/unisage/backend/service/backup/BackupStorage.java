@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import org.springframework.stereotype.Component;
@@ -14,6 +15,8 @@ import org.springframework.stereotype.Component;
 import io.minio.BucketExistsArgs;
 import io.minio.DownloadObjectArgs;
 import io.minio.GetObjectArgs;
+import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.Http.Method;
 import io.minio.ListObjectsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
@@ -38,6 +41,8 @@ public class BackupStorage {
     private static final long PART_SIZE = 64L * 1024 * 1024;
 
     private final MinioClient minioClient;
+    /** Signs download links for the browser; the name picks the bean, as in FileServiceImpl. */
+    private final MinioClient publicMinioClient;
     private final BackupProperties properties;
 
     private volatile boolean bucketReady;
@@ -105,6 +110,22 @@ public class BackupStorage {
             return objects;
         } catch (Exception e) {
             throw new BackupException("cannot list objects under " + prefix, e);
+        }
+    }
+
+    /** A time-limited link the browser downloads {@code key} from, saved as {@code fileName}. */
+    public String downloadUrl(String key, String fileName) {
+        try {
+            return publicMinioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+                    .method(Method.GET)
+                    .bucket(properties.getBucket())
+                    .object(key)
+                    .expiry(properties.getDownloadUrlExpirySeconds())
+                    .extraQueryParams(Map.of("response-content-disposition",
+                            "attachment; filename=\"" + fileName + "\""))
+                    .build());
+        } catch (Exception e) {
+            throw new BackupException("cannot sign a download link for " + key, e);
         }
     }
 

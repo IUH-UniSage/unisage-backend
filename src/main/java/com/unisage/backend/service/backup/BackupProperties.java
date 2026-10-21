@@ -70,4 +70,8 @@ public class BackupProperties {
     /** Backup folder and file names carry this wall time, so they read like the admin page. */
     @Value("${app.timezone:Asia/Ho_Chi_Minh}")
     private ZoneId zone;
+
+    /** How long a "Tải" link on the admin page stays valid. */
+    @Value("${minio.presigned-url-expiry-seconds:3600}")
+    private int downloadUrlExpirySeconds;
 }

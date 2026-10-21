@@ -105,6 +105,8 @@ public enum ErrorCode {
     BACKUP_TYPE_NOT_MANUAL(HttpStatus.BAD_REQUEST, 2166,
             "Chưa chạy được loại sao lưu này: Differential cần một bản Full thành công, Transaction log cần "
                     + "cấu hình thư mục WAL archive (BACKUP_WAL_ARCHIVE_DIR)."),
+    BACKUP_FILES_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, 2167,
+            "Không đọc được danh sách file sao lưu từ MinIO, vui lòng thử lại sau."),
 
     // Internal API (/internal/**) — X-Internal-Secret is checked separately by
     // InternalSecretFilter (code 1007); this is the CIDR layer.
