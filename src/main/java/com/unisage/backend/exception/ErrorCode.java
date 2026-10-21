@@ -173,6 +173,10 @@ public enum ErrorCode {
     MESSAGE_TRACE_INVALID(HttpStatus.BAD_REQUEST, 2710,
             "Trace truy xuất của tin nhắn không hợp lệ (vượt quá 256 KB)."),
 
+    // Admin dashboard (272x)
+    DASHBOARD_INVALID_RANGE(HttpStatus.BAD_REQUEST, 2720,
+            "Khoảng thời gian không hợp lệ: ngày bắt đầu phải trước ngày kết thúc, không ở tương lai và không quá 366 ngày."),
+
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),
     FILE_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2402, "Không thể xoá file khỏi hệ thống lưu trữ."),
