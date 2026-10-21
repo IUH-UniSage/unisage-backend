@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -79,20 +80,26 @@ public class EmbeddingReindexServiceImpl implements EmbeddingReindexService {
     @Override
     @Transactional
     public EmbeddingReindexRunResponse start(EmbeddingReindexRequest request) {
-        ChatModel model = chatModelRepository.findByIdForUpdate(request.chatModelId())
-                .orElseThrow(() -> new AppException(ErrorCode.CHAT_MODEL_NOT_FOUND));
-        if (!isReindexTarget(model)) {
-            throw new AppException(ErrorCode.EMBEDDING_REINDEX_MODEL_INVALID);
-        }
+        ChatModel model = request.isRebuild() ? lockedLiveEmbeddingModel() : lockedModel(request.chatModelId());
 
         String base = pointerService.baseCollection();
         if (runRepository.findFirstByBaseCollectionAndStatusInOrderByCreatedAtDesc(base, OPEN_STATUSES).isPresent()) {
             throw new AppException(ErrorCode.EMBEDDING_REINDEX_IN_PROGRESS);
         }
 
-        // Same identity (or nothing indexed yet): the model can simply be activated.
         Optional<InternalEmbeddingIndexIdentityResponse> activeIdentity = pointerService.activeIdentity();
-        if (activeIdentity.isEmpty() || EmbeddingIdentityMismatches.of(model, activeIdentity.get()).isEmpty()) {
+        if (request.isRebuild()) {
+            // Rebuild = same model, same identity: the live collection is copied and gains bm25.
+            // Nothing indexed yet means there is nothing to rebuild; a live model whose identity
+            // differs from the index needs a real re-index, not a copy.
+            if (activeIdentity.isEmpty()) {
+                throw new AppException(ErrorCode.EMBEDDING_REINDEX_NOT_NEEDED);
+            }
+            if (!EmbeddingIdentityMismatches.of(model, activeIdentity.get()).isEmpty()) {
+                throw new AppException(ErrorCode.EMBEDDING_REINDEX_MODEL_INVALID);
+            }
+        } else if (activeIdentity.isEmpty() || EmbeddingIdentityMismatches.of(model, activeIdentity.get()).isEmpty()) {
+            // Same identity (or nothing indexed yet): the model can simply be activated.
             throw new AppException(ErrorCode.EMBEDDING_REINDEX_NOT_NEEDED);
         }
 
@@ -103,6 +110,7 @@ public class EmbeddingReindexServiceImpl implements EmbeddingReindexService {
                 .targetCollection(base + "__" + LocalDateTime.now(ZoneOffset.UTC).format(TARGET_SUFFIX))
                 .targetChatModel(model)
                 .targetModelRevision(model.getRevision())
+                .rebuild(request.isRebuild())
                 .status(EmbeddingReindexStatus.QUEUED)
                 .requestedBy(requestedBy != null ? userRepository.getReferenceById(requestedBy) : null)
                 .build();
@@ -135,11 +143,51 @@ public class EmbeddingReindexServiceImpl implements EmbeddingReindexService {
         return EmbeddingReindexRunMapper.toResponse(run);
     }
 
+    private ChatModel lockedModel(UUID chatModelId) {
+        if (chatModelId == null) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, Map.of("chatModelId", "chatModelId không được để trống"));
+        }
+        ChatModel model = chatModelRepository.findByIdForUpdate(chatModelId)
+                .orElseThrow(() -> new AppException(ErrorCode.CHAT_MODEL_NOT_FOUND));
+        if (!isReindexTarget(model)) {
+            throw new AppException(ErrorCode.EMBEDDING_REINDEX_MODEL_INVALID);
+        }
+        return model;
+    }
+
+    /** The ACTIVE EMBEDDING model, locked - what a rebuild copies the collection for. */
+    private ChatModel lockedLiveEmbeddingModel() {
+        UUID liveId = chatModelRepository.findAllActiveForSnapshot().stream()
+                .filter(m -> m.getModelPurpose() == ChatModelPurpose.EMBEDDING)
+                .map(ChatModel::getId)
+                .findFirst()
+                .orElseThrow(() -> new AppException(ErrorCode.EMBEDDING_REINDEX_MODEL_INVALID));
+        ChatModel model = chatModelRepository.findByIdForUpdate(liveId)
+                .orElseThrow(() -> new AppException(ErrorCode.CHAT_MODEL_NOT_FOUND));
+        if (!isRebuildTarget(model)) {
+            throw new AppException(ErrorCode.EMBEDDING_REINDEX_MODEL_INVALID);
+        }
+        return model;
+    }
+
     /** A verified, INACTIVE, non-deleted EMBEDDING row with a measured dimension and fingerprint. */
     static boolean isReindexTarget(ChatModel model) {
+        return isMeasuredEmbedding(model) && model.getStatus() == ChatModelStatus.INACTIVE;
+    }
+
+    /** The same, but ACTIVE: the live model a rebuild copies the collection for. */
+    static boolean isRebuildTarget(ChatModel model) {
+        return isMeasuredEmbedding(model) && model.getStatus() == ChatModelStatus.ACTIVE;
+    }
+
+    /** Whether a run's target model is still what the run needs (INACTIVE, or ACTIVE for a rebuild). */
+    static boolean isTargetFor(EmbeddingReindexRun run, ChatModel model) {
+        return run.isRebuild() ? isRebuildTarget(model) : isReindexTarget(model);
+    }
+
+    private static boolean isMeasuredEmbedding(ChatModel model) {
         return model.getModelPurpose() == ChatModelPurpose.EMBEDDING
                 && Boolean.TRUE.equals(model.getIsActive())
-                && model.getStatus() == ChatModelStatus.INACTIVE
                 && model.getVerifiedAt() != null
                 && model.getEmbeddingDimension() != null
                 && model.getEmbeddingFingerprint() != null

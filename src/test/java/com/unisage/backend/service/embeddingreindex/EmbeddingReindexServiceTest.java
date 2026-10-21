@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -86,7 +87,7 @@ class EmbeddingReindexServiceTest {
     void startQueuesARunIntoANewCollectionOfTheBase() {
         ChatModel model = stored(embeddingModel("text-embedding-3-large", 3072, NEW_FINGERPRINT));
 
-        EmbeddingReindexRunResponse run = service.start(new EmbeddingReindexRequest(model.getId()));
+        EmbeddingReindexRunResponse run = service.start(new EmbeddingReindexRequest(model.getId(), false));
 
         assertThat(run.status()).isEqualTo(EmbeddingReindexStatus.QUEUED);
         assertThat(run.sourceCollection()).isEqualTo(BASE);
@@ -101,9 +102,65 @@ class EmbeddingReindexServiceTest {
     @Test
     void startRefusesAModelWithTheSameIdentity() {
         ChatModel model = stored(embeddingModel("text-embedding-3-small", 1536, OLD_FINGERPRINT));
-
-        assertError(() -> service.start(new EmbeddingReindexRequest(model.getId())), ErrorCode.EMBEDDING_REINDEX_NOT_NEEDED);
+        assertError(() -> service.start(new EmbeddingReindexRequest(model.getId(), false)), ErrorCode.EMBEDDING_REINDEX_NOT_NEEDED);
         verify(runRepository, never()).saveAndFlush(any());
+    }
+
+    // ── rebuild (UNISAGE-104: same live model, adds the bm25 sparse vector) ──
+
+    private ChatModel liveModel() {
+        ChatModel live = stored(embeddingModel("text-embedding-3-small", 1536, OLD_FINGERPRINT));
+        live.setStatus(ChatModelStatus.ACTIVE);
+        when(chatModelRepository.findAllActiveForSnapshot()).thenReturn(List.of(live));
+        return live;
+    }
+
+    @Test
+    void rebuildQueuesARunOnTheLiveModelDespiteTheSameIdentity() {
+        ChatModel live = liveModel();
+
+        EmbeddingReindexRunResponse run = service.start(new EmbeddingReindexRequest(null, true));
+
+        assertThat(run.status()).isEqualTo(EmbeddingReindexStatus.QUEUED);
+        assertThat(run.rebuild()).isTrue();
+        assertThat(run.targetModel().id()).isEqualTo(live.getId());
+        assertThat(run.targetCollection()).matches(BASE + "__\\d{14}");
+        ArgumentCaptor<EmbeddingReindexRun> saved = ArgumentCaptor.forClass(EmbeddingReindexRun.class);
+        verify(runRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().isRebuild()).isTrue();
+        verify(versionService).bump();
+    }
+
+    @Test
+    void rebuildIgnoresTheRequestedModelAndUsesTheLiveOne() {
+        ChatModel live = liveModel();
+        ChatModel other = stored(embeddingModel("text-embedding-3-large", 3072, NEW_FINGERPRINT));
+
+        EmbeddingReindexRunResponse run = service.start(new EmbeddingReindexRequest(other.getId(), true));
+
+        assertThat(run.targetModel().id()).isEqualTo(live.getId());
+    }
+
+    @Test
+    void rebuildRefusesWhenNothingIsIndexedOrTheLiveModelDriftedFromTheIndex() {
+        liveModel();
+        when(pointerService.activeIdentity()).thenReturn(Optional.empty());
+        assertError(() -> service.start(new EmbeddingReindexRequest(null, true)), ErrorCode.EMBEDDING_REINDEX_NOT_NEEDED);
+
+        when(pointerService.activeIdentity()).thenReturn(Optional.of(identity("text-embedding-3-large", 3072, NEW_FINGERPRINT)));
+        assertError(() -> service.start(new EmbeddingReindexRequest(null, true)), ErrorCode.EMBEDDING_REINDEX_MODEL_INVALID);
+        verify(runRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void rebuildRefusesWithoutAnActiveEmbeddingModel() {
+        when(chatModelRepository.findAllActiveForSnapshot()).thenReturn(List.of());
+        assertError(() -> service.start(new EmbeddingReindexRequest(null, true)), ErrorCode.EMBEDDING_REINDEX_MODEL_INVALID);
+    }
+
+    @Test
+    void aPlainStartWithoutAModelIsAValidationError() {
+        assertError(() -> service.start(new EmbeddingReindexRequest(null, false)), ErrorCode.VALIDATION_ERROR);
     }
 
     @Test
@@ -116,7 +173,7 @@ class EmbeddingReindexServiceTest {
         chat.setModelPurpose(ChatModelPurpose.CHAT);
 
         for (ChatModel model : new ChatModel[] {unverified, active, chat}) {
-            assertError(() -> service.start(new EmbeddingReindexRequest(model.getId())),
+            assertError(() -> service.start(new EmbeddingReindexRequest(model.getId(), false)),
                     ErrorCode.EMBEDDING_REINDEX_MODEL_INVALID);
         }
     }
@@ -127,7 +184,7 @@ class EmbeddingReindexServiceTest {
         when(runRepository.findFirstByBaseCollectionAndStatusInOrderByCreatedAtDesc(anyString(), any()))
                 .thenReturn(Optional.of(new EmbeddingReindexRun()));
 
-        assertError(() -> service.start(new EmbeddingReindexRequest(model.getId())), ErrorCode.EMBEDDING_REINDEX_IN_PROGRESS);
+        assertError(() -> service.start(new EmbeddingReindexRequest(model.getId(), false)), ErrorCode.EMBEDDING_REINDEX_IN_PROGRESS);
     }
 
     @Test

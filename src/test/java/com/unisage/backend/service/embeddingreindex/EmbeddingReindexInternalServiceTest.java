@@ -77,6 +77,52 @@ class EmbeddingReindexInternalServiceTest {
         return new InternalEmbeddingReindexResultRequest(token, true, 10, 10, 0, null);
     }
 
+    // ── rebuild (UNISAGE-104): the live model stays, only the pointer moves ──
+
+    private void asRebuildOfTheLiveModel() {
+        model.setStatus(ChatModelStatus.ACTIVE);
+        run.setRebuild(true);
+    }
+
+    @Test
+    void claimOfARebuildAcceptsTheActiveModelAndSaysSo() {
+        asRebuildOfTheLiveModel();
+        run.setStatus(EmbeddingReindexStatus.QUEUED);
+        when(runRepository.findClaimableIds(1)).thenReturn(List.of(run.getId()));
+        when(runRepository.findById(run.getId())).thenReturn(Optional.of(run));
+
+        var claims = service.claim(1);
+
+        assertThat(claims).hasSize(1);
+        assertThat(claims.get(0).rebuild()).isTrue();
+        assertThat(run.getStatus()).isEqualTo(EmbeddingReindexStatus.RUNNING);
+    }
+
+    @Test
+    void claimOfARebuildFailsWhenTheLiveModelWasSwitchedOff() {
+        asRebuildOfTheLiveModel();
+        model.setStatus(ChatModelStatus.INACTIVE);
+        run.setStatus(EmbeddingReindexStatus.QUEUED);
+        when(runRepository.findClaimableIds(1)).thenReturn(List.of(run.getId()));
+        when(runRepository.findById(run.getId())).thenReturn(Optional.of(run));
+
+        assertThat(service.claim(1)).isEmpty();
+        assertThat(run.getStatus()).isEqualTo(EmbeddingReindexStatus.FAILED);
+    }
+
+    @Test
+    void rebuildSuccessMovesThePointerAndLeavesTheModelAlone() {
+        asRebuildOfTheLiveModel();
+
+        var status = service.result(run.getId(), success(lease));
+
+        assertThat(status.status()).isEqualTo(EmbeddingReindexStatus.SUCCEEDED);
+        verify(pointerService).pointTo(TARGET);
+        verify(chatModelRepository, never()).deactivateOtherActiveEmbedding(any());
+        verify(chatModelRepository, never()).updateStatusIfCurrent(any(), any(), any());
+        verify(versionService).bump();
+    }
+
     @Test
     void claimHandsOutTheTargetCredentialUnderAFreshLease() {
         run.setStatus(EmbeddingReindexStatus.QUEUED);

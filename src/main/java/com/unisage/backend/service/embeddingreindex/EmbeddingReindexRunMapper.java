@@ -21,6 +21,7 @@ final class EmbeddingReindexRunMapper {
                         model.getLlmProvider(),
                         model.getLlmModelName(),
                         model.getEmbeddingDimension()))
+                .rebuild(run.isRebuild())
                 .totalPoints(run.getTotalPoints())
                 .processedPoints(run.getProcessedPoints())
                 .failedPoints(run.getFailedPoints())

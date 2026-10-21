@@ -14,6 +14,8 @@ public record EmbeddingReindexRunResponse(
     String sourceCollection,
     String targetCollection,
     TargetModel targetModel,
+    /** True = rebuild of the live collection with the same model (adds the bm25 sparse vector). */
+    boolean rebuild,
     Integer totalPoints,
     Integer processedPoints,
     Integer failedPoints,

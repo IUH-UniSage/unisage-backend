@@ -61,6 +61,14 @@ public class EmbeddingReindexRun {
     @Column(name = "status", columnDefinition = "varchar(20)", nullable = false)
     private EmbeddingReindexStatus status;
 
+    /**
+     * True = the target is the live model itself: the agent copies the dense vectors and adds
+     * the {@code bm25} sparse vector, no embedding call; the cutover only moves the pointer.
+     */
+    @Builder.Default
+    @Column(name = "rebuild", nullable = false, updatable = false)
+    private boolean rebuild = false;
+
     @Column(name = "total_points")
     private Integer totalPoints;
 

@@ -20,7 +20,9 @@ public record InternalEmbeddingReindexClaimResponse(
     CandidateCredential credential,
     int credentialRevision,
     Integer dimension,
-    Float[] fingerprint
+    Float[] fingerprint,
+    /** Copy the dense vectors and add {@code bm25} instead of re-embedding (same live model). */
+    boolean rebuild
 ) {
 
     @Override
@@ -32,6 +34,7 @@ public record InternalEmbeddingReindexClaimResponse(
                 + ", targetCollection=" + targetCollection
                 + ", credential=" + credential
                 + ", credentialRevision=" + credentialRevision
-                + ", dimension=" + dimension + "]";
+                + ", dimension=" + dimension
+                + ", rebuild=" + rebuild + "]";
     }
 }
