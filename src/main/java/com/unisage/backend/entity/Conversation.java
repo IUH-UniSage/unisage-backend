@@ -47,4 +47,12 @@ public class Conversation extends BaseEntity {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    /**
+     * The share link this conversation was copied from by "Tiếp tục" (UNISAGE-107), null for an
+     * ordinary conversation. Unique per (link, user) among non-deleted conversations.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_share_id", updatable = false)
+    private ConversationShare sourceShare;
 }

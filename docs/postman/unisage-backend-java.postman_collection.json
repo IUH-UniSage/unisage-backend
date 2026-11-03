@@ -44,6 +44,8 @@
     { "key": "assistantMessageId", "value": "" },
     { "key": "accessLevelId", "value": "" },
     { "key": "ticketId", "value": "" },
+    { "key": "shareId", "value": "" },
+    { "key": "shareToken", "value": "" },
     { "key": "ingestAdminDaoTaoToken", "value": "" },
     { "key": "regularUserToken", "value": "" },
     {
@@ -1628,6 +1630,166 @@
               "raw": "{{gateway_url}}/api/v1/master/messages/{{messageId}}",
               "host": ["{{gateway_url}}"],
               "path": ["api", "v1", "master", "messages", "{{messageId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Conversation Shares",
+      "description": "UNISAGE-107 - link chia sẻ hội thoại. Mọi route chỉ cần đăng nhập (AUTHENTICATED_ONLY_PATHS, không cần Permission row); danh tính lấy từ JWT. Lỗi: 2801 SHARE_NOT_FOUND (404: token sai, đã thu hồi, hội thoại gốc đã xoá), 2802 SHARE_EMPTY_CONVERSATION (400), 2803 SHARE_GUEST_CONVERSATION (400); tạo link cho hội thoại không phải của mình -> 2127 CONVERSATION_NOT_FOUND.",
+      "item": [
+        {
+          "name": "Create Share",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data) {",
+                  "    pm.collectionVariables.set('shareId', json.data.id);",
+                  "    pm.collectionVariables.set('shareToken', json.data.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/shares",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "shares"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversationId\": \"{{conversationId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List My Shares",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/shares?page=1&limit=10",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "shares"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "View Shared Conversation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/shares/view/{{shareToken}}",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "shares",
+                "view",
+                "{{shareToken}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Continue From Share",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/shares/view/{{shareToken}}/continue",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "shares",
+                "view",
+                "{{shareToken}}",
+                "continue"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revoke Share",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/shares/{{shareId}}",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "shares",
+                "{{shareId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revoke All My Shares",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/master/shares",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master",
+                "shares"
+              ]
             }
           }
         }

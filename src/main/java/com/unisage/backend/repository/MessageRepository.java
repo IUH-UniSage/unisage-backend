@@ -33,6 +33,26 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
     Optional<Message> findFirstByConversationIdAndRoleAndCreatedAtBeforeOrderByCreatedAtDesc(
             UUID conversationId, MsgRole role, LocalDateTime before);
 
+    /** Last COMPLETED message of a conversation - the cutoff of a new share link (UNISAGE-107). */
+    @Query(value = "SELECT * FROM messages WHERE conversation_id = :conversationId AND status = 'COMPLETED' "
+            + "ORDER BY created_at DESC, id DESC LIMIT 1", nativeQuery = true)
+    Optional<Message> findLastCompleted(@Param("conversationId") UUID conversationId);
+
+    /**
+     * A share link's snapshot: the COMPLETED messages up to and including the cutoff, oldest first.
+     * {@code (created_at, id)} row comparison, so a tie on created_at can't let a later row in.
+     */
+    @Query(value = "SELECT * FROM messages WHERE conversation_id = :conversationId AND status = 'COMPLETED' "
+            + "AND (created_at, id) <= (CAST(:cutoffAt AS timestamp), CAST(:cutoffId AS uuid)) "
+            + "ORDER BY created_at, id", nativeQuery = true)
+    List<Message> findSnapshot(@Param("conversationId") UUID conversationId,
+            @Param("cutoffAt") LocalDateTime cutoffAt, @Param("cutoffId") UUID cutoffId);
+
+    @Query(value = "SELECT count(*) FROM messages WHERE conversation_id = :conversationId AND status = 'COMPLETED' "
+            + "AND (created_at, id) <= (CAST(:cutoffAt AS timestamp), CAST(:cutoffId AS uuid))", nativeQuery = true)
+    int countSnapshot(@Param("conversationId") UUID conversationId,
+            @Param("cutoffAt") LocalDateTime cutoffAt, @Param("cutoffId") UUID cutoffId);
+
     /** Bulk delete for the guest-session cleanup job — bypasses conversation-by-conversation loading. */
     @Modifying
     @Query("DELETE FROM Message m WHERE m.conversation.id IN "

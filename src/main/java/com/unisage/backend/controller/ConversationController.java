@@ -55,9 +55,16 @@ public class ConversationController {
                 .body(ApiResponse.success(conversationService.create(request, ownerId, guestSession)));
     }
 
+    /**
+     * The caller's own conversations; identity comes from the JWT. {@code userId} is still accepted
+     * because unisage-web sends it, but it is ignored (UNISAGE-107 §4) - it used to let anyone list
+     * anyone's conversations.
+     */
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ConversationResponse>>> getByUser(@RequestParam UUID userId) {
-        return ResponseEntity.ok(ApiResponse.success(conversationService.getByUser(userId)));
+    public ResponseEntity<ApiResponse<List<ConversationResponse>>> getByUser(
+            @RequestParam(name = "userId", required = false) String ignoredUserId) {
+        UUID callerId = securityUtil.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(conversationService.getByUser(callerId)));
     }
 
     /**
@@ -74,14 +81,17 @@ public class ConversationController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> softDelete(@PathVariable UUID id) {
-        conversationService.softDelete(id);
+        conversationService.softDelete(id, securityUtil.getCurrentUserId());
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PatchMapping("/{id}/claim")
-    public ResponseEntity<ApiResponse<ConversationResponse>> claim(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<ConversationResponse>> claim(@PathVariable UUID id, HttpServletRequest httpRequest) {
         UUID userId = securityUtil.getCurrentUserId();
-        return ResponseEntity.ok(ApiResponse.success(conversationService.claim(id, userId)));
+        // Read-only: claiming must not mint or extend a guest session.
+        String cookieToken = cookieUtil.extractGuestSessionTokenFromCookie(httpRequest);
+        GuestSession guestSession = guestSessionService.resolveReadOnly(cookieToken).orElse(null);
+        return ResponseEntity.ok(ApiResponse.success(conversationService.claim(id, userId, guestSession)));
     }
 
     private void writeGuestSessionCookie(HttpServletResponse httpResponse, String rawToken) {

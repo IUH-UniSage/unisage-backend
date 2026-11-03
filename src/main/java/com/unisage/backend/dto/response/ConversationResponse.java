@@ -10,5 +10,7 @@ public record ConversationResponse(
     UUID id,
     UUID userId,
     String title,
-    LocalDateTime createdAt
+    LocalDateTime createdAt,
+    /** The share link this conversation was continued from (UNISAGE-107), or null. */
+    UUID sourceShareId
 ) {}

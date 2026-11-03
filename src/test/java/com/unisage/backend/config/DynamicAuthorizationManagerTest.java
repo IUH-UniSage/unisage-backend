@@ -126,4 +126,28 @@ class DynamicAuthorizationManagerTest {
         assertThat(granted(authenticated(), "GET", "/tickets/" + UUID.randomUUID())).isFalse();
         assertThat(granted(authenticated(), "PATCH", "/tickets/" + UUID.randomUUID())).isFalse();
     }
+
+    @Test
+    void shareLinkPaths_grantedToAnyActiveUserWithoutAPermissionRow() {
+        when(userRepository.findByIdWithPermissions(userId))
+                .thenReturn(Optional.of(user(UserStatus.ACTIVE, roleWithoutPermissions())));
+
+        assertThat(granted(authenticated(), "POST", "/shares")).isTrue();
+        assertThat(granted(authenticated(), "GET", "/shares")).isTrue();
+        assertThat(granted(authenticated(), "DELETE", "/shares")).isTrue();
+        assertThat(granted(authenticated(), "DELETE", "/shares/" + UUID.randomUUID())).isTrue();
+        assertThat(granted(authenticated(), "GET", "/shares/view/abc_DEF-123")).isTrue();
+        assertThat(granted(authenticated(), "POST", "/shares/view/abc_DEF-123/continue")).isTrue();
+    }
+
+    @Test
+    void shareLinkPaths_areNotPublic() {
+        Authentication anonymous = new AnonymousAuthenticationToken(
+                "key", "anonymousUser", AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS"));
+
+        assertThat(granted(anonymous, "GET", "/shares/view/abc_DEF-123")).isFalse();
+        assertThat(granted(anonymous, "POST", "/shares/view/abc_DEF-123/continue")).isFalse();
+        assertThat(granted(anonymous, "POST", "/shares")).isFalse();
+        assertThat(granted(null, "GET", "/shares")).isFalse();
+    }
 }

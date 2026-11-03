@@ -1,6 +1,5 @@
 package com.unisage.backend.service.conversation;
 
-import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,9 +41,6 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class MessageServiceImpl implements MessageService {
-
-    // created_at is rounded to microseconds by Postgres; 2us keeps the next row strictly after.
-    private static final long CREATED_AT_GAP_NANOS = 2_000;
 
     /** SPEC-clarification-panel §7.1: the only USER-message metadata key a turn may carry. */
     private static final Set<String> ALLOWED_TURN_METADATA_KEYS = Set.of("clarification_answers");
@@ -137,7 +133,7 @@ public class MessageServiceImpl implements MessageService {
                 .status(MsgStatus.COMPLETED)
                 .metadata(userMetadata)
                 .build());
-        waitPastCreatedAt(userMessage);
+        CreatedAtSpacing.waitPast(userMessage);
         Message assistantMessage = messageRepository.save(Message.builder()
                 .conversation(conversation)
                 .role(MsgRole.ASSISTANT)
@@ -250,15 +246,46 @@ public class MessageServiceImpl implements MessageService {
     }
 
     @Override
-    public List<MessageResponse> getByConversation(UUID conversationId, Integer limit, boolean forContext) {
+    @Transactional
+    public List<MessageResponse> getByConversation(UUID conversationId, Integer limit, boolean forContext,
+            UUID callerId, String guestSessionToken) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
+        validateReadAccess(conversation, callerId, guestSessionToken);
         return toResponses(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId), limit, forContext);
     }
 
     @Override
-    public MessageResponse getById(UUID id) {
+    @Transactional
+    public MessageResponse getById(UUID id, UUID callerId, String guestSessionToken) {
         Message message = messageRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.MESSAGE_NOT_FOUND));
+        validateReadAccess(message.getConversation(), callerId, guestSessionToken);
         return toResponse(message, ticketIdOf(message));
+    }
+
+    /**
+     * Read-side twin of {@link #validateOwnership}: same owner rule, but every failure (not the
+     * owner, wrong/missing guest cookie, soft-deleted) is reported as {@code CONVERSATION_NOT_FOUND}
+     * so a foreign UUID reveals nothing - and a revoked share link can't be bypassed by reading
+     * the original conversation directly (UNISAGE-107 §4). Reading never slides the guest TTL.
+     */
+    private void validateReadAccess(Conversation conversation, UUID callerId, String guestSessionToken) {
+        if (conversation == null || conversation.getDeletedAt() != null) {
+            throw new AppException(ErrorCode.CONVERSATION_NOT_FOUND);
+        }
+        boolean allowed;
+        if (conversation.getUser() != null) {
+            allowed = callerId != null && conversation.getUser().getId().equals(callerId);
+        } else {
+            GuestSession resolved = callerId != null ? null
+                    : guestSessionService.resolveReadOnly(guestSessionToken).orElse(null);
+            allowed = resolved != null && conversation.getGuestSession() != null
+                    && resolved.getId().equals(conversation.getGuestSession().getId());
+        }
+        if (!allowed) {
+            throw new AppException(ErrorCode.CONVERSATION_NOT_FOUND);
+        }
     }
 
     /**
@@ -307,18 +334,6 @@ public class MessageServiceImpl implements MessageService {
             throw new AppException(ErrorCode.MESSAGE_METADATA_INVALID);
         }
         return metadata;
-    }
-
-    /** Messages are ordered by created_at only - spin until the clock is past the previous row's stamp. */
-    private static void waitPastCreatedAt(Message message) {
-        LocalDateTime createdAt = message.getCreatedAt();
-        if (createdAt == null) {
-            return;
-        }
-        LocalDateTime threshold = createdAt.plusNanos(CREATED_AT_GAP_NANOS);
-        while (!LocalDateTime.now().isAfter(threshold)) {
-            Thread.onSpinWait();
-        }
     }
 
     private List<MessageResponse> toResponses(List<Message> messages, Integer limit, boolean forContext) {
