@@ -159,11 +159,11 @@ class CalculationFeedbackIntegrationTest {
         assertThat(t2.getDescription()).contains("Không có trace cho run_id req-1.");
 
         // The message list keeps showing only the Report's id, and never the note or the trace.
-        MessageResponse listed = messageService.getByConversation(conversation.getId(), null, false).get(0);
+        MessageResponse listed = messageService.getByConversation(conversation.getId(), null, false, user.getId(), null).get(0);
         assertThat(listed.ticketId()).isEqualTo(created.id());
         assertThat(listed.metadata()).containsKey("calculation_feedback");
         assertThat(listed.toString()).doesNotContain(NOTE).doesNotContain("so_tc * don_gia_tc");
-        assertThat(messageService.getById(message.getId()).toString())
+        assertThat(messageService.getById(message.getId(), user.getId(), null).toString())
                 .doesNotContain(NOTE).doesNotContain("so_tc * don_gia_tc");
     }
 
@@ -200,8 +200,11 @@ class CalculationFeedbackIntegrationTest {
                 {"itemId": "T1", "verdict": "CORRECT", "reason": null, "note": null}
                 """).getStatusCode().value()).isEqualTo(404);
 
-        String listed = restTemplate.getForEntity("http://localhost:" + port + "/api/v1/messages/conversation/"
-                + conversation.getId(), String.class).getBody();
+        // History is owner-only too (UNISAGE-107 §4): read it with the guest's cookie.
+        HttpHeaders guestCookie = new HttpHeaders();
+        guestCookie.add(HttpHeaders.COOKIE, "guest_session_id=" + guest.rawToken());
+        String listed = restTemplate.exchange("http://localhost:" + port + "/api/v1/messages/conversation/"
+                + conversation.getId(), HttpMethod.GET, new HttpEntity<>(guestCookie), String.class).getBody();
         assertThat(listed).contains("calculation_feedback").contains("WRONG_FORMULA").doesNotContain(NOTE);
         assertThat(ticketRepository.findAll().stream()
                 .filter(t -> t.getMessage().getId().equals(message.getId()))).isEmpty();

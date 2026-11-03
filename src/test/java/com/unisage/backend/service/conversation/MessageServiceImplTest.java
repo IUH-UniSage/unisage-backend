@@ -50,6 +50,8 @@ import static org.mockito.Mockito.when;
 
 class MessageServiceImplTest {
 
+    private static final UUID OWNER_ID = UUID.randomUUID();
+
     private MessageRepository messageRepository;
     private ConversationRepository conversationRepository;
     private ChatModelRepository chatModelRepository;
@@ -346,10 +348,10 @@ class MessageServiceImplTest {
     @Test
     void getByConversation_uiWithoutLimit_returnsWholeHistory() {
         UUID conversationId = UUID.randomUUID();
-        List<Message> messages = buildMessages(conversationId, 25);
+        List<Message> messages = ownedHistory(conversationId, 25);
         when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
 
-        List<MessageResponse> result = messageService.getByConversation(conversationId, null, false);
+        List<MessageResponse> result = messageService.getByConversation(conversationId, null, false, OWNER_ID, null);
 
         assertThat(result).hasSize(25);
     }
@@ -357,10 +359,10 @@ class MessageServiceImplTest {
     @Test
     void getByConversation_uiWithLimit_returnsLatestMessages() {
         UUID conversationId = UUID.randomUUID();
-        List<Message> messages = buildMessages(conversationId, 25);
+        List<Message> messages = ownedHistory(conversationId, 25);
         when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
 
-        List<MessageResponse> result = messageService.getByConversation(conversationId, 22, false);
+        List<MessageResponse> result = messageService.getByConversation(conversationId, 22, false, OWNER_ID, null);
 
         assertThat(result).hasSize(22);
         assertThat(result.get(result.size() - 1).content()).isEqualTo("msg-24");
@@ -369,10 +371,10 @@ class MessageServiceImplTest {
     @Test
     void getByConversation_contextWithoutLimit_capsAtMaxHistory() {
         UUID conversationId = UUID.randomUUID();
-        List<Message> messages = buildMessages(conversationId, 25);
+        List<Message> messages = ownedHistory(conversationId, 25);
         when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
 
-        List<MessageResponse> result = messageService.getByConversation(conversationId, null, true);
+        List<MessageResponse> result = messageService.getByConversation(conversationId, null, true, OWNER_ID, null);
 
         assertThat(result).hasSize(20);
         // keeps the most recent ones (tail of the ascending list)
@@ -382,10 +384,10 @@ class MessageServiceImplTest {
     @Test
     void getByConversation_contextLimitBelowCeiling_isRespected() {
         UUID conversationId = UUID.randomUUID();
-        List<Message> messages = buildMessages(conversationId, 25);
+        List<Message> messages = ownedHistory(conversationId, 25);
         when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
 
-        List<MessageResponse> result = messageService.getByConversation(conversationId, 5, true);
+        List<MessageResponse> result = messageService.getByConversation(conversationId, 5, true, OWNER_ID, null);
 
         assertThat(result).hasSize(5);
         assertThat(result.get(result.size() - 1).content()).isEqualTo("msg-24");
@@ -394,10 +396,10 @@ class MessageServiceImplTest {
     @Test
     void getByConversation_contextLimitAboveCeiling_isCappedAtMaxHistory() {
         UUID conversationId = UUID.randomUUID();
-        List<Message> messages = buildMessages(conversationId, 25);
+        List<Message> messages = ownedHistory(conversationId, 25);
         when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
 
-        List<MessageResponse> result = messageService.getByConversation(conversationId, 1000, true);
+        List<MessageResponse> result = messageService.getByConversation(conversationId, 1000, true, OWNER_ID, null);
 
         assertThat(result).hasSize(20);
     }
@@ -405,10 +407,10 @@ class MessageServiceImplTest {
     @Test
     void getByConversation_fewerMessagesThanLimit_returnsAll() {
         UUID conversationId = UUID.randomUUID();
-        List<Message> messages = buildMessages(conversationId, 3);
+        List<Message> messages = ownedHistory(conversationId, 3);
         when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
 
-        List<MessageResponse> result = messageService.getByConversation(conversationId, 10, true);
+        List<MessageResponse> result = messageService.getByConversation(conversationId, 10, true, OWNER_ID, null);
 
         assertThat(result).hasSize(3);
     }
@@ -416,14 +418,14 @@ class MessageServiceImplTest {
     @Test
     void getByConversation_marksOnlyReportedMessagesWithTheirTicketId() {
         UUID conversationId = UUID.randomUUID();
-        List<Message> messages = buildMessages(conversationId, 3);
+        List<Message> messages = ownedHistory(conversationId, 3);
         UUID reportedMessageId = messages.get(1).getId();
         UUID ticketId = UUID.randomUUID();
         Ticket ticket = Ticket.builder().id(ticketId).message(messages.get(1)).build();
         when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(messages);
         when(ticketRepository.findByMessageIdInAndCalculationItemIdIsNull(any())).thenReturn(List.of(ticket));
 
-        List<MessageResponse> result = messageService.getByConversation(conversationId, 10, false);
+        List<MessageResponse> result = messageService.getByConversation(conversationId, 10, false, OWNER_ID, null);
 
         assertThat(result).extracting(MessageResponse::ticketId).containsExactly(null, ticketId, null);
         assertThat(result.get(1).id()).isEqualTo(reportedMessageId);
@@ -433,24 +435,24 @@ class MessageServiceImplTest {
     void getById_includesTicketIdWhenTheMessageWasReported() {
         UUID messageId = UUID.randomUUID();
         UUID ticketId = UUID.randomUUID();
-        Conversation conversation = Conversation.builder().id(UUID.randomUUID()).build();
+        Conversation conversation = conversation(UUID.randomUUID(), owner(), null);
         Message message = assistantMessage(messageId, conversation, MsgStatus.COMPLETED, "answer");
         when(messageRepository.findById(messageId)).thenReturn(Optional.of(message));
         when(ticketRepository.findByMessageIdAndCalculationItemIdIsNull(messageId))
                 .thenReturn(Optional.of(Ticket.builder().id(ticketId).build()));
 
-        assertThat(messageService.getById(messageId).ticketId()).isEqualTo(ticketId);
+        assertThat(messageService.getById(messageId, OWNER_ID, null).ticketId()).isEqualTo(ticketId);
     }
 
     @Test
     void getById_ticketIdIsNullWhenNotReported() {
         UUID messageId = UUID.randomUUID();
-        Conversation conversation = Conversation.builder().id(UUID.randomUUID()).build();
+        Conversation conversation = conversation(UUID.randomUUID(), owner(), null);
         Message message = assistantMessage(messageId, conversation, MsgStatus.COMPLETED, "answer");
         when(messageRepository.findById(messageId)).thenReturn(Optional.of(message));
         when(ticketRepository.findByMessageIdAndCalculationItemIdIsNull(messageId)).thenReturn(Optional.empty());
 
-        assertThat(messageService.getById(messageId).ticketId()).isNull();
+        assertThat(messageService.getById(messageId, OWNER_ID, null).ticketId()).isNull();
     }
 
     // ── usage limit hooks ────────────────────────────────────────────────
@@ -992,6 +994,108 @@ class MessageServiceImplTest {
 
     // ── helpers ──────────────────────────────────────────────────────────
 
+    // ── read access (UNISAGE-107 §4) ─────────────────────────────────────
+
+    @Test
+    void getByConversation_otherUser_isNotFoundAndReadsNothing() {
+        UUID conversationId = UUID.randomUUID();
+        ownedHistory(conversationId, 2);
+
+        assertNotFound(() -> messageService.getByConversation(conversationId, null, false, UUID.randomUUID(), null));
+        verify(messageRepository, never()).findByConversationIdOrderByCreatedAtAsc(any());
+    }
+
+    @Test
+    void getByConversation_anonymousCallerOnUserConversation_isNotFound() {
+        UUID conversationId = UUID.randomUUID();
+        ownedHistory(conversationId, 2);
+
+        assertNotFound(() -> messageService.getByConversation(conversationId, null, false, null, "some-cookie"));
+    }
+
+    @Test
+    void getByConversation_softDeleted_isNotFoundEvenForOwner() {
+        UUID conversationId = UUID.randomUUID();
+        Conversation conversation = conversation(conversationId, owner(), null);
+        conversation.setDeletedAt(LocalDateTime.now());
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.of(conversation));
+
+        assertNotFound(() -> messageService.getByConversation(conversationId, null, false, OWNER_ID, null));
+    }
+
+    @Test
+    void getByConversation_unknownConversation_isNotFound() {
+        UUID conversationId = UUID.randomUUID();
+        when(conversationRepository.findById(conversationId)).thenReturn(Optional.empty());
+
+        assertNotFound(() -> messageService.getByConversation(conversationId, null, false, OWNER_ID, null));
+    }
+
+    @Test
+    void getByConversation_guestWithMatchingCookie_readsHistory() {
+        UUID conversationId = UUID.randomUUID();
+        GuestSession session = guestSession(UUID.randomUUID());
+        when(conversationRepository.findById(conversationId))
+                .thenReturn(Optional.of(conversation(conversationId, null, session)));
+        when(guestSessionService.resolveReadOnly("cookie")).thenReturn(Optional.of(session));
+        when(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId)).thenReturn(List.of());
+
+        assertThat(messageService.getByConversation(conversationId, null, false, null, "cookie")).isEmpty();
+        // Reading history must not slide the guest session's TTL.
+        verify(guestSessionService, never()).resolveAndTouch(any());
+    }
+
+    @Test
+    void getByConversation_guestWithOtherOrMissingCookie_isNotFound() {
+        UUID conversationId = UUID.randomUUID();
+        when(conversationRepository.findById(conversationId))
+                .thenReturn(Optional.of(conversation(conversationId, null, guestSession(UUID.randomUUID()))));
+        when(guestSessionService.resolveReadOnly("other")).thenReturn(Optional.of(guestSession(UUID.randomUUID())));
+        when(guestSessionService.resolveReadOnly(null)).thenReturn(Optional.empty());
+
+        assertNotFound(() -> messageService.getByConversation(conversationId, null, false, null, "other"));
+        assertNotFound(() -> messageService.getByConversation(conversationId, null, false, null, null));
+    }
+
+    @Test
+    void getByConversation_signedInCallerOnUnclaimedGuestConversation_isNotFound() {
+        UUID conversationId = UUID.randomUUID();
+        GuestSession session = guestSession(UUID.randomUUID());
+        when(conversationRepository.findById(conversationId))
+                .thenReturn(Optional.of(conversation(conversationId, null, session)));
+        when(guestSessionService.resolveReadOnly("cookie")).thenReturn(Optional.of(session));
+
+        assertNotFound(() -> messageService.getByConversation(conversationId, null, false, OWNER_ID, "cookie"));
+    }
+
+    @Test
+    void getById_messageOfSomeoneElsesConversation_isNotFound() {
+        UUID messageId = UUID.randomUUID();
+        Message message = assistantMessage(messageId, conversation(UUID.randomUUID(), owner(), null),
+                MsgStatus.COMPLETED, "answer");
+        when(messageRepository.findById(messageId)).thenReturn(Optional.of(message));
+
+        assertNotFound(() -> messageService.getById(messageId, UUID.randomUUID(), null));
+    }
+
+    @Test
+    void getById_messageOfDeletedConversation_isNotFound() {
+        UUID messageId = UUID.randomUUID();
+        Conversation conversation = conversation(UUID.randomUUID(), owner(), null);
+        conversation.setDeletedAt(LocalDateTime.now());
+        when(messageRepository.findById(messageId))
+                .thenReturn(Optional.of(assistantMessage(messageId, conversation, MsgStatus.COMPLETED, "a")));
+
+        assertNotFound(() -> messageService.getById(messageId, OWNER_ID, null));
+    }
+
+    private void assertNotFound(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+        assertThatThrownBy(call)
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.CONVERSATION_NOT_FOUND);
+    }
+
     private void assertCancelFails(UUID messageId, CancelClarificationRequest request, ErrorCode expected) {
         assertThatThrownBy(() -> messageService.cancelClarification(messageId, request))
                 .isInstanceOf(AppException.class)
@@ -1034,8 +1138,20 @@ class MessageServiceImplTest {
                 .build();
     }
 
+    private User owner() {
+        return User.builder().id(OWNER_ID).build();
+    }
+
+    /** {@link #buildMessages}, with the conversation stubbed as owned by {@link #OWNER_ID}. */
+    private List<Message> ownedHistory(UUID conversationId, int count) {
+        List<Message> messages = buildMessages(conversationId, count);
+        when(conversationRepository.findById(conversationId))
+                .thenReturn(Optional.of(messages.get(0).getConversation()));
+        return messages;
+    }
+
     private List<Message> buildMessages(UUID conversationId, int count) {
-        Conversation conversation = conversation(conversationId);
+        Conversation conversation = conversation(conversationId, owner(), null);
         List<Message> messages = new java.util.ArrayList<>();
         for (int i = 0; i < count; i++) {
             Message m = Message.builder()

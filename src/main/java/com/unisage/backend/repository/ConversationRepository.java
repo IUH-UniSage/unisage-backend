@@ -2,6 +2,7 @@ package com.unisage.backend.repository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -26,16 +27,29 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
      * (a user, or an unclaimed guest session - {@code conversations_owner_xor} guarantees exactly
      * one of the two is set, so they never share a partition). One statement for the whole table
      * instead of a loop per owner. Returns the number of conversations trimmed.
+     *
+     * <p>The same statement revokes every live share link of the trimmed conversations
+     * (UNISAGE-107 R11): a data-modifying CTE always runs to completion even though the outer
+     * UPDATE doesn't read it, and both see the same {@code doomed} set, so the two writes are
+     * atomic and can't disagree on which conversations were deleted.
      */
     @Modifying
-    @Query(value = "UPDATE conversations SET deleted_at = now() WHERE id IN ("
+    @Query(value = "WITH doomed AS ("
             + "SELECT id FROM (SELECT c.id, ROW_NUMBER() OVER ("
             + "PARTITION BY COALESCE(c.user_id, c.guest_session_id) "
             + "ORDER BY COALESCE((SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = c.id), "
             + "c.created_at) DESC, c.created_at DESC) AS rn "
-            + "FROM conversations c WHERE c.deleted_at IS NULL) ranked WHERE rn > :keep)",
+            + "FROM conversations c WHERE c.deleted_at IS NULL) ranked WHERE rn > :keep), "
+            + "revoked AS (UPDATE conversation_shares SET revoked_at = now() "
+            + "WHERE revoked_at IS NULL AND conversation_id IN (SELECT id FROM doomed) RETURNING id) "
+            + "UPDATE conversations SET deleted_at = now() WHERE id IN (SELECT id FROM doomed)",
             nativeQuery = true)
     int softDeleteBeyondNewestPerOwner(@Param("keep") int keep);
+
+    /** The caller's live copy made from {@code shareId} by "Tiếp tục", if any. */
+    @Query("SELECT c FROM Conversation c WHERE c.sourceShare.id = :shareId AND c.user.id = :userId "
+            + "AND c.deletedAt IS NULL")
+    Optional<Conversation> findActiveCopy(@Param("shareId") UUID shareId, @Param("userId") UUID userId);
 
     /**
      * Bulk delete for the guest-session cleanup job. Never touches a claimed conversation: the

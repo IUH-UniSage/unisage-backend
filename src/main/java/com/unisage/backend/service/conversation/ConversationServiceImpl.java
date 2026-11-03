@@ -15,6 +15,7 @@ import com.unisage.backend.entity.User;
 import com.unisage.backend.exception.AppException;
 import com.unisage.backend.exception.ErrorCode;
 import com.unisage.backend.repository.ConversationRepository;
+import com.unisage.backend.repository.ConversationShareRepository;
 import com.unisage.backend.repository.UserRepository;
 
 import jakarta.transaction.Transactional;
@@ -26,6 +27,7 @@ public class ConversationServiceImpl implements ConversationService {
 
     private final ConversationRepository conversationRepository;
     private final UserRepository userRepository;
+    private final ConversationShareRepository conversationShareRepository;
 
     @Override
     @Transactional
@@ -71,21 +73,36 @@ public class ConversationServiceImpl implements ConversationService {
 
     @Override
     @Transactional
-    public void softDelete(UUID id) {
+    public void softDelete(UUID id, UUID callerId) {
+        // Someone else's (or a guest's) conversation looks exactly like an unknown id (UNISAGE-107 §4).
         Conversation conversation = conversationRepository.findById(id)
+                .filter(c -> callerId != null && c.getUser() != null && callerId.equals(c.getUser().getId()))
                 .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
-        conversation.setDeletedAt(LocalDateTime.now());
+        if (conversation.getDeletedAt() != null) {
+            return; // already deleted by its owner: a repeated click stays a no-op
+        }
+        LocalDateTime now = LocalDateTime.now();
+        conversation.setDeletedAt(now);
         conversationRepository.save(conversation);
+        conversationShareRepository.revokeAllByConversationId(conversation.getId(), now);
     }
 
     @Override
     @Transactional
-    public ConversationResponse claim(UUID conversationId, UUID userId) {
+    public ConversationResponse claim(UUID conversationId, UUID userId, GuestSession guestSession) {
         Conversation conversation = conversationRepository.findById(conversationId)
+                .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
 
         if (conversation.getUser() != null) {
             throw new AppException(ErrorCode.CONVERSATION_ALREADY_CLAIMED);
+        }
+
+        // Only the browser that created the guest conversation (same guest session cookie) may
+        // claim it; anyone else holding the UUID gets the same answer as for an unknown id.
+        if (guestSession == null || conversation.getGuestSession() == null
+                || !guestSession.getId().equals(conversation.getGuestSession().getId())) {
+            throw new AppException(ErrorCode.CONVERSATION_NOT_FOUND);
         }
 
         User user = userRepository.findById(userId)
@@ -103,6 +120,8 @@ public class ConversationServiceImpl implements ConversationService {
                 .userId(conversation.getUser() != null ? conversation.getUser().getId() : null)
                 .title(conversation.getTitle())
                 .createdAt(conversation.getCreatedAt())
+                // Reading the id of a lazy proxy doesn't load the share row.
+                .sourceShareId(conversation.getSourceShare() != null ? conversation.getSourceShare().getId() : null)
                 .build();
     }
 }

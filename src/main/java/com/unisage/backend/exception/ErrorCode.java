@@ -177,6 +177,14 @@ public enum ErrorCode {
     DASHBOARD_INVALID_RANGE(HttpStatus.BAD_REQUEST, 2720,
             "Khoảng thời gian không hợp lệ: ngày bắt đầu phải trước ngày kết thúc, không ở tương lai và không quá 366 ngày."),
 
+    // Conversation share links (28xx) - UNISAGE-107. An unknown token, a revoked link and a link whose
+    // conversation was deleted all answer SHARE_NOT_FOUND, so a link never reveals it once existed.
+    SHARE_NOT_FOUND(HttpStatus.NOT_FOUND, 2801, "Liên kết không tồn tại hoặc đã bị thu hồi."),
+    SHARE_EMPTY_CONVERSATION(HttpStatus.BAD_REQUEST, 2802,
+            "Hội thoại chưa có tin nhắn hoàn chỉnh nào để chia sẻ."),
+    SHARE_GUEST_CONVERSATION(HttpStatus.BAD_REQUEST, 2803,
+            "Không thể chia sẻ hội thoại khi chưa đăng nhập."),
+
     // File storage errors (24xx)
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2401, "Không thể tải file lên hệ thống lưu trữ."),
     FILE_DELETE_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, 2402, "Không thể xoá file khỏi hệ thống lưu trữ."),

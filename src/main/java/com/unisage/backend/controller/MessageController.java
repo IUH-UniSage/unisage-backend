@@ -90,14 +90,19 @@ public class MessageController {
     public ResponseEntity<ApiResponse<List<MessageResponse>>> getByConversation(
             @PathVariable UUID conversationId,
             @RequestParam(required = false) Integer limit,
-            @RequestParam(defaultValue = "false") boolean context) {
+            @RequestParam(defaultValue = "false") boolean context,
+            HttpServletRequest httpRequest) {
+        UUID callerId = securityUtil.getCurrentUserIdOrNull();
+        String guestSessionToken = extractGuestSessionToken(httpRequest);
         return ResponseEntity.ok(ApiResponse.success(
-                messageService.getByConversation(conversationId, limit, context)));
+                messageService.getByConversation(conversationId, limit, context, callerId, guestSessionToken)));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<MessageResponse>> getById(@PathVariable UUID id) {
-        return ResponseEntity.ok(ApiResponse.success(messageService.getById(id)));
+    public ResponseEntity<ApiResponse<MessageResponse>> getById(@PathVariable UUID id, HttpServletRequest httpRequest) {
+        UUID callerId = securityUtil.getCurrentUserIdOrNull();
+        String guestSessionToken = extractGuestSessionToken(httpRequest);
+        return ResponseEntity.ok(ApiResponse.success(messageService.getById(id, callerId, guestSessionToken)));
     }
 
     /**

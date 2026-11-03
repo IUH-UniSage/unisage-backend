@@ -31,8 +31,14 @@ public interface MessageService {
      * {@code forContext = false} (the chat UI) returns the whole history, or its last {@code limit}
      * messages. {@code forContext = true} (the agent building a prompt) is additionally capped by
      * the admin setting {@code chat.max_history_messages}.
+     *
+     * <p>Only the conversation's owner may read it: the signed-in user it belongs to, or - for a
+     * guest conversation - the caller presenting the same guest session. Anyone else, and any
+     * soft-deleted conversation, gets {@code CONVERSATION_NOT_FOUND} (UNISAGE-107 §4).
      */
-    List<MessageResponse> getByConversation(UUID conversationId, Integer limit, boolean forContext);
+    List<MessageResponse> getByConversation(UUID conversationId, Integer limit, boolean forContext,
+            UUID callerId, String guestSessionToken);
 
-    MessageResponse getById(UUID id);
+    /** Same read rule as {@link #getByConversation}, through the message's conversation. */
+    MessageResponse getById(UUID id, UUID callerId, String guestSessionToken);
 }

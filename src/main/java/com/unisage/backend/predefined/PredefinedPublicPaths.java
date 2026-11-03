@@ -20,7 +20,11 @@ public final class PredefinedPublicPaths {
             // list/detail/update stay on TICKET_* Permission rows.
             new PublicPath("POST", "/tickets"),
             new PublicPath("GET", "/tickets/my"),
-            new PublicPath("GET", "/tickets/my/*")
+            new PublicPath("GET", "/tickets/my/*"),
+            // Conversation share links (UNISAGE-107): any signed-in user creates/lists/revokes their
+            // own links and opens/continues any link they hold. Ownership is checked in
+            // ConversationShareServiceImpl (identity from the JWT, never from the request).
+            new PublicPath("*", "/shares/**")
     );
 
     public static final List<PublicPath> PUBLIC_PATHS = List.of(
