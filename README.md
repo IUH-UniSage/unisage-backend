@@ -50,6 +50,50 @@ COMPOSE_PROFILES=app
 docker compose up -d --build
 ```
 
+## Bật sao lưu Database định kỳ
+
+Chức năng Full, Differential và Transaction Log cần `pg_basebackup` PostgreSQL 17,
+WAL archive và thư mục restore dùng chung với PostgreSQL. Cách khởi động được hỗ trợ
+đầy đủ nhất là chạy backend bằng Docker profile `app`:
+
+```powershell
+Copy-Item .env.example .ENV
+# Trong .ENV: COMPOSE_PROFILES=app
+# Với DB dev: để APP_PROFILE trống. Chỉ dùng APP_PROFILE=eval sau khi assistant_eval đã tồn tại.
+.\mvnw.cmd clean package -DskipTests
+docker compose --profile app up -d --build
+```
+
+Sau khi đăng nhập bằng `SUPER_ADMIN`, vào **Cài đặt hệ thống > Bảo trì** và bật
+**Bật sao lưu tự động** (`maintenance.backup.enabled=true`). Các tham số Full,
+Differential, Transaction Log, Qdrant và retention được đọc lại từ SystemSetting
+mỗi phút, không cần khởi động lại backend.
+
+Kiểm tra hạ tầng backup:
+
+```powershell
+docker ps
+docker exec unisage-postgres psql -U postgres -Atc "SHOW summarize_wal; SHOW archive_mode;"
+docker exec backend-java pg_basebackup --version
+docker exec unisage-postgres psql -U postgres -d assistant_DB -c `
+  "SELECT backup_type,status,scheduled_for,finished_at,error_message FROM backup_runs ORDER BY started_at DESC LIMIT 10;"
+```
+
+Kết quả cần có:
+
+- `summarize_wal=on` để tạo Differential.
+- `archive_mode=on` để lưu Transaction Log và PITR.
+- `pg_basebackup` cùng major version 17 với PostgreSQL server.
+- Các run trong `backup_runs` chuyển từ `RUNNING` sang `SUCCEEDED`.
+
+Nếu chạy backend trực tiếp trên Windows thay vì Docker, phải tự cài PostgreSQL 17
+client và cấu hình `BACKUP_PG_BIN_DIR`, `BACKUP_WAL_ARCHIVE_DIR`,
+`BACKUP_RESTORE_DIR`. Nếu thiếu một trong các thành phần này, Full/WAL/restore có
+thể không chạy dù giao diện SystemSetting vẫn hiển thị lịch.
+
+Không kiểm tra restore trực tiếp trên database đang sử dụng. Hãy restore thử trên
+một PostgreSQL cô lập trước khi xem một bộ backup là đã được xác nhận hoàn chỉnh.
+
 ## Database migration (Flyway)
 
 Schema được quản lý bằng Flyway thay vì để Hibernate tự sinh (`spring.jpa.hibernate.ddl-auto=validate`
