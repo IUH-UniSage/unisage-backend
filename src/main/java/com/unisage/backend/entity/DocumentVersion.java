@@ -52,4 +52,8 @@ public class DocumentVersion {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    /** Reason given when this version was the current one (see Document#changeReason). */
+    @Column(name = "change_reason", length = 500)
+    private String changeReason;
 }

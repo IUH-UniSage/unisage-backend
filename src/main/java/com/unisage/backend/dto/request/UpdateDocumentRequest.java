@@ -15,5 +15,7 @@ public record UpdateDocumentRequest(
     String fileType,
     UUID minAccessLevelId,
     Boolean isPublic,
-    MultipartFile file
+    MultipartFile file,
+    /** Why the document is being edited; kept on the document and its archived versions. */
+    String changeReason
 ) {}

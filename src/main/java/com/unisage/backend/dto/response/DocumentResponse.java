@@ -19,6 +19,7 @@ public record DocumentResponse(
     UUID minAccessLevelId,
     Integer minAccessLevel,
     Integer version,
+    String changeReason,
     UUID departmentId,
     String departmentName,
     UUID categoryId,
