@@ -31,6 +31,7 @@ import com.unisage.backend.repository.TicketRepository;
 import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.utils.SecurityUtil;
 
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -157,9 +158,16 @@ public class TicketServiceImpl implements TicketService {
             if (type != null) {
                 predicates.add(cb.equal(root.get("type"), type));
             }
-            Predicate matchesQuery = SearchPatterns.anyContains(cb, query, root.get("title"));
-            if (matchesQuery != null) {
-                predicates.add(matchesQuery);
+            if (SearchPatterns.containsPattern(query) != null) {
+                // Staff search by what the ticket says or by who sent it.
+                var user = root.join("user");
+                Expression<String> first = cb.coalesce(user.get("firstName"), "");
+                Expression<String> last = cb.coalesce(user.get("lastName"), "");
+                predicates.add(SearchPatterns.anyContains(cb, query,
+                        root.get("title"), root.get("description"),
+                        user.get("email"), user.get("code"),
+                        cb.concat(cb.concat(first, " "), last),
+                        cb.concat(cb.concat(last, " "), first)));
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
