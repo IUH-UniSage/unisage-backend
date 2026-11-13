@@ -107,6 +107,8 @@ public enum ErrorCode {
                     + "cấu hình thư mục WAL archive (BACKUP_WAL_ARCHIVE_DIR)."),
     BACKUP_FILES_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, 2167,
             "Không đọc được danh sách file sao lưu từ MinIO, vui lòng thử lại sau."),
+    USER_LEAF_DEPARTMENT_REQUIRED(HttpStatus.BAD_REQUEST, 2169,
+            "Người dùng phải thuộc ít nhất một phòng ban cấp cuối."),
 
     // Internal API (/internal/**) — X-Internal-Secret is checked separately by
     // InternalSecretFilter (code 1007); this is the CIDR layer.
