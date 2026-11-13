@@ -10,6 +10,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
+import com.unisage.backend.utils.SearchPatterns;
 import com.unisage.backend.dto.request.CreateTicketRequest;
 import com.unisage.backend.dto.request.UpdateTicketRequest;
 import com.unisage.backend.dto.response.PageResponse;
@@ -156,8 +157,9 @@ public class TicketServiceImpl implements TicketService {
             if (type != null) {
                 predicates.add(cb.equal(root.get("type"), type));
             }
-            if (query != null && !query.isBlank()) {
-                predicates.add(cb.like(cb.lower(root.get("title")), "%" + query.trim().toLowerCase() + "%"));
+            Predicate matchesQuery = SearchPatterns.anyContains(cb, query, root.get("title"));
+            if (matchesQuery != null) {
+                predicates.add(matchesQuery);
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
