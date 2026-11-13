@@ -9,6 +9,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -84,6 +85,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
                 .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage(), null));
+    }
+
+    /**
+     * A query/path parameter that doesn't convert ({@code ?status=FOO}, {@code ?roleId=abc},
+     * {@code ?page=x}) is a bad filter, not a server error: 400 with the parameter name.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(
+            MethodArgumentTypeMismatchException exception) {
+
+        ErrorCode errorCode = ErrorCode.VALIDATION_ERROR;
+        Map<String, String> errors = Map.of(exception.getName(), "Giá trị không hợp lệ.");
+
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage(), errors));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
