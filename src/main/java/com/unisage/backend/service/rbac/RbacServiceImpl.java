@@ -2,6 +2,7 @@ package com.unisage.backend.service.rbac;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -144,7 +145,17 @@ public class RbacServiceImpl implements RbacService {
     @Override
     public PageResponse<List<RoleResponse>> getAllRoles(Pageable pageable) {
         Page<Role> rolePage = roleRepository.findAll(pageable);
-        return PageResponse.fromPage(rolePage, role -> getRoleDetails(role.getId()));
+        List<UUID> roleIds = rolePage.getContent().stream().map(Role::getId).toList();
+        Map<UUID, List<PermissionInfo>> permsByRole = roleIds.isEmpty()
+                ? Map.of()
+                : rolePermissionRepository.findWithPermissionByRoleIdIn(roleIds).stream()
+                        .collect(Collectors.groupingBy(rp -> rp.getRole().getId(),
+                                Collectors.mapping(rp -> PermissionInfo.builder()
+                                        .id(rp.getPermission().getId())
+                                        .name(rp.getPermission().getName())
+                                        .build(), Collectors.toList())));
+        return PageResponse.fromPage(rolePage,
+                role -> mapToRoleResponse(role, permsByRole.getOrDefault(role.getId(), List.of())));
     }
 
     @Override
