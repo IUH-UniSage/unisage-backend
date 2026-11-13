@@ -72,8 +72,10 @@ public class DepartmentController {
     }
 
     @PatchMapping("/{id}/recover")
-    public ResponseEntity<ApiResponse<Void>> recoverDepartment(@PathVariable UUID id) {
-        departmentService.recoverDepartment(id);
+    public ResponseEntity<ApiResponse<Void>> recoverDepartment(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "false") boolean includeChildren) {
+        departmentService.recoverDepartment(id, includeChildren);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

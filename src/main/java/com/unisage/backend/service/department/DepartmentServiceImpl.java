@@ -92,13 +92,22 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     @Override
     @Transactional
-    public void recoverDepartment(UUID id) {
+    public void recoverDepartment(UUID id, boolean includeChildren) {
         Department department = departmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND));
+        recover(department, includeChildren);
+    }
 
+    private void recover(Department department, boolean includeChildren) {
         department.setIsActive(true);
         department.setDeletedAt(null);
         departmentRepository.save(department);
+
+        if (includeChildren) {
+            for (Department child : departmentRepository.findByParentIdAndIsActive(department.getId(), null)) {
+                recover(child, true);
+            }
+        }
     }
 
     @Override

@@ -88,4 +88,24 @@ class DepartmentServiceIntegrationTest extends PostgresIntegrationTest {
         assertThat(departmentService.getAllRoots(true)).extracting(DepartmentResponse::id)
                 .contains(khoa).doesNotContain(boMon);
     }
+
+    @Test
+    void recoverRestoresChildrenOnlyWhenAsked() {
+        UUID khoa = create("Khoa khôi phục", null);
+        UUID boMon = create("Bộ môn khôi phục", khoa);
+        UUID nhom = create("Nhóm khôi phục", boMon);
+
+        departmentService.deleteDepartment(khoa);
+        departmentService.recoverDepartment(khoa, false);
+        assertThat(isActive(khoa)).isTrue();
+        assertThat(isActive(boMon)).isFalse();
+
+        departmentService.deleteDepartment(khoa);
+        departmentService.recoverDepartment(khoa, true);
+        assertThat(List.of(isActive(khoa), isActive(boMon), isActive(nhom))).containsOnly(true);
+    }
+
+    private boolean isActive(UUID id) {
+        return departmentRepository.findById(id).orElseThrow().getIsActive();
+    }
 }

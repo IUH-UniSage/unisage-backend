@@ -14,7 +14,8 @@ public interface DepartmentService {
 
     void deleteDepartment(UUID id);
 
-    void recoverDepartment(UUID id);
+    /** {@code includeChildren} also recovers every descendant; otherwise only this node. */
+    void recoverDepartment(UUID id, boolean includeChildren);
 
     DepartmentResponse getDepartmentById(UUID id);
 
