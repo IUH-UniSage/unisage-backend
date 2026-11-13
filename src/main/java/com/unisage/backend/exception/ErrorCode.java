@@ -56,6 +56,8 @@ public enum ErrorCode {
     EMAIL_EXISTED(HttpStatus.BAD_REQUEST, 2115, "Email này đã được sử dụng!"),
     PHONE_EXISTED(HttpStatus.BAD_REQUEST, 2116, "Số điện thoại này đã được sử dụng!"),
     USER_CODE_EXISTED(HttpStatus.BAD_REQUEST, 2117, "Mã người dùng này đã tồn tại!"),
+    USER_LEAF_DEPARTMENT_REQUIRED(HttpStatus.BAD_REQUEST, 2169,
+            "Người dùng phải thuộc ít nhất một phòng ban cấp cuối."),
     ROLE_EXISTED(HttpStatus.BAD_REQUEST, 2119, "Vai trò này đã tồn tại!"),
     CATEGORY_NAME_EXISTED(HttpStatus.BAD_REQUEST, 2120, "Tên danh mục này đã tồn tại!"),
     USER_DEPARTMENT_ACCESS_EXISTED(HttpStatus.BAD_REQUEST, 2126, "Phân quyền phòng ban này đã tồn tại!"),
@@ -107,8 +109,6 @@ public enum ErrorCode {
                     + "cấu hình thư mục WAL archive (BACKUP_WAL_ARCHIVE_DIR)."),
     BACKUP_FILES_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, 2167,
             "Không đọc được danh sách file sao lưu từ MinIO, vui lòng thử lại sau."),
-    USER_LEAF_DEPARTMENT_REQUIRED(HttpStatus.BAD_REQUEST, 2169,
-            "Người dùng phải thuộc ít nhất một phòng ban cấp cuối."),
 
     // Internal API (/internal/**) — X-Internal-Secret is checked separately by
     // InternalSecretFilter (code 1007); this is the CIDR layer.
