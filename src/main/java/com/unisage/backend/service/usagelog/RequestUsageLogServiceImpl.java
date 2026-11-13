@@ -284,7 +284,8 @@ public class RequestUsageLogServiceImpl implements RequestUsageLogService {
                     linePredicates.add(cb.equal(line.get("provider"), filter.provider().trim()));
                 }
                 if (StringUtils.hasText(filter.model())) {
-                    linePredicates.add(cb.equal(line.get("modelName"), filter.model().trim()));
+                    // Free-text box in the history filters: "gpt-4" should find "openai/gpt-4o-mini".
+                    linePredicates.add(SearchPatterns.anyContains(cb, filter.model(), line.get("modelName")));
                 }
                 sub.select(cb.literal(1)).where(linePredicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
                 predicates.add(cb.exists(sub));
