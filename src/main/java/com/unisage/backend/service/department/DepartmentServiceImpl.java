@@ -47,6 +47,30 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     @Override
     @Transactional
+    public DepartmentResponse updateDepartment(UUID id, DepartmentRequest request) {
+        Department department = departmentRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND));
+
+        Department parent = null;
+        if (request.parentId() != null) {
+            parent = departmentRepository.findById(request.parentId())
+                    .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND));
+            // Walking up from the new parent must never reach this department, or the tree loops.
+            for (Department cursor = parent; cursor != null; cursor = cursor.getParent()) {
+                if (cursor.getId().equals(id)) {
+                    throw new AppException(ErrorCode.DEPARTMENT_PARENT_INVALID);
+                }
+            }
+        }
+
+        department.setName(request.name().trim());
+        department.setDescription(request.description());
+        department.setParent(parent);
+        return toResponse(departmentRepository.save(department));
+    }
+
+    @Override
+    @Transactional
     public void deleteDepartment(UUID id) {
         Department department = departmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND));

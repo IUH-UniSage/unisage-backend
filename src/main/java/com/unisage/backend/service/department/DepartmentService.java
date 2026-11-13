@@ -10,6 +10,8 @@ public interface DepartmentService {
 
     DepartmentResponse createDepartment(DepartmentRequest request);
 
+    DepartmentResponse updateDepartment(UUID id, DepartmentRequest request);
+
     void deleteDepartment(UUID id);
 
     void recoverDepartment(UUID id);

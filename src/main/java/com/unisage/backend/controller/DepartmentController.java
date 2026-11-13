@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -54,6 +55,14 @@ public class DepartmentController {
     public ResponseEntity<ApiResponse<DepartmentResponse>> getDepartmentById(
             @PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(departmentService.getDepartmentById(id)));
+    }
+
+    /** Rename / re-describe / move a department. The name is free text, not a code. */
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<DepartmentResponse>> updateDepartment(
+            @PathVariable UUID id,
+            @Valid @RequestBody DepartmentRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(departmentService.updateDepartment(id, request)));
     }
 
     @DeleteMapping("/{id}")
