@@ -1,6 +1,7 @@
 package com.unisage.backend.service.department;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -108,7 +109,7 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     @Override
     public List<DepartmentResponse> getAllRoots(Boolean isActive) {
-        List<Department> all = departmentRepository.findAllByIsActive(isActive);
+        List<Department> all = sortedByCreation(departmentRepository.findAllByIsActive(isActive));
         Map<UUID, List<Department>> childrenByParent = groupByParent(all);
 
         return all.stream()
@@ -119,13 +120,25 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     @Override
     public List<DepartmentResponse> getChildren(UUID parentId, Boolean isActive) {
-        List<Department> all = departmentRepository.findAllByIsActive(isActive);
+        List<Department> all = sortedByCreation(departmentRepository.findAllByIsActive(isActive));
         Map<UUID, List<Department>> childrenByParent = groupByParent(all);
 
         List<Department> directChildren = childrenByParent.getOrDefault(parentId, List.of());
         return directChildren.stream()
                 .map(d -> toResponseTree(d, childrenByParent))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Oldest first, name as tie-break. groupByParent keeps this order inside every sibling list, so
+     * the same rule holds at every level and each child stays right under its parent.
+     */
+    private static List<Department> sortedByCreation(List<Department> departments) {
+        return departments.stream()
+                .sorted(Comparator.comparing(Department::getCreatedAt,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(Department::getName, String.CASE_INSENSITIVE_ORDER))
+                .toList();
     }
 
     private Map<UUID, List<Department>> groupByParent(List<Department> all) {

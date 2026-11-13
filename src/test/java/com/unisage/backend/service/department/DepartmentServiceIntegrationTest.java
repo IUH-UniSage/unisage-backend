@@ -60,4 +60,21 @@ class DepartmentServiceIntegrationTest extends PostgresIntegrationTest {
         assertThatThrownBy(() -> departmentService.updateDepartment(khoa, new DepartmentRequest("X", null, khoa)))
                 .isInstanceOf(AppException.class);
     }
+
+    @Test
+    void siblingsAreOrderedByCreationAtEveryLevel() {
+        UUID root = create("ZZ Gốc", null);
+        UUID b = create("B lớp 1", root);
+        UUID a = create("A lớp 1", root);
+        UUID b2 = create("Y lớp 2", b);
+        UUID b1 = create("X lớp 2", b);
+
+        DepartmentResponse tree = departmentService.getAllRoots(null).stream()
+                .filter(d -> d.id().equals(root)).findFirst().orElseThrow();
+
+        assertThat(tree.children()).extracting(c -> c.id()).containsExactly(b, a);
+        assertThat(tree.children().get(0).children()).extracting(c -> c.id()).containsExactly(b2, b1);
+        assertThat(departmentService.getChildren(root, null)).extracting(DepartmentResponse::id)
+                .containsExactly(b, a);
+    }
 }
