@@ -17,6 +17,11 @@ public interface DepartmentService {
     /** {@code includeChildren} also recovers every descendant; otherwise only this node. */
     void recoverDepartment(UUID id, boolean includeChildren);
 
+    /** Bulk version of {@link #deleteDepartment}: each id is soft-deleted with its subtree. */
+    void deleteDepartments(List<UUID> ids);
+
+    void recoverDepartments(List<UUID> ids, boolean includeChildren);
+
     DepartmentResponse getDepartmentById(UUID id);
 
     List<DepartmentResponse> getAllRoots(Boolean isActive);

@@ -108,4 +108,21 @@ class DepartmentServiceIntegrationTest extends PostgresIntegrationTest {
     private boolean isActive(UUID id) {
         return departmentRepository.findById(id).orElseThrow().getIsActive();
     }
+
+    @Test
+    void bulkDeleteAndRecoverWorkOnSeveralSubtrees() {
+        UUID a = create("Khoa A bulk", null);
+        UUID a1 = create("Bộ môn A1 bulk", a);
+        UUID b = create("Khoa B bulk", null);
+
+        departmentService.deleteDepartments(List.of(a, b));
+        assertThat(List.of(isActive(a), isActive(a1), isActive(b))).containsOnly(false);
+
+        departmentService.recoverDepartments(List.of(a, b), true);
+        assertThat(List.of(isActive(a), isActive(a1), isActive(b))).containsOnly(true);
+
+        assertThatThrownBy(() -> departmentService.deleteDepartments(List.of(a, UUID.randomUUID())))
+                .isInstanceOf(AppException.class);
+        assertThat(isActive(a)).isTrue();
+    }
 }

@@ -111,6 +111,33 @@ public class DepartmentServiceImpl implements DepartmentService {
     }
 
     @Override
+    @Transactional
+    public void deleteDepartments(List<UUID> ids) {
+        LocalDateTime now = LocalDateTime.now();
+        for (Department department : findAllOrThrow(ids)) {
+            recursiveDelete(department, now);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void recoverDepartments(List<UUID> ids, boolean includeChildren) {
+        for (Department department : findAllOrThrow(ids)) {
+            recover(department, includeChildren);
+        }
+    }
+
+    /** All or nothing: one unknown id fails the whole batch before anything changes. */
+    private List<Department> findAllOrThrow(List<UUID> ids) {
+        List<UUID> distinct = ids.stream().distinct().toList();
+        List<Department> found = departmentRepository.findAllById(distinct);
+        if (found.size() != distinct.size()) {
+            throw new AppException(ErrorCode.DEPARTMENT_NOT_FOUND);
+        }
+        return found;
+    }
+
+    @Override
     public DepartmentResponse getDepartmentById(UUID id) {
         Department department = departmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND));

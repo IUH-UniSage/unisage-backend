@@ -71,6 +71,20 @@ public class DepartmentController {
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
+    @DeleteMapping("/bulk")
+    public ResponseEntity<ApiResponse<Void>> deleteDepartments(@RequestBody List<UUID> ids) {
+        departmentService.deleteDepartments(ids);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @PostMapping("/bulk/recover")
+    public ResponseEntity<ApiResponse<Void>> recoverDepartments(
+            @RequestBody List<UUID> ids,
+            @RequestParam(defaultValue = "false") boolean includeChildren) {
+        departmentService.recoverDepartments(ids, includeChildren);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
     @PatchMapping("/{id}/recover")
     public ResponseEntity<ApiResponse<Void>> recoverDepartment(
             @PathVariable UUID id,
