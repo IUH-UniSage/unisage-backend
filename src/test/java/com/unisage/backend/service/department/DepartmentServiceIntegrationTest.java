@@ -77,4 +77,15 @@ class DepartmentServiceIntegrationTest extends PostgresIntegrationTest {
         assertThat(departmentService.getChildren(root, null)).extracting(DepartmentResponse::id)
                 .containsExactly(b, a);
     }
+
+    @Test
+    void filteringByStatusKeepsNodesWhoseParentIsFilteredOut() {
+        UUID khoa = create("Khoa lọc", null);
+        UUID boMon = create("Bộ môn lọc", khoa);
+        departmentService.deleteDepartment(boMon);
+
+        assertThat(departmentService.getAllRoots(false)).extracting(DepartmentResponse::id).contains(boMon);
+        assertThat(departmentService.getAllRoots(true)).extracting(DepartmentResponse::id)
+                .contains(khoa).doesNotContain(boMon);
+    }
 }

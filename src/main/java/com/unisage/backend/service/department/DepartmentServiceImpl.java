@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -112,8 +113,11 @@ public class DepartmentServiceImpl implements DepartmentService {
         List<Department> all = sortedByCreation(departmentRepository.findAllByIsActive(isActive));
         Map<UUID, List<Department>> childrenByParent = groupByParent(all);
 
+        // With an isActive filter a node's parent may be filtered out; show that node at the top
+        // instead of dropping it (e.g. an inactive Bộ môn under an active Khoa).
+        Set<UUID> ids = all.stream().map(Department::getId).collect(Collectors.toSet());
         return all.stream()
-                .filter(d -> d.getParent() == null)
+                .filter(d -> d.getParent() == null || !ids.contains(d.getParent().getId()))
                 .map(d -> toResponseTree(d, childrenByParent))
                 .collect(Collectors.toList());
     }
