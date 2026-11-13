@@ -3,6 +3,7 @@ import com.unisage.backend.dto.request.CreateUserRequest;
 import com.unisage.backend.dto.response.UserResponse;
 import org.springframework.data.domain.Page;
 import com.unisage.backend.dto.response.PageResponse;
+import com.unisage.backend.entity.enums.UserStatus;
 import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.UUID;
@@ -14,7 +15,7 @@ public interface UserService {
  UserResponse createUser(CreateUserRequest request);
  UserDetailResponse getUserById(UUID id);
  UserResponse getMyProfile();
- PageResponse<List<UserResponse>> getAllUsers(Pageable pageable);
+ PageResponse<List<UserResponse>> getAllUsers(String q, UserStatus status, UUID roleId, Pageable pageable);
  UserDetailResponse updateUser(UUID id, UpdateUserRequest request);
  void deleteUser(UUID id);
  void recoverUser(UUID id);

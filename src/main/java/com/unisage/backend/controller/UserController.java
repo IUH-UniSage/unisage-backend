@@ -16,7 +16,10 @@ import java.util.List;
 import com.unisage.backend.service.usagelimit.UsageLimitService;
 import com.unisage.backend.service.user.UserService;
 import lombok.RequiredArgsConstructor;
+import com.unisage.backend.entity.enums.UserStatus;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -52,9 +55,17 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(usageLimitService.getUsage(id, null)));
     }
 
+    /**
+     * {@code q} matches code, email or full name (case- and accent-insensitive); all filters are
+     * optional. Newest first unless the caller sends its own {@code sort}.
+     */
     @GetMapping
-    public ResponseEntity<ApiResponse<PageResponse<List<UserResponse>>>> getAll(Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(userService.getAllUsers(pageable)));
+    public ResponseEntity<ApiResponse<PageResponse<List<UserResponse>>>> getAll(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) UserStatus status,
+            @RequestParam(required = false) UUID roleId,
+            @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(userService.getAllUsers(q, status, roleId, pageable)));
     }
 
     @PutMapping("/{id}")
