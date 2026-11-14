@@ -1,8 +1,10 @@
 package com.unisage.backend.service.department;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -47,6 +49,30 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     @Override
     @Transactional
+    public DepartmentResponse updateDepartment(UUID id, DepartmentRequest request) {
+        Department department = departmentRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND));
+
+        Department parent = null;
+        if (request.parentId() != null) {
+            parent = departmentRepository.findById(request.parentId())
+                    .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND));
+            // Walking up from the new parent must never reach this department, or the tree loops.
+            for (Department cursor = parent; cursor != null; cursor = cursor.getParent()) {
+                if (cursor.getId().equals(id)) {
+                    throw new AppException(ErrorCode.DEPARTMENT_PARENT_INVALID);
+                }
+            }
+        }
+
+        department.setName(request.name().trim());
+        department.setDescription(request.description());
+        department.setParent(parent);
+        return toResponse(departmentRepository.save(department));
+    }
+
+    @Override
+    @Transactional
     public void deleteDepartment(UUID id) {
         Department department = departmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND));
@@ -66,13 +92,49 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     @Override
     @Transactional
-    public void recoverDepartment(UUID id) {
+    public void recoverDepartment(UUID id, boolean includeChildren) {
         Department department = departmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.DEPARTMENT_NOT_FOUND));
+        recover(department, includeChildren);
+    }
 
+    private void recover(Department department, boolean includeChildren) {
         department.setIsActive(true);
         department.setDeletedAt(null);
         departmentRepository.save(department);
+
+        if (includeChildren) {
+            for (Department child : departmentRepository.findByParentIdAndIsActive(department.getId(), null)) {
+                recover(child, true);
+            }
+        }
+    }
+
+    @Override
+    @Transactional
+    public void deleteDepartments(List<UUID> ids) {
+        LocalDateTime now = LocalDateTime.now();
+        for (Department department : findAllOrThrow(ids)) {
+            recursiveDelete(department, now);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void recoverDepartments(List<UUID> ids, boolean includeChildren) {
+        for (Department department : findAllOrThrow(ids)) {
+            recover(department, includeChildren);
+        }
+    }
+
+    /** All or nothing: one unknown id fails the whole batch before anything changes. */
+    private List<Department> findAllOrThrow(List<UUID> ids) {
+        List<UUID> distinct = ids.stream().distinct().toList();
+        List<Department> found = departmentRepository.findAllById(distinct);
+        if (found.size() != distinct.size()) {
+            throw new AppException(ErrorCode.DEPARTMENT_NOT_FOUND);
+        }
+        return found;
     }
 
     @Override
@@ -84,24 +146,39 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     @Override
     public List<DepartmentResponse> getAllRoots(Boolean isActive) {
-        List<Department> all = departmentRepository.findAllByIsActive(isActive);
+        List<Department> all = sortedByCreation(departmentRepository.findAllByIsActive(isActive));
         Map<UUID, List<Department>> childrenByParent = groupByParent(all);
 
+        // With an isActive filter a node's parent may be filtered out; show that node at the top
+        // instead of dropping it (e.g. an inactive Bộ môn under an active Khoa).
+        Set<UUID> ids = all.stream().map(Department::getId).collect(Collectors.toSet());
         return all.stream()
-                .filter(d -> d.getParent() == null)
+                .filter(d -> d.getParent() == null || !ids.contains(d.getParent().getId()))
                 .map(d -> toResponseTree(d, childrenByParent))
                 .collect(Collectors.toList());
     }
 
     @Override
     public List<DepartmentResponse> getChildren(UUID parentId, Boolean isActive) {
-        List<Department> all = departmentRepository.findAllByIsActive(isActive);
+        List<Department> all = sortedByCreation(departmentRepository.findAllByIsActive(isActive));
         Map<UUID, List<Department>> childrenByParent = groupByParent(all);
 
         List<Department> directChildren = childrenByParent.getOrDefault(parentId, List.of());
         return directChildren.stream()
                 .map(d -> toResponseTree(d, childrenByParent))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Oldest first, name as tie-break. groupByParent keeps this order inside every sibling list, so
+     * the same rule holds at every level and each child stays right under its parent.
+     */
+    private static List<Department> sortedByCreation(List<Department> departments) {
+        return departments.stream()
+                .sorted(Comparator.comparing(Department::getCreatedAt,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(Department::getName, String.CASE_INSENSITIVE_ORDER))
+                .toList();
     }
 
     private Map<UUID, List<Department>> groupByParent(List<Department> all) {

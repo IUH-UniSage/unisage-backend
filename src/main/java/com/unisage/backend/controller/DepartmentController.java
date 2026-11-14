@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -56,15 +57,39 @@ public class DepartmentController {
         return ResponseEntity.ok(ApiResponse.success(departmentService.getDepartmentById(id)));
     }
 
+    /** Rename / re-describe / move a department. The name is free text, not a code. */
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<DepartmentResponse>> updateDepartment(
+            @PathVariable UUID id,
+            @Valid @RequestBody DepartmentRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(departmentService.updateDepartment(id, request)));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteDepartment(@PathVariable UUID id) {
         departmentService.deleteDepartment(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
+    @DeleteMapping("/bulk")
+    public ResponseEntity<ApiResponse<Void>> deleteDepartments(@RequestBody List<UUID> ids) {
+        departmentService.deleteDepartments(ids);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @PostMapping("/bulk/recover")
+    public ResponseEntity<ApiResponse<Void>> recoverDepartments(
+            @RequestBody List<UUID> ids,
+            @RequestParam(defaultValue = "false") boolean includeChildren) {
+        departmentService.recoverDepartments(ids, includeChildren);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
     @PatchMapping("/{id}/recover")
-    public ResponseEntity<ApiResponse<Void>> recoverDepartment(@PathVariable UUID id) {
-        departmentService.recoverDepartment(id);
+    public ResponseEntity<ApiResponse<Void>> recoverDepartment(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "false") boolean includeChildren) {
+        departmentService.recoverDepartment(id, includeChildren);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 }
