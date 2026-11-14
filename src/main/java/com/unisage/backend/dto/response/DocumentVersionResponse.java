@@ -17,5 +17,6 @@ public record DocumentVersionResponse(
     String fileUrl,
     UUID uploadedByUserId,
     String uploadedByName,
-    LocalDateTime createdAt
+    LocalDateTime createdAt,
+    String changeReason
 ) {}

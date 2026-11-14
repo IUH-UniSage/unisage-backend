@@ -108,6 +108,7 @@ public class DocumentServiceImpl implements DocumentService {
                 .orElseThrow(() -> new AppException(ErrorCode.DOCUMENT_NOT_FOUND));
         IndexedAccess accessBefore = IndexedAccess.of(document);
         String sourceBefore = document.getSourceUrl();
+        String changeReason = normalizeChangeReason(request.changeReason());
 
         if (request.docPackageId() != null) {
             Department docPackage = departmentRepository.findById(request.docPackageId())
@@ -138,6 +139,7 @@ public class DocumentServiceImpl implements DocumentService {
                         .fileType(document.getFileType())
                         .uploadedBy(uploader)
                         .createdAt(LocalDateTime.now())
+                        .changeReason(document.getChangeReason())
                         .build();
                 documentVersionRepository.save(version);
 
@@ -167,6 +169,10 @@ public class DocumentServiceImpl implements DocumentService {
 
         if (request.isPublic() != null) {
             document.setIsPublic(request.isPublic());
+        }
+
+        if (changeReason != null) {
+            document.setChangeReason(changeReason);
         }
 
         syncIndex(document, accessBefore, sourceBefore);
@@ -290,8 +296,23 @@ public class DocumentServiceImpl implements DocumentService {
                         .uploadedByUserId(v.getUploadedBy() != null ? v.getUploadedBy().getId() : null)
                         .uploadedByName(v.getUploadedBy() != null ? v.getUploadedBy().getFullName() : null)
                         .createdAt(v.getCreatedAt())
+                        .changeReason(v.getChangeReason())
                         .build())
                 .toList();
+    }
+
+    private static final int CHANGE_REASON_MAX_LENGTH = 500;
+
+    private static String normalizeChangeReason(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.length() > CHANGE_REASON_MAX_LENGTH) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    java.util.Map.of("changeReason", "Lý do chỉnh sửa tối đa " + CHANGE_REASON_MAX_LENGTH + " ký tự."));
+        }
+        return trimmed;
     }
 
     /**
@@ -371,6 +392,7 @@ public class DocumentServiceImpl implements DocumentService {
                 .minAccessLevelId(document.getMinAccessLevel() != null ? document.getMinAccessLevel().getId() : null)
                 .minAccessLevel(document.getMinAccessLevel() != null ? document.getMinAccessLevel().getLevel() : null)
                 .version(document.getVersion())
+                .changeReason(document.getChangeReason())
                 .departmentId(document.getDocPackage() != null ? document.getDocPackage().getId() : null)
                 .departmentName(document.getDocPackage() != null ? document.getDocPackage().getName() : null)
                 .categoryId(document.getCategory() != null ? document.getCategory().getId() : null)

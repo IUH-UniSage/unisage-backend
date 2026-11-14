@@ -71,6 +71,10 @@ public class Document extends BaseEntity {
     @Builder.Default
     private Integer version = 1;
 
+    /** Reason given with the latest edit; moves to the archived DocumentVersion when the file is replaced. */
+    @Column(name = "change_reason", length = 500)
+    private String changeReason;
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 }
