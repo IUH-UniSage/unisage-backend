@@ -56,6 +56,8 @@ public enum ErrorCode {
     EMAIL_EXISTED(HttpStatus.BAD_REQUEST, 2115, "Email này đã được sử dụng!"),
     PHONE_EXISTED(HttpStatus.BAD_REQUEST, 2116, "Số điện thoại này đã được sử dụng!"),
     USER_CODE_EXISTED(HttpStatus.BAD_REQUEST, 2117, "Mã người dùng này đã tồn tại!"),
+    USER_LEAF_DEPARTMENT_REQUIRED(HttpStatus.BAD_REQUEST, 2169,
+            "Người dùng phải thuộc ít nhất một phòng ban cấp cuối."),
     ROLE_EXISTED(HttpStatus.BAD_REQUEST, 2119, "Vai trò này đã tồn tại!"),
     CATEGORY_NAME_EXISTED(HttpStatus.BAD_REQUEST, 2120, "Tên danh mục này đã tồn tại!"),
     USER_DEPARTMENT_ACCESS_EXISTED(HttpStatus.BAD_REQUEST, 2126, "Phân quyền phòng ban này đã tồn tại!"),

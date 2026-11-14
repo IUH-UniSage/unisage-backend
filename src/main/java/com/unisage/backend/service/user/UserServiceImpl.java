@@ -51,6 +51,7 @@ public class UserServiceImpl implements UserService {
     private final UserDepartmentAccessRepository userDepartmentAccessRepository;
     private final AccessLevelRepository accessLevelRepository;
     private final SecurityUtil securityUtil;
+    private final LeafDepartmentRule leafDepartmentRule;
 
     @Override
     @Transactional
@@ -71,6 +72,8 @@ public class UserServiceImpl implements UserService {
                     .orElseThrow(() -> new AppException(ErrorCode.ACCESS_LEVEL_NOT_FOUND));
         }
 
+        leafDepartmentRule.check(departmentIdsOf(request.departmentAccesses()));
+
         User user = User.builder()
                 .email(request.email())
                 .code(request.code())
@@ -90,6 +93,10 @@ public class UserServiceImpl implements UserService {
         }
 
         return toResponse(user);
+    }
+
+    private static List<UUID> departmentIdsOf(List<DepartmentAccessItem> items) {
+        return items == null ? List.of() : items.stream().map(DepartmentAccessItem::departmentId).toList();
     }
 
     private void saveDepartmentAccesses(User user, List<DepartmentAccessItem> items) {
@@ -202,6 +209,7 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
 
         if (request.departmentAccesses() != null) {
+            leafDepartmentRule.check(departmentIdsOf(request.departmentAccesses()));
             userDepartmentAccessRepository.deleteByUserId(user.getId());
             if (!request.departmentAccesses().isEmpty()) {
                 saveDepartmentAccesses(user, request.departmentAccesses());

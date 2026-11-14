@@ -42,7 +42,8 @@ class UserServiceImplTest {
         when(securityUtil.getCurrentUserId()).thenReturn(userId);
         service = new UserServiceImpl(userRepository, mock(RoleRepository.class),
                 mock(PermissionRepository.class), passwordEncoder, mock(DepartmentRepository.class),
-                mock(UserDepartmentAccessRepository.class), mock(AccessLevelRepository.class), securityUtil);
+                mock(UserDepartmentAccessRepository.class), mock(AccessLevelRepository.class), securityUtil,
+                mock(LeafDepartmentRule.class));
 
         user = User.builder().id(userId).passwordHash("old-hash").build();
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
