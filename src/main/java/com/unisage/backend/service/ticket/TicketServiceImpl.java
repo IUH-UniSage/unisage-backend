@@ -10,6 +10,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
+import com.unisage.backend.utils.SearchPatterns;
 import com.unisage.backend.dto.request.CreateTicketRequest;
 import com.unisage.backend.dto.request.UpdateTicketRequest;
 import com.unisage.backend.dto.response.PageResponse;
@@ -30,6 +31,7 @@ import com.unisage.backend.repository.TicketRepository;
 import com.unisage.backend.repository.UserRepository;
 import com.unisage.backend.utils.SecurityUtil;
 
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -156,8 +158,16 @@ public class TicketServiceImpl implements TicketService {
             if (type != null) {
                 predicates.add(cb.equal(root.get("type"), type));
             }
-            if (query != null && !query.isBlank()) {
-                predicates.add(cb.like(cb.lower(root.get("title")), "%" + query.trim().toLowerCase() + "%"));
+            if (SearchPatterns.containsPattern(query) != null) {
+                // Staff search by what the ticket says or by who sent it.
+                var user = root.join("user");
+                Expression<String> first = cb.coalesce(user.get("firstName"), "");
+                Expression<String> last = cb.coalesce(user.get("lastName"), "");
+                predicates.add(SearchPatterns.anyContains(cb, query,
+                        root.get("title"), root.get("description"),
+                        user.get("email"), user.get("code"),
+                        cb.concat(cb.concat(first, " "), last),
+                        cb.concat(cb.concat(last, " "), first)));
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };

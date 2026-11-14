@@ -31,6 +31,10 @@ import com.unisage.backend.utils.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Predicate;
+import com.unisage.backend.utils.SearchPatterns;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -127,9 +131,33 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public PageResponse<List<UserResponse>> getAllUsers(Pageable pageable) {
-        Page<User> userPage = userRepository.findAll(pageable);
+    public PageResponse<List<UserResponse>> getAllUsers(String q, UserStatus status, UUID roleId,
+                                                        Pageable pageable) {
+        Page<User> userPage = userRepository.findAll(userFilter(q, status, roleId), pageable);
         return PageResponse.fromPage(userPage, this::toResponse);
+    }
+
+    private static Specification<User> userFilter(String q, UserStatus status, UUID roleId) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+            if (roleId != null) {
+                predicates.add(cb.equal(root.get("role").get("id"), roleId));
+            }
+            // Full name in both orders: the UI shows "first last", people type "Nguyễn Văn Đức".
+            Expression<String> first = cb.coalesce(root.get("firstName"), "");
+            Expression<String> last = cb.coalesce(root.get("lastName"), "");
+            Predicate matchesQuery = SearchPatterns.anyContains(cb, q,
+                    root.get("code"), root.get("email"),
+                    cb.concat(cb.concat(first, " "), last),
+                    cb.concat(cb.concat(last, " "), first));
+            if (matchesQuery != null) {
+                predicates.add(matchesQuery);
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
     }
 
     @Override

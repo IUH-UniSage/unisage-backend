@@ -128,6 +128,19 @@ class RequestUsageLogServiceImplTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void search_modelFilter_matchesCaseInsensitiveSubstring() {
+        OffsetDateTime now = OffsetDateTime.now();
+        UUID haikuId = ingestChat(now, "anthropic",
+                List.of(line(0, "anthropic", "claude-3-haiku", now, 0, UsageRequestStatus.SUCCESS)));
+        ingestChat(now, "openai", List.of(line(0, "openai", "gpt-4o-mini", now, 0, UsageRequestStatus.SUCCESS)));
+
+        var page = service.search(
+                new UsageLogSearchFilter(null, null, null, null, null, " HAIKU ", null), Pageable.unpaged());
+
+        assertThat(page.data()).extracting(item -> item.id()).containsExactly(haikuId);
+    }
+
+    @Test
     void search_userOrIpFilter_matchesGuestIpSubstring() {
         OffsetDateTime now = OffsetDateTime.now();
         UUID guestId = ingestGuestChat(now, "203.0.113.7");

@@ -1,5 +1,6 @@
 package com.unisage.backend.service.chatmodel;
 
+import com.unisage.backend.utils.SearchPatterns;
 import com.unisage.backend.dto.request.ChatModelRequest;
 import com.unisage.backend.dto.request.ChatModelUpdateRequest;
 import com.unisage.backend.dto.response.ChatModelResponse;
@@ -291,13 +292,11 @@ public class ChatModelServiceImpl implements ChatModelService {
             if (isActive != null) {
                 predicates.add(cb.equal(root.get("isActive"), isActive));
             }
-            if (query != null && !query.isBlank()) {
-                String like = "%" + query.trim().toLowerCase(Locale.ROOT) + "%";
-                predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("llmModelName")), like),
-                        cb.like(cb.lower(root.get("llmProvider")), like),
-                        cb.like(cb.lower(root.get("modelSourceRef")), like),
-                        cb.like(cb.lower(root.get("apiBaseUrl")), like)));
+            Predicate matchesQuery = SearchPatterns.anyContains(cb, query,
+                    root.get("llmModelName"), root.get("llmProvider"),
+                    root.get("modelSourceRef"), root.get("apiBaseUrl"));
+            if (matchesQuery != null) {
+                predicates.add(matchesQuery);
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };

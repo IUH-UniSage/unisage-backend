@@ -48,4 +48,18 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().code()).isEqualTo(ErrorCode.VALIDATION_ERROR.getCode());
     }
+
+    @Test
+    void parameterTypeMismatch_returnsValidationErrorNamingTheParameter() {
+        var exception = new org.springframework.web.method.annotation.MethodArgumentTypeMismatchException(
+                "FOO", com.unisage.backend.entity.enums.UserStatus.class, "status", null,
+                new IllegalArgumentException("No enum constant"));
+
+        ResponseEntity<ApiResponse<Void>> response = handler.handleTypeMismatch(exception);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().code()).isEqualTo(ErrorCode.VALIDATION_ERROR.getCode());
+        assertThat(response.getBody().errors()).containsOnlyKeys("status");
+    }
 }

@@ -10,6 +10,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
+import com.unisage.backend.utils.SearchPatterns;
 import com.unisage.backend.dto.response.AuditLogResponse;
 import com.unisage.backend.dto.response.PageResponse;
 import com.unisage.backend.entity.AuditLog;
@@ -65,9 +66,9 @@ public class AuditLogServiceImpl implements AuditLogService {
             if (actorId != null) {
                 predicates.add(cb.equal(root.get("actorId"), actorId));
             }
-            if (actorCode != null && !actorCode.isBlank()) {
-                predicates.add(cb.like(
-                        cb.lower(root.get("actorCode")), "%" + actorCode.trim().toLowerCase() + "%"));
+            Predicate matchesActor = SearchPatterns.anyContains(cb, actorCode, root.get("actorCode"));
+            if (matchesActor != null) {
+                predicates.add(matchesActor);
             }
             if (fromDate != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), fromDate));
