@@ -281,9 +281,9 @@ class CalculationFeedbackServiceImplTest {
         assertThat(ticket.getCalculationItemId()).isEqualTo("T1");
         assertThat(ticket.getStatus()).isEqualTo(TicketStatus.OPEN);
         assertThat(ticket.getUser()).isEqualTo(owner);
-        assertThat(ticket.getTitle()).isEqualTo("Tính sai (T1): Sai kết quả");
+        assertThat(ticket.getTitle()).isEqualTo("Kết quả tính sai: Sai kết quả");
         assertThat(ticket.getDescription())
-                .contains("Lý do: Sai kết quả (WRONG_RESULT)")
+                .contains("Lý do: Sai kết quả\n")
                 .contains("Ghi chú: Quy chế 2024 đã đổi")
                 .contains("run_id: req-42")
                 .contains(TicketDescriptions.STAFF_ONLY_MARKER)
@@ -295,6 +295,31 @@ class CalculationFeedbackServiceImplTest {
     }
 
     @Test
+    void wrong_ownerPartIsPlainVietnamese_technicalDetailsAreStaffOnly() {
+        ownedMessage();
+
+        service.submit(messageId, wrong("T1", CalculationWrongReason.WRONG_RESULT, "Quy chế 2024 đã đổi"),
+                owner.getId(), null);
+
+        ArgumentCaptor<Ticket> saved = ArgumentCaptor.forClass(Ticket.class);
+        verify(ticketRepository).save(saved.capture());
+        String description = saved.getValue().getDescription();
+        String ownerPart = TicketDescriptions.forViewer(description, false);
+        assertThat(ownerPart).isEqualTo("""
+                Kết quả tính toán được đánh giá là Sai.
+                Lý do: Sai kết quả
+                Ghi chú: Quy chế 2024 đã đổi
+                Kết quả đã hiển thị: Học phí học kỳ: 8.400.000 đồng""");
+        assertThat(ownerPart).doesNotContain("WRONG_RESULT", "run_id", "T1", "Nguồn", "QĐ-123.pdf");
+        String staffPart = description.substring(ownerPart.length());
+        assertThat(staffPart)
+                .startsWith(TicketDescriptions.STAFF_ONLY_MARKER)
+                .contains("Mục tính: T1 · lý do: WRONG_RESULT")
+                .contains("run_id: run-T1")
+                .contains("Nguồn đã hiển thị: QĐ-123.pdf · Chương II › Điều 8");
+    }
+
+    @Test
     void wrong_withoutTrace_saysSoWithTheRunId() {
         ownedMessage();
 
@@ -303,7 +328,7 @@ class CalculationFeedbackServiceImplTest {
         ArgumentCaptor<Ticket> saved = ArgumentCaptor.forClass(Ticket.class);
         verify(ticketRepository).save(saved.capture());
         assertThat(saved.getValue().getDescription())
-                .contains("Ghi chú: (không có)")
+                .doesNotContain("Ghi chú")
                 .contains("Không có trace cho run_id run-T1.");
     }
 
@@ -318,7 +343,7 @@ class CalculationFeedbackServiceImplTest {
         verify(ticketRepository, org.mockito.Mockito.times(2)).save(saved.capture());
         assertThat(saved.getAllValues()).extracting(Ticket::getCalculationItemId).containsExactly("T1", "T2");
         assertThat(saved.getAllValues()).extracting(Ticket::getTitle)
-                .containsExactly("Tính sai (T1): Sai kết quả", "Tính sai (T2): Thiếu thông tin");
+                .containsExactly("Kết quả tính sai: Sai kết quả", "Kết quả tính sai: Thiếu thông tin");
     }
 
     @Test
@@ -330,8 +355,8 @@ class CalculationFeedbackServiceImplTest {
                 wrong("T1", CalculationWrongReason.OTHER, "Thiếu học phần tự chọn"), owner.getId(), null);
 
         assertThat(response.ticketCreated()).isTrue();
-        assertThat(ticket.getTitle()).isEqualTo("Tính sai (T1): Khác");
-        assertThat(ticket.getDescription()).contains("Lý do: Khác (OTHER)").contains("Thiếu học phần tự chọn");
+        assertThat(ticket.getTitle()).isEqualTo("Kết quả tính sai: Khác");
+        assertThat(ticket.getDescription()).contains("Lý do: Khác\n").contains("Thiếu học phần tự chọn");
         assertThat(ticket.getStatus()).isEqualTo(TicketStatus.OPEN);
     }
 
@@ -359,7 +384,7 @@ class CalculationFeedbackServiceImplTest {
         assertThat(response.ticketCreated()).isTrue();
         assertThat(ticket.getStatus()).isEqualTo(TicketStatus.OPEN);
         assertThat(ticket.getResolution()).isNull();
-        assertThat(ticket.getTitle()).isEqualTo("Tính sai (T1): Sai nguồn/quy chế");
+        assertThat(ticket.getTitle()).isEqualTo("Kết quả tính sai: Sai nguồn/quy chế");
     }
 
     @Test
