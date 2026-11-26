@@ -7,7 +7,12 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import com.unisage.backend.dto.request.CreateTicketRequest;
 import com.unisage.backend.dto.request.UpdateTicketRequest;
@@ -174,6 +179,106 @@ class TicketServiceImplTest {
 
         assertThat(response.calculationItemId()).isNull();
         verify(ticketRepository).existsByMessageIdAndCalculationItemIdIsNull(messageId);
+    }
+
+    // ── general requests (no message) ───────────────────────────────────────────────────────────
+
+    private static CreateTicketRequest generalRequest(TicketType type) {
+        return CreateTicketRequest.builder().type(type).title("Quên mật khẩu").description("Không đăng nhập được").build();
+    }
+
+    @Test
+    void create_withoutMessage_acceptsTheGeneralTypesAndOther() {
+        for (TicketType type : List.of(TicketType.GENERAL_QUESTION, TicketType.ACCOUNT_ISSUE, TicketType.OTHER)) {
+            TicketResponse response = service.create(generalRequest(type));
+
+            assertThat(response.type()).isEqualTo(type);
+            assertThat(response.messageId()).isNull();
+            assertThat(response.status()).isEqualTo(TicketStatus.OPEN);
+            assertThat(response.userId()).isEqualTo(callerId);
+        }
+        verify(messageRepository, never()).findById(any());
+        verify(ticketRepository, never()).existsByMessageIdAndCalculationItemIdIsNull(any());
+    }
+
+    @Test
+    void create_withoutMessage_rejectsAnAnswerReportType() {
+        for (TicketType type : List.of(TicketType.AI_SYSTEM_ERROR, TicketType.AI_UNANSWERED,
+                TicketType.AI_SECURITY_BREACH, TicketType.AI_INAPPROPRIATE)) {
+            assertCode(() -> service.create(generalRequest(type)), ErrorCode.TICKET_TYPE_MESSAGE_MISMATCH);
+        }
+        verify(ticketRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void create_withoutMessage_stillRejectsCalculationWrong() {
+        assertCode(() -> service.create(generalRequest(TicketType.AI_CALCULATION_WRONG)),
+                ErrorCode.TICKET_TYPE_NOT_REPORTABLE);
+    }
+
+    @Test
+    void create_withMessage_rejectsTheGeneralTypes_beforeLookingTheMessageUp() {
+        for (TicketType type : List.of(TicketType.GENERAL_QUESTION, TicketType.ACCOUNT_ISSUE)) {
+            CreateTicketRequest request = CreateTicketRequest.builder()
+                    .messageId(messageId).type(type).title("t").description("d").build();
+            assertCode(() -> service.create(request), ErrorCode.TICKET_TYPE_MESSAGE_MISMATCH);
+        }
+        verify(messageRepository, never()).findById(any());
+        verify(ticketRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void create_withMessage_otherIsStillAReport() {
+        when(messageRepository.findById(messageId)).thenReturn(Optional.of(message(MsgRole.ASSISTANT, caller)));
+        CreateTicketRequest request = CreateTicketRequest.builder()
+                .messageId(messageId).type(TicketType.OTHER).title("t").description("d").build();
+
+        assertThat(service.create(request).messageId()).isEqualTo(messageId);
+    }
+
+    private Ticket generalTicket() {
+        return Ticket.builder()
+                .id(UUID.randomUUID()).user(caller).type(TicketType.ACCOUNT_ISSUE).status(TicketStatus.OPEN)
+                .title("t").description("d").build();
+    }
+
+    @Test
+    void generalTicket_listAndDetail_haveNullMessageFields_forOwnerAndStaff() {
+        Ticket t = generalTicket();
+        when(ticketRepository.findByIdAndUserId(t.getId(), callerId)).thenReturn(Optional.of(t));
+        when(ticketRepository.findById(t.getId())).thenReturn(Optional.of(t));
+        when(ticketRepository.findAll(ArgumentMatchers.<Specification<Ticket>>any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(t)));
+        Pageable page = PageRequest.of(0, 10);
+
+        assertThat(service.getMyTickets(null, page).data()).singleElement()
+                .satisfies(r -> assertThat(r.messageId()).isNull());
+        assertThat(service.getAll(null, null, null, page).data()).singleElement()
+                .satisfies(r -> assertThat(r.messageId()).isNull());
+        for (TicketDetailResponse detail : List.of(service.getMyTicket(t.getId()), service.getById(t.getId()))) {
+            assertThat(detail.messageId()).isNull();
+            assertThat(detail.conversationId()).isNull();
+            assertThat(detail.questionContent()).isNull();
+            assertThat(detail.messageContent()).isNull();
+            assertThat(detail.citations()).isNull();
+            assertThat(detail.traceId()).isNull();
+            assertThat(detail.contextChunks()).isNull();
+            assertThat(detail.webSources()).isNull();
+            assertThat(detail.description()).isEqualTo("d");
+        }
+        verify(messageTraceRepository, never()).findById(any());
+    }
+
+    @Test
+    void generalTicket_canBeUpdatedByStaff() {
+        Ticket t = generalTicket();
+        when(ticketRepository.findById(t.getId())).thenReturn(Optional.of(t));
+
+        TicketDetailResponse detail = service.update(t.getId(),
+                UpdateTicketRequest.builder().status(TicketStatus.RESOLVED).resolution("Đã cấp lại mật khẩu").build());
+
+        assertThat(detail.status()).isEqualTo(TicketStatus.RESOLVED);
+        assertThat(detail.messageId()).isNull();
     }
 
     // ── calculation ticket visibility ──────────────────────────────────────────────────────────

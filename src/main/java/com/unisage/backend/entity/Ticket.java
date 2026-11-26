@@ -23,7 +23,8 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 /**
- * A user's report about one AI answer. At most one regular Report per message, plus at most one
+ * A user's report about one AI answer, or (no {@code message}) a general support request from the
+ * support page. At most one regular Report per message, plus at most one
  * {@code AI_CALCULATION_WRONG} ticket per calculation item of that message (partial unique indexes,
  * V34); there is no assignee and no delete — staff only move {@code status} and write
  * {@code resolution}.
@@ -42,8 +43,12 @@ public class Ticket extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false, updatable = false)
     private User user;
 
+    /**
+     * The reported AI answer; null on a general request ({@code GENERAL_QUESTION},
+     * {@code ACCOUNT_ISSUE} or {@code OTHER} - DB CHECK {@code tickets_message_type_check}, V46).
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "message_id", nullable = false, updatable = false)
+    @JoinColumn(name = "message_id", updatable = false)
     private Message message;
 
     @Enumerated(EnumType.STRING)

@@ -14,9 +14,11 @@ import lombok.Builder;
 @Builder
 public record TicketDetailResponse(
     UUID id,
+    /** Null for a general request (not about a chat message), as are every message-derived field below. */
     UUID messageId,
     /** {@code T1}..{@code T3} for an {@code AI_CALCULATION_WRONG} ticket, null otherwise. */
     String calculationItemId,
+    /** Null for a general request. */
     UUID conversationId,
     TicketType type,
     TicketStatus status,
@@ -28,9 +30,12 @@ public record TicketDetailResponse(
     String userEmail,
     /** The user message that immediately preceded the reported AI answer; null if none is found. */
     String questionContent,
-    /** The reported AI answer. */
+    /** The reported AI answer; null for a general request. */
     String messageContent,
-    /** Sources the answer cites ({@code [n]} markers), as stored on the message. Staff view only. */
+    /**
+     * Sources the answer cites ({@code [n]} markers), as stored on the message. Staff view only;
+     * null for a general request.
+     */
     List<Map<String, Object>> citations,
     /** Id on every agent log line of the turn that produced the answer. Staff view only; null if none. */
     String traceId,

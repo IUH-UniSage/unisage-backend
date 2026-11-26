@@ -57,6 +57,9 @@ public enum ErrorCode {
     PHONE_EXISTED(HttpStatus.BAD_REQUEST, 2116, "Số điện thoại này đã được sử dụng!"),
     USER_CODE_EXISTED(HttpStatus.BAD_REQUEST, 2117, "Mã người dùng này đã tồn tại!"),
     USER_CODE_IMMUTABLE(HttpStatus.BAD_REQUEST, 2170, "Mã GV/SV không thể thay đổi sau khi tạo!"),
+    TICKET_TYPE_MESSAGE_MISMATCH(HttpStatus.BAD_REQUEST, 2171,
+            "Loại yêu cầu không phù hợp: yêu cầu chung (Hỏi đáp chung, Tài khoản và đăng nhập, Khác) không gắn "
+                    + "với tin nhắn, còn báo cáo câu trả lời của AI phải chọn đúng tin nhắn cần báo cáo."),
     USER_LEAF_DEPARTMENT_REQUIRED(HttpStatus.BAD_REQUEST, 2169,
             "Người dùng phải thuộc ít nhất một phòng ban cấp cuối."),
     ROLE_EXISTED(HttpStatus.BAD_REQUEST, 2119, "Vai trò này đã tồn tại!"),

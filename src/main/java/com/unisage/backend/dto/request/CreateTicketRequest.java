@@ -11,7 +11,10 @@ import lombok.Builder;
 
 @Builder
 public record CreateTicketRequest(
-    @NotNull(message = "Tin nhắn cần báo cáo không được để trống")
+    /**
+     * The AI answer being reported. Null for a general request from the support page, whose type
+     * must then be GENERAL_QUESTION, ACCOUNT_ISSUE or OTHER.
+     */
     UUID messageId,
 
     @NotNull(message = "Loại yêu cầu không được để trống")

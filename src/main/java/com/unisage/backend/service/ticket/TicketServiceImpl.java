@@ -1,7 +1,9 @@
 package com.unisage.backend.service.ticket;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -46,6 +48,14 @@ public class TicketServiceImpl implements TicketService {
     private final UserRepository userRepository;
     private final SecurityUtil securityUtil;
 
+    /** Types a general request (no message) may have - mirrored by DB CHECK tickets_message_type_check. */
+    private static final Set<TicketType> MESSAGELESS_TYPES =
+            EnumSet.of(TicketType.GENERAL_QUESTION, TicketType.ACCOUNT_ISSUE, TicketType.OTHER);
+
+    /** Types that never go with a message. */
+    private static final Set<TicketType> GENERAL_ONLY_TYPES =
+            EnumSet.of(TicketType.GENERAL_QUESTION, TicketType.ACCOUNT_ISSUE);
+
     @Override
     @Transactional
     public TicketResponse create(CreateTicketRequest request) {
@@ -56,17 +66,10 @@ public class TicketServiceImpl implements TicketService {
             throw new AppException(ErrorCode.TICKET_TYPE_NOT_REPORTABLE);
         }
 
-        // Unknown message, someone else's conversation and a non-assistant message all get the same
-        // error so a caller cannot probe which message ids exist.
-        Message message = messageRepository.findById(request.messageId())
-                .orElseThrow(() -> new AppException(ErrorCode.TICKET_MESSAGE_INVALID));
-        boolean ownedByCaller = message.getConversation().getUser() != null
-                && message.getConversation().getUser().getId().equals(userId);
-        if (message.getRole() != MsgRole.ASSISTANT || !ownedByCaller) {
-            throw new AppException(ErrorCode.TICKET_MESSAGE_INVALID);
-        }
-        if (ticketRepository.existsByMessageIdAndCalculationItemIdIsNull(message.getId())) {
-            throw new AppException(ErrorCode.TICKET_ALREADY_EXISTS);
+        Message message = request.messageId() == null ? null : resolveReportedMessage(request, userId);
+        if (message == null && !MESSAGELESS_TYPES.contains(request.type())) {
+            // A report about an AI answer must say which answer.
+            throw new AppException(ErrorCode.TICKET_TYPE_MESSAGE_MISMATCH);
         }
 
         User user = userRepository.findById(userId)
@@ -82,6 +85,7 @@ public class TicketServiceImpl implements TicketService {
             ticket = ticketRepository.saveAndFlush(ticket);
         } catch (DataIntegrityViolationException e) {
             // Two concurrent requests for the same message: the partial unique index on Reports wins.
+            // (A message-less ticket has no unique key, so it never ends up here.)
             throw new AppException(ErrorCode.TICKET_ALREADY_EXISTS);
         }
         return mapToResponse(ticket, false);
@@ -145,6 +149,28 @@ public class TicketServiceImpl implements TicketService {
         return mapToDetailResponse(ticketRepository.save(ticket), true);
     }
 
+    /**
+     * The caller's own assistant message a Report is about. Unknown message, someone else's
+     * conversation and a non-assistant message all get the same error so a caller cannot probe
+     * which message ids exist. The general types never go with a message.
+     */
+    private Message resolveReportedMessage(CreateTicketRequest request, UUID userId) {
+        if (GENERAL_ONLY_TYPES.contains(request.type())) {
+            throw new AppException(ErrorCode.TICKET_TYPE_MESSAGE_MISMATCH);
+        }
+        Message message = messageRepository.findById(request.messageId())
+                .orElseThrow(() -> new AppException(ErrorCode.TICKET_MESSAGE_INVALID));
+        boolean ownedByCaller = message.getConversation().getUser() != null
+                && message.getConversation().getUser().getId().equals(userId);
+        if (message.getRole() != MsgRole.ASSISTANT || !ownedByCaller) {
+            throw new AppException(ErrorCode.TICKET_MESSAGE_INVALID);
+        }
+        if (ticketRepository.existsByMessageIdAndCalculationItemIdIsNull(message.getId())) {
+            throw new AppException(ErrorCode.TICKET_ALREADY_EXISTS);
+        }
+        return message;
+    }
+
     /** All filters are optional; a null criterion is simply not added, so no null query parameters. */
     private Specification<Ticket> buildSpec(UUID userId, String query, TicketStatus status, TicketType type) {
         return (root, cq, cb) -> {
@@ -180,7 +206,8 @@ public class TicketServiceImpl implements TicketService {
     private TicketResponse mapToResponse(Ticket ticket, boolean staffView) {
         return TicketResponse.builder()
                 .id(ticket.getId())
-                .messageId(ticket.getMessage().getId())
+                // Reading the id of a lazy proxy doesn't load the message.
+                .messageId(ticket.getMessage() != null ? ticket.getMessage().getId() : null)
                 .calculationItemId(ticket.getCalculationItemId())
                 .type(ticket.getType())
                 .status(ticket.getStatus())
@@ -195,20 +222,22 @@ public class TicketServiceImpl implements TicketService {
                 .build();
     }
 
+    /** A general request (no message) has no conversation context: every message-derived field is null. */
     private TicketDetailResponse mapToDetailResponse(Ticket ticket, boolean staffView) {
         Message message = ticket.getMessage();
-        String question = messageRepository
+        String question = message == null ? null : messageRepository
                 .findFirstByConversationIdAndRoleAndCreatedAtBeforeOrderByCreatedAtDesc(
                         message.getConversation().getId(), MsgRole.USER, message.getCreatedAt())
                 .map(Message::getContent)
                 .orElse(null);
         // Retrieval diagnostics are for staff: the owner never sees chunk text, scores or the trace id.
-        MessageTrace trace = staffView ? messageTraceRepository.findById(message.getId()).orElse(null) : null;
+        MessageTrace trace = staffView && message != null
+                ? messageTraceRepository.findById(message.getId()).orElse(null) : null;
         return TicketDetailResponse.builder()
                 .id(ticket.getId())
-                .messageId(message.getId())
+                .messageId(message != null ? message.getId() : null)
                 .calculationItemId(ticket.getCalculationItemId())
-                .conversationId(message.getConversation().getId())
+                .conversationId(message != null ? message.getConversation().getId() : null)
                 .type(ticket.getType())
                 .status(ticket.getStatus())
                 .title(ticket.getTitle())
@@ -218,8 +247,8 @@ public class TicketServiceImpl implements TicketService {
                 .userName(ticket.getUser().getFullName())
                 .userEmail(ticket.getUser().getEmail())
                 .questionContent(question)
-                .messageContent(message.getContent())
-                .citations(staffView ? message.getCitations() : null)
+                .messageContent(message != null ? message.getContent() : null)
+                .citations(staffView && message != null ? message.getCitations() : null)
                 .traceId(trace != null ? trace.getTraceId() : null)
                 .contextChunks(trace != null ? trace.getChunks() : null)
                 .webSources(trace != null ? trace.getWebSources() : null)
