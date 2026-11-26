@@ -45,6 +45,16 @@ public class FileServiceImpl implements FileService {
     @Value("${minio.presigned-url-expiry-seconds}")
     private int expirySeconds;
 
+    /**
+     * Optional. When the browser reaches MinIO through a reverse proxy / dev tunnel that rewrites the Host header
+     * (VS Code / GitHub dev tunnels send "localhost:9100" to MinIO), the link must be SIGNED for the host MinIO sees
+     * ({@code minio.public-endpoint}) but OPENED at the public address. Set this to that public origin
+     * (e.g. https://xxxx-9100.asse.devtunnels.ms) and the scheme/host/port of the presigned link are swapped for it.
+     * Empty = the link is returned as signed.
+     */
+    @Value("${minio.public-base-url:}")
+    private String publicBaseUrl;
+
     // Fallback whitelist when the config row is missing/corrupted - AllowedFileType is no longer
     // the source of truth at runtime (ingest.allowed_file_extensions in System Settings is), but
     // its values still document/seed the intended default set.
@@ -119,17 +129,28 @@ public class FileServiceImpl implements FileService {
     @Override
     public String getPresignedUrl(String objectKey) {
         try {
-            return publicMinioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+            String url = publicMinioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
                     .method(Method.GET)
                     .bucket(bucket)
                     .object(objectKey)
                     .expiry(expirySeconds, TimeUnit.SECONDS)
                     .build());
+            return withPublicBase(url);
         } catch (ErrorResponseException e) {
             throw new AppException(ErrorCode.FILE_NOT_FOUND);
         } catch (Exception e) {
             log.error("MinIO presign failed for {}", objectKey, e);
             throw new AppException(ErrorCode.FILE_UPLOAD_FAILED);
         }
+    }
+
+    /** Swap the origin of a presigned link for {@code minio.public-base-url}; path and signed query stay byte for byte. */
+    private String withPublicBase(String url) {
+        if (publicBaseUrl == null || publicBaseUrl.isBlank()) {
+            return url;
+        }
+        java.net.URI u = java.net.URI.create(url);
+        String base = publicBaseUrl.trim().replaceAll("/+$", "");
+        return base + u.getRawPath() + (u.getRawQuery() != null ? "?" + u.getRawQuery() : "");
     }
 }
