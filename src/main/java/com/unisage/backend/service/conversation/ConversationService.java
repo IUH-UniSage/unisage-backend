@@ -28,6 +28,14 @@ public interface ConversationService {
     void softDelete(UUID id, UUID callerId);
 
     /**
+     * Pins ({@code pinned = true}) or unpins the caller's own conversation in the sidebar. Same
+     * owner check as {@link #softDelete}: another user's or a guest's conversation, and a deleted
+     * one, is {@code CONVERSATION_NOT_FOUND}. Pinning an already pinned conversation keeps its pin
+     * time; neither direction changes {@code updatedAt}.
+     */
+    ConversationResponse setPinned(UUID id, UUID callerId, boolean pinned);
+
+    /**
      * "Xóa tất cả": soft-deletes (marks inactive) every live conversation the caller owns and
      * revokes their share links in the same transaction. Returns how many were deleted; 0 when
      * there is nothing to delete.

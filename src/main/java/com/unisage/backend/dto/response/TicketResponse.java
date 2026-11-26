@@ -11,6 +11,7 @@ import lombok.Builder;
 @Builder
 public record TicketResponse(
     UUID id,
+    /** Null for a general request (not about a chat message). */
     UUID messageId,
     /** {@code T1}..{@code T3} for an {@code AI_CALCULATION_WRONG} ticket, null otherwise. */
     String calculationItemId,

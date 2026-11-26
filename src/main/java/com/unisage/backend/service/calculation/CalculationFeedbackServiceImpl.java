@@ -198,7 +198,9 @@ public class CalculationFeedbackServiceImpl implements CalculationFeedbackServic
             ticket.setStatus(TicketStatus.OPEN);
             ticket.setResolution(null);
         }
-        ticket.setTitle("Tính sai (" + request.itemId() + "): " + request.reason().getDisplayName());
+        // Shown to the student in "Yêu cầu hỗ trợ": no item id (T1..T3 means nothing to them). The
+        // ticket is matched by calculation_item_id, never by its title.
+        ticket.setTitle("Kết quả tính sai: " + request.reason().getDisplayName());
         ticket.setDescription(describe(message.getId(), item, request, note));
         ticketRepository.save(ticket);
         return true;
@@ -208,6 +210,11 @@ public class CalculationFeedbackServiceImpl implements CalculationFeedbackServic
         return ticket.getStatus() == TicketStatus.CLOSED && USER_SWITCHED_TO_CORRECT.equals(ticket.getResolution());
     }
 
+    /**
+     * The part before {@link TicketDescriptions#STAFF_ONLY_MARKER} is what the student who filed it
+     * reads, so it is plain Vietnamese: reason, note and the result they saw. Everything technical
+     * (item id, run_id, the source shown, the trace) goes after the marker, for staff only.
+     */
     private String describe(UUID messageId, Map<?, ?> item, CalculationFeedbackRequest request, String note) {
         Optional<CalculationTrace> trace = calculationTraceRepository.findByMessageIdAndItemId(
                 messageId, request.itemId());
@@ -215,17 +222,24 @@ public class CalculationFeedbackServiceImpl implements CalculationFeedbackServic
                 .orElseGet(() -> item.get("run_id") == null ? null : String.valueOf(item.get("run_id")));
 
         StringBuilder out = new StringBuilder();
-        out.append("Người dùng đánh giá kết quả tính ").append(request.itemId()).append(" là Sai.\n");
-        out.append("Lý do: ").append(request.reason().getDisplayName())
-                .append(" (").append(request.reason().name()).append(")\n");
-        out.append("Ghi chú: ").append(note == null ? "(không có)" : note).append('\n');
-        appendIfPresent(out, "Kết quả đã hiển thị", item.get("result_summary"));
+        out.append("Kết quả tính toán được đánh giá là Sai.\n");
+        out.append("Lý do: ").append(request.reason().getDisplayName());
+        // No note: no "Ghi chú" line at all, rather than a placeholder the student has to read.
+        if (note != null) {
+            out.append("\nGhi chú: ").append(note);
+        }
+        Object result = item.get("result_summary");
+        if (result != null && !String.valueOf(result).isBlank()) {
+            out.append("\nKết quả đã hiển thị: ").append(result);
+        }
+
+        out.append(TicketDescriptions.STAFF_ONLY_MARKER);
+        out.append("Mục tính: ").append(request.itemId()).append(" · lý do: ").append(request.reason().name())
+                .append('\n');
+        out.append("run_id: ").append(runId == null ? "(không rõ)" : runId).append('\n');
         if (item.get("source_summary") instanceof Map<?, ?> source) {
             appendIfPresent(out, "Nguồn đã hiển thị", joinNonNull(source.get("title"), source.get("heading")));
         }
-        out.append("run_id: ").append(runId == null ? "(không rõ)" : runId);
-
-        out.append(TicketDescriptions.STAFF_ONLY_MARKER);
         if (trace.isEmpty()) {
             out.append("Không có trace cho run_id ").append(runId == null ? "(không rõ)" : runId).append('.');
         } else {

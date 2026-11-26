@@ -15,8 +15,25 @@ import com.unisage.backend.entity.Conversation;
 
 public interface ConversationRepository extends JpaRepository<Conversation, UUID> {
 
-    @Query("SELECT c FROM Conversation c WHERE c.user.id = :userId AND c.deletedAt IS NULL ORDER BY c.updatedAt DESC")
+    /** Pinned first (newest pin first), then the rest by last update. */
+    @Query("SELECT c FROM Conversation c WHERE c.user.id = :userId AND c.deletedAt IS NULL "
+            + "ORDER BY c.pinnedAt DESC NULLS LAST, c.updatedAt DESC")
     List<Conversation> findActiveByUserId(@Param("userId") UUID userId);
+
+    /**
+     * Pins a conversation, keeping the original pin time if it is already pinned. Like
+     * {@link #unpin}, a bulk JPQL UPDATE: it bypasses the JPA auditing listener, so
+     * {@code updated_at}/{@code updated_by} stay as they were and (un)pinning never reorders the
+     * "recent" part of the list. Clears the persistence context so a re-read sees the new value.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Conversation c SET c.pinnedAt = COALESCE(c.pinnedAt, :now) WHERE c.id = :id")
+    int pin(@Param("id") UUID id, @Param("now") LocalDateTime now);
+
+    /** See {@link #pin}. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Conversation c SET c.pinnedAt = NULL WHERE c.id = :id")
+    int unpin(@Param("id") UUID id);
 
     @Query("SELECT c FROM Conversation c WHERE c.guestSession.id = :guestSessionId AND c.user IS NULL "
             + "AND c.deletedAt IS NULL ORDER BY c.updatedAt DESC")

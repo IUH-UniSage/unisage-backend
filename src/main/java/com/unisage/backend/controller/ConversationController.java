@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.unisage.backend.dto.request.CreateConversationRequest;
+import com.unisage.backend.dto.request.PinConversationRequest;
 import com.unisage.backend.dto.response.ApiResponse;
 import com.unisage.backend.dto.response.ConversationResponse;
 import com.unisage.backend.entity.GuestSession;
@@ -93,6 +94,17 @@ public class ConversationController {
     public ResponseEntity<ApiResponse<Void>> softDelete(@PathVariable UUID id) {
         conversationService.softDelete(id, securityUtil.getCurrentUserId());
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    /**
+     * "Ghim" in the chat sidebar: {@code {"pinned": true|false}}. Owner only (identity from the
+     * JWT); pinning does not change {@code updatedAt}.
+     */
+    @PatchMapping("/{id}/pin")
+    public ResponseEntity<ApiResponse<ConversationResponse>> setPinned(
+            @PathVariable UUID id, @Valid @RequestBody PinConversationRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                conversationService.setPinned(id, securityUtil.getCurrentUserId(), request.pinned())));
     }
 
     @PatchMapping("/{id}/claim")
