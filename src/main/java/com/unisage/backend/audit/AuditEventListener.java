@@ -51,8 +51,10 @@ public class AuditEventListener implements PostInsertEventListener, PostUpdateEv
     // UsageLimit is the per-identity token counter, rewritten on every chat turn: pure bookkeeping.
     // SystemHealthCheck is written by the health-check scheduler every few minutes with no human
     // actor - it flooded the trail with "Hệ thống / Khác" rows (UNISAGE-92).
-    private static final Set<String> EXCLUDED_ENTITIES =
-            Set.of("AuditLog", "Message", "Conversation", "UsageLimit", "SystemHealthCheck");
+    // RequestUsageLine is one cost row per model call (several per chat turn), already browsable
+    // under Chi phí AI > Lịch sử - it made up ~98% of the trail as anonymous "Tạo mới" rows.
+    private static final Set<String> EXCLUDED_ENTITIES = Set.of(
+            "AuditLog", "Message", "Conversation", "UsageLimit", "SystemHealthCheck", "RequestUsageLine");
 
     // Field AuthServiceImpl.login() touches on every login (updatedAt/updatedBy are already
     // dropped as BOOKKEEPING_FIELDS) - see the skip check in handle() below.
