@@ -55,6 +55,18 @@ class ConversationControllerTest {
     }
 
     @Test
+    void softDeleteAll_deletesOnlyTheCallersOwn() {
+        UUID me = UUID.randomUUID();
+        when(securityUtil.getCurrentUserId()).thenReturn(me);
+        when(conversationService.softDeleteAll(me)).thenReturn(2);
+
+        var response = controller.softDeleteAll();
+
+        verify(conversationService).softDeleteAll(me);
+        org.assertj.core.api.Assertions.assertThat(response.getBody().data()).isEqualTo(2);
+    }
+
+    @Test
     void claim_resolvesTheGuestCookieReadOnly() {
         UUID me = UUID.randomUUID();
         UUID id = UUID.randomUUID();

@@ -41,4 +41,15 @@ public interface ConversationShareRepository extends JpaRepository<ConversationS
     @Query("UPDATE ConversationShare s SET s.revokedAt = :now "
             + "WHERE s.conversation.id = :conversationId AND s.revokedAt IS NULL")
     int revokeAllByConversationId(@Param("conversationId") UUID conversationId, @Param("now") LocalDateTime now);
+
+    /**
+     * Deleting all of a user's conversations revokes their links (UNISAGE-107 R11). Must run
+     * before {@link ConversationRepository#softDeleteAllActiveByUserId}, while the conversations
+     * are still live.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE ConversationShare s SET s.revokedAt = :now WHERE s.revokedAt IS NULL "
+            + "AND s.conversation.id IN (SELECT c.id FROM Conversation c "
+            + "WHERE c.user.id = :userId AND c.deletedAt IS NULL)")
+    int revokeAllOfActiveConversationsByUserId(@Param("userId") UUID userId, @Param("now") LocalDateTime now);
 }

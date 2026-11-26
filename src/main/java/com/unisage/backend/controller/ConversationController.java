@@ -79,6 +79,16 @@ public class ConversationController {
         return ResponseEntity.ok(ApiResponse.success(conversationService.getByGuestSession(guestSession)));
     }
 
+    /**
+     * "Xóa tất cả" in the chat sidebar: soft-deletes every conversation of the caller (identity
+     * from the JWT). Returns the number deleted.
+     */
+    @DeleteMapping("/delete-batch")
+    public ResponseEntity<ApiResponse<Integer>> softDeleteAll() {
+        return ResponseEntity.ok(ApiResponse.success(
+                conversationService.softDeleteAll(securityUtil.getCurrentUserId())));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> softDelete(@PathVariable UUID id) {
         conversationService.softDelete(id, securityUtil.getCurrentUserId());

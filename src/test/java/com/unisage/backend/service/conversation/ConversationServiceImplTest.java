@@ -47,6 +47,28 @@ class ConversationServiceImplTest {
         when(conversationRepository.save(any(Conversation.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
+    // ── softDeleteAll ("Xóa tất cả") ─────────────────────────────────────
+
+    @Test
+    void softDeleteAll_revokesLinksThenDeletesTheCallersConversations() {
+        when(conversationRepository.softDeleteAllActiveByUserId(eq(OWNER_ID), any(LocalDateTime.class))).thenReturn(3);
+
+        int deleted = service.softDeleteAll(OWNER_ID);
+
+        assertThat(deleted).isEqualTo(3);
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(shareRepository, conversationRepository);
+        order.verify(shareRepository).revokeAllOfActiveConversationsByUserId(eq(OWNER_ID), any(LocalDateTime.class));
+        order.verify(conversationRepository).softDeleteAllActiveByUserId(eq(OWNER_ID), any(LocalDateTime.class));
+    }
+
+    @Test
+    void softDeleteAll_noCaller_isNotFoundAndChangesNothing() {
+        assertError(() -> service.softDeleteAll(null), ErrorCode.CONVERSATION_NOT_FOUND);
+
+        verify(conversationRepository, never()).softDeleteAllActiveByUserId(any(), any());
+        verify(shareRepository, never()).revokeAllOfActiveConversationsByUserId(any(), any());
+    }
+
     // ── softDelete ───────────────────────────────────────────────────────
 
     @Test
@@ -57,6 +79,7 @@ class ConversationServiceImplTest {
         service.softDelete(conversation.getId(), OWNER_ID);
 
         assertThat(conversation.getDeletedAt()).isNotNull();
+        assertThat(conversation.getIsActive()).isFalse();
         verify(conversationRepository).save(conversation);
         verify(shareRepository).revokeAllByConversationId(conversation.getId(), conversation.getDeletedAt());
     }

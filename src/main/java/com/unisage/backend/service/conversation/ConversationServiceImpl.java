@@ -83,8 +83,21 @@ public class ConversationServiceImpl implements ConversationService {
         }
         LocalDateTime now = LocalDateTime.now();
         conversation.setDeletedAt(now);
+        conversation.setIsActive(false);
         conversationRepository.save(conversation);
         conversationShareRepository.revokeAllByConversationId(conversation.getId(), now);
+    }
+
+    @Override
+    @Transactional
+    public int softDeleteAll(UUID callerId) {
+        if (callerId == null) {
+            throw new AppException(ErrorCode.CONVERSATION_NOT_FOUND);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        // Links first: the revoke query selects the conversations that are still live.
+        conversationShareRepository.revokeAllOfActiveConversationsByUserId(callerId, now);
+        return conversationRepository.softDeleteAllActiveByUserId(callerId, now);
     }
 
     @Override

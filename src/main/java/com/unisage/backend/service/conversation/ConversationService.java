@@ -28,6 +28,13 @@ public interface ConversationService {
     void softDelete(UUID id, UUID callerId);
 
     /**
+     * "Xóa tất cả": soft-deletes (marks inactive) every live conversation the caller owns and
+     * revokes their share links in the same transaction. Returns how many were deleted; 0 when
+     * there is nothing to delete.
+     */
+    int softDeleteAll(UUID callerId);
+
+    /**
      * Keeps only the {@code keep} most recent conversations of each user/guest session and
      * soft-deletes the rest. Returns how many were deleted.
      */

@@ -1,5 +1,6 @@
 package com.unisage.backend.repository;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -45,6 +46,16 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
             + "UPDATE conversations SET deleted_at = now() WHERE id IN (SELECT id FROM doomed)",
             nativeQuery = true)
     int softDeleteBeyondNewestPerOwner(@Param("keep") int keep);
+
+    /**
+     * "Xóa tất cả" in the chat sidebar: marks every live conversation of the user inactive
+     * ({@code deleted_at} set, {@code is_active = false}) - the same soft delete a single delete
+     * does, so the list queries above stop returning them. Returns how many were deleted.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Conversation c SET c.deletedAt = :now, c.isActive = false "
+            + "WHERE c.user.id = :userId AND c.deletedAt IS NULL")
+    int softDeleteAllActiveByUserId(@Param("userId") UUID userId, @Param("now") LocalDateTime now);
 
     /** The caller's live copy made from {@code shareId} by "Tiếp tục", if any. */
     @Query("SELECT c FROM Conversation c WHERE c.sourceShare.id = :shareId AND c.user.id = :userId "
