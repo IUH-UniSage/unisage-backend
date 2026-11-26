@@ -246,6 +246,31 @@ class ConversationShareIntegrationTest {
     }
 
     @Test
+    void deleteBatch_deletesOnlyTheCallersConversations_andRevokesTheirLinks() throws Exception {
+        Conversation first = conversationOf(ownerId, "xoá hết 1");
+        save(first, MsgRole.USER, "q", MsgStatus.COMPLETED, null, null);
+        String token = data(call(HttpMethod.POST, "/shares", ownerJwt, body(first.getId()))).get("token").asText();
+        Conversation second = conversationOf(ownerId, "xoá hết 2");
+        Conversation others = conversationOf(readerId, "của người khác");
+
+        ResponseEntity<String> deleted = call(HttpMethod.DELETE, "/conversations/delete-batch", ownerJwt, null);
+
+        assertThat(deleted.getStatusCode().value()).isEqualTo(200);
+        assertThat(data(deleted).asInt()).isGreaterThanOrEqualTo(2);
+        for (UUID id : List.of(first.getId(), second.getId())) {
+            Conversation row = conversationRepository.findById(id).orElseThrow();
+            assertThat(row.getDeletedAt()).isNotNull();
+            assertThat(row.getIsActive()).isFalse();
+        }
+        assertThat(data(call(HttpMethod.GET, "/conversations", ownerJwt, null))).isEmpty();
+        assertThat(conversationRepository.findById(others.getId()).orElseThrow().getDeletedAt()).isNull();
+        assertThat(jdbc.queryForObject("SELECT revoked_at FROM conversation_shares WHERE token = ?",
+                LocalDateTime.class, token)).isNotNull();
+        // Nothing left: a repeated click is a no-op.
+        assertThat(data(call(HttpMethod.DELETE, "/conversations/delete-batch", ownerJwt, null)).asInt()).isZero();
+    }
+
+    @Test
     void revokeAll_returnsTheCount_andEmptiesTheList() throws Exception {
         Conversation conversation = conversationOf(ownerId, "nhiều link");
         save(conversation, MsgRole.USER, "q", MsgStatus.COMPLETED, null, null);

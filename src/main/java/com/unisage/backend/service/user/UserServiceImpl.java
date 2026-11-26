@@ -56,11 +56,16 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserResponse createUser(CreateUserRequest request) {
+        // The form sends "" for an empty optional field: stored as null, never matched as a
+        // duplicate of another account without a phone (25/11/2026: "Số điện thoại này đã được
+        // sử dụng!" when creating a user with no phone).
+        String code = blankToNull(request.code());
+        String phone = blankToNull(request.phone());
         if (userRepository.findByEmail(request.email()).isPresent())
             throw new AppException(ErrorCode.EMAIL_EXISTED);
-        if (request.code() != null && userRepository.findByCode(request.code()).isPresent())
+        if (code != null && userRepository.findByCode(code).isPresent())
             throw new AppException(ErrorCode.USER_CODE_EXISTED);
-        if (request.phone() != null && userRepository.findByPhone(request.phone()).isPresent())
+        if (phone != null && userRepository.findByPhone(phone).isPresent())
             throw new AppException(ErrorCode.PHONE_EXISTED);
 
         Role role = roleRepository.findById(request.roleId())
@@ -76,13 +81,13 @@ public class UserServiceImpl implements UserService {
 
         User user = User.builder()
                 .email(request.email())
-                .code(request.code())
+                .code(code)
                 .passwordHash(passwordEncoder.encode(request.password()))
                 .firstName(request.firstName())
                 .lastName(request.lastName())
                 .role(role)
                 .accessLevel(accessLevel)
-                .phone(request.phone())
+                .phone(phone)
                 .gender(request.gender())
                 .status(UserStatus.ACTIVE)
                 .build();
@@ -93,6 +98,10 @@ public class UserServiceImpl implements UserService {
         }
 
         return toResponse(user);
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private static List<UUID> departmentIdsOf(List<DepartmentAccessItem> items) {
@@ -178,15 +187,19 @@ public class UserServiceImpl implements UserService {
                 throw new AppException(ErrorCode.EMAIL_EXISTED);
             user.setEmail(request.email());
         }
-        if (request.code() != null && !request.code().equals(user.getCode())) {
-            if (userRepository.findByCode(request.code()).isPresent())
-                throw new AppException(ErrorCode.USER_CODE_EXISTED);
-            user.setCode(request.code());
-        }
-        if (request.phone() != null && !request.phone().equals(user.getPhone())) {
-            if (userRepository.findByPhone(request.phone()).isPresent())
-                throw new AppException(ErrorCode.PHONE_EXISTED);
-            user.setPhone(request.phone());
+        // The user code (mã GV/SV) is immutable after creation.
+        if (request.code() != null && !request.code().equals(user.getCode()))
+            throw new AppException(ErrorCode.USER_CODE_IMMUTABLE);
+        if (request.phone() != null) {
+            // "" clears the phone; it is never checked as a duplicate.
+            String phone = blankToNull(request.phone());
+            if (phone == null) {
+                user.setPhone(null);
+            } else if (!phone.equals(user.getPhone())) {
+                if (userRepository.findByPhone(phone).isPresent())
+                    throw new AppException(ErrorCode.PHONE_EXISTED);
+                user.setPhone(phone);
+            }
         }
 
         user.setFirstName(request.firstName());

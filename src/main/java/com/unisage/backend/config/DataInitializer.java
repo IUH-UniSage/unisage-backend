@@ -542,7 +542,14 @@ public class DataInitializer implements CommandLineRunner {
             // The chunking-strategy step of the ingestion wizard prefills its defaults from
             // GET /system-configs (category=INGEST) instead of a hardcoded FE constant -
             // read-only, no SYSTEM_CONFIG_UPDATE (that stays SUPER_ADMIN-only).
-            permKey(PredefinedPermissions.SYSTEM_CONFIG_READ)
+            permKey(PredefinedPermissions.SYSTEM_CONFIG_READ),
+            // Chat access (owner 07/11/2026): an ingest admin tries the chatbot on the documents
+            // they load, and opens shared conversation links - the chat page lists the caller's
+            // conversations (GET /conversations -> 403 without these).
+            permKey(PredefinedPermissions.CONVERSATION_ALL),
+            permKey(PredefinedPermissions.MESSAGE_READ),
+            permKey(PredefinedPermissions.MESSAGE_SEND),
+            permKey(PredefinedPermissions.MESSAGE_UPDATE)
         );
         assign(role, perms, keys);
         log.info("  {} permissions assigned to role '{}'.", keys.size(), role.getName());

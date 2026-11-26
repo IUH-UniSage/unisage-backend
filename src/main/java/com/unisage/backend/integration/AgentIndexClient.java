@@ -41,8 +41,15 @@ public class AgentIndexClient {
             @Value("${app.internal.secret-key}") String internalSecret,
             @Value("${app.agent.timeout-ms:10000}") int timeoutMs) {
         // JDK HttpClient: HttpURLConnection (SimpleClientHttpRequestFactory) cannot send PATCH.
+        // HTTP/1.1 only: by default it asks a plain-HTTP server to upgrade to h2c, uvicorn
+        // refuses the upgrade ("Unsupported upgrade request") and the PATCH reached the agent
+        // without its body - every access edit of an indexed document failed with "body: Field
+        // required" (25/11/2026).
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(
-                HttpClient.newBuilder().connectTimeout(Duration.ofMillis(timeoutMs)).build());
+                HttpClient.newBuilder()
+                        .version(HttpClient.Version.HTTP_1_1)
+                        .connectTimeout(Duration.ofMillis(timeoutMs))
+                        .build());
         factory.setReadTimeout(Duration.ofMillis(timeoutMs));
         this.restTemplate = new RestTemplate(factory);
         this.baseUrl = baseUrl.replaceAll("/+$", "");
