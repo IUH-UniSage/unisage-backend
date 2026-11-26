@@ -25,6 +25,11 @@
     }
   ],
   "variable": [
+    {
+      "key": "password",
+      "value": "",
+      "description": "Password of the seeded accounts (DEFAULT_*_PASS in .env). Set it in your Postman environment; never commit it."
+    },
     { "key": "gateway_url", "value": "http://localhost:8400" },
     {
       "key": "backend_java_url",
@@ -81,7 +86,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"SA-001\",\n  \"password\": \"123123\"\n}"
+              "raw": "{\n  \"code\": \"SA-001\",\n  \"password\": \"{{password}}\"\n}"
             },
             "url": {
               "raw": "{{gateway_url}}/api/v1/master/auth/login",
@@ -1826,7 +1831,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"US-001\",\n  \"password\": \"123123\"\n}"
+              "raw": "{\n  \"code\": \"US-001\",\n  \"password\": \"{{password}}\"\n}"
             },
             "url": {
               "raw": "{{gateway_url}}/api/v1/master/auth/login",
@@ -2394,7 +2399,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"IA-002\",\n  \"password\": \"123123\"\n}"
+              "raw": "{\n  \"code\": \"IA-002\",\n  \"password\": \"{{password}}\"\n}"
             },
             "url": {
               "raw": "{{gateway_url}}/api/v1/master/auth/login",
@@ -2427,7 +2432,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"US-001\",\n  \"password\": \"123123\"\n}"
+              "raw": "{\n  \"code\": \"US-001\",\n  \"password\": \"{{password}}\"\n}"
             },
             "url": {
               "raw": "{{gateway_url}}/api/v1/master/auth/login",
