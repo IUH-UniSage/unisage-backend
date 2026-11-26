@@ -11,6 +11,10 @@ public record ConversationResponse(
     UUID userId,
     String title,
     LocalDateTime createdAt,
+    /** Last change of the conversation (new message, rename, claim); pinning does not change it. */
+    LocalDateTime updatedAt,
+    /** When the owner pinned it in the sidebar, null when not pinned. */
+    LocalDateTime pinnedAt,
     /** The share link this conversation was continued from (UNISAGE-107), or null. */
     UUID sourceShareId
 ) {}

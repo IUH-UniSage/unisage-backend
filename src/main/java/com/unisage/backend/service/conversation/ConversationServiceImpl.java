@@ -90,6 +90,26 @@ public class ConversationServiceImpl implements ConversationService {
 
     @Override
     @Transactional
+    public ConversationResponse setPinned(UUID id, UUID callerId, boolean pinned) {
+        // Same lookup as softDelete, except a deleted conversation is not found rather than a no-op.
+        conversationRepository.findById(id)
+                .filter(c -> callerId != null && c.getUser() != null && callerId.equals(c.getUser().getId()))
+                .filter(c -> c.getDeletedAt() == null)
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
+        // A bulk UPDATE of pinned_at only, so JPA auditing doesn't bump updated_at (which would move
+        // the conversation to the top of the "recent" list on every unpin).
+        if (pinned) {
+            conversationRepository.pin(id, LocalDateTime.now());
+        } else {
+            conversationRepository.unpin(id);
+        }
+        return conversationRepository.findById(id)
+                .map(this::toResponse)
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
+    }
+
+    @Override
+    @Transactional
     public int softDeleteAll(UUID callerId) {
         if (callerId == null) {
             throw new AppException(ErrorCode.CONVERSATION_NOT_FOUND);
@@ -133,6 +153,8 @@ public class ConversationServiceImpl implements ConversationService {
                 .userId(conversation.getUser() != null ? conversation.getUser().getId() : null)
                 .title(conversation.getTitle())
                 .createdAt(conversation.getCreatedAt())
+                .updatedAt(conversation.getUpdatedAt())
+                .pinnedAt(conversation.getPinnedAt())
                 // Reading the id of a lazy proxy doesn't load the share row.
                 .sourceShareId(conversation.getSourceShare() != null ? conversation.getSourceShare().getId() : null)
                 .build();

@@ -49,6 +49,14 @@ public class Conversation extends BaseEntity {
     private LocalDateTime deletedAt;
 
     /**
+     * When the owner pinned it in the sidebar ("Ghim"), null when not pinned. Written only by
+     * {@code ConversationRepository.pin/unpin} (bulk UPDATEs) so pinning never bumps
+     * {@code updatedAt}; read-only here so a later save of the entity can't overwrite it.
+     */
+    @Column(name = "pinned_at", insertable = false, updatable = false)
+    private LocalDateTime pinnedAt;
+
+    /**
      * The share link this conversation was copied from by "Tiếp tục" (UNISAGE-107), null for an
      * ordinary conversation. Unique per (link, user) among non-deleted conversations.
      */
